@@ -18,7 +18,7 @@ export default async function handler(req, res) {
           'X-Title': 'AgroMind Pro'
         },
         body: JSON.stringify({
-          model: 'deepseek/deepseek-r1-0528:free',
+          model: 'google/gemini-2.0-flash-exp:free',
           messages: [
             { role: 'system', content: systemPrompt || '' },
             { role: 'user', content: prompt }
