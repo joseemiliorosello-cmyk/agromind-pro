@@ -8,32 +8,30 @@ export default async function handler(req, res) {
   }
   try {
     const response = await fetch(
-      'https://openrouter.ai/api/v1/chat/completions',
+      'https://api.anthropic.com/v1/messages',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          'HTTP-Referer': 'https://agromind-pro.vercel.app',
-          'X-Title': 'AgroMind Pro'
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
         },
         body: JSON.stringify({
-          model: 'mistralai/mistral-small-3.1-24b-instruct:free',
+          model: 'claude-sonnet-4-5',
+          max_tokens: 4096,
+          system: systemPrompt || '',
           messages: [
-            { role: 'system', content: systemPrompt || '' },
             { role: 'user', content: prompt }
-          ],
-          temperature: 0.3,
-          max_tokens: 4096
+          ]
         })
       }
     );
     if (!response.ok) {
       const err = await response.json();
-      throw new Error(err.error?.message || 'Error OpenRouter');
+      throw new Error(err.error?.message || 'Error Anthropic API');
     }
     const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || 'Sin respuesta.';
+    const text = data.content?.[0]?.text || 'Sin respuesta.';
     res.status(200).json({ result: text });
   } catch (error) {
     res.status(500).json({ error: error.message });
