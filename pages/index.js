@@ -32,12 +32,11 @@ LA PALANCA ESTÁ EN EL PARTO, NO EN EL SERVICIO.
 ═══════════════════════════════════════
 CONSUMO VOLUNTARIO SEGÚN FENOLOGÍA
 ═══════════════════════════════════════
-El consumo voluntario NO es fijo — depende de la calidad de la pastura (D-value implícito en la fenología):
-<10% floración: D-value alto → consumo 2.2–2.5% PV
-10–25% floración: D-value medio-alto → consumo 2.0–2.2% PV
-25–50% floración: D-value medio → consumo 1.8–2.0% PV (restricción física + metabólica)
->50% floración: D-value bajo, B-value alto → consumo 1.5–1.8% PV (restricción física dominante)
-IMPORTANTE: a mayor lignificación, el animal NO puede compensar calidad con más cantidad. La fibra indigestible (B-value) ocupa espacio en el rumen sin aportar energía → restricción física del consumo (Detmann et al., 2014, J. Anim. Sci.).
+El consumo voluntario NO es fijo — depende de la calidad de la pastura:
+<10% floración: consumo 2.2–2.5% PV
+10–25% floración: consumo 2.0–2.2% PV
+25–50% floración: consumo 1.8–2.0% PV
+>50% floración: consumo 1.5–1.8% PV — restricción física dominante (B-value alto)
 Cuantificar siempre: déficit proteico en g PB/día y déficit energético en Mcal/día por categoría.
 
 ═══════════════════════════════════════
@@ -64,33 +63,25 @@ Peso mínimo entore: 0.75 × PV vaca adulta. NO 0.65.
 ═══════════════════════════════════════
 RECRÍA (NASSEM, 2010)
 ═══════════════════════════════════════
-Vaquilla 1°Invierno (post-destete, primera etapa crítica):
-  Meta: ≥170 kg ingreso, GDP 600 g/d, llegar ≥280 kg al inicio del 2°invierno.
-  Período crítico: mayo–agosto. Suplementación proteica sin discusión.
-  Objetivo: primer entore a los 24 meses de edad.
-Vaquilla 2°Invierno (pre-entore):
-  Meta: ≥280 kg ingreso invierno, GDP 300 g/d, ≥320 kg al servicio.
-  Peso mínimo entore: 0.75 × PV vaca adulta.
-  Flushing: 0.8% PV diario, 25–30d pre-entore.
+Vaquilla 1°Invierno: Meta ≥170 kg ingreso, GDP 600 g/d, llegar ≥280 kg al 2°invierno. Primer entore 24 meses.
+Vaquilla 2°Invierno: Meta ≥280 kg ingreso, GDP 300 g/d, ≥320 kg al servicio. Flushing 0.8% PV, 25–30d pre-entore.
 
 ═══════════════════════════════════════
 EMERGENCIA FORRAJERA (Rosello Brajovich et al., INTA 2025)
 ═══════════════════════════════════════
 Prioridades: 1.Recría 2.Preñadas 1°serv 3.Preñadas 2°serv 4.Preñadas flacas 5.Preñadas buena CC 6.Vacías.
-Dosis emergencia: ≥8–10 kg heno/vientre/día + proteico si calidad baja.
 
 ═══════════════════════════════════════
 ESTRUCTURA OBLIGATORIA — 8 SECCIONES
 ═══════════════════════════════════════
 1️⃣ DIAGNÓSTICO AMBIENTAL Y FORRAJERO
 2️⃣ DIAGNÓSTICO POR CATEGORÍA
-3️⃣ ESTADO DEL DESTETE Y PROYECCIÓN CC
+3️⃣ ESTADO DEL DESTETE Y PROYECCIÓN CC — USAR EL VALOR CALCULADO POR EL SISTEMA, no recalcular
 4️⃣ BALANCE OFERTA vs DEMANDA
 5️⃣ EVALUACIÓN ESTRATÉGICA
 6️⃣ IMPACTO A 1–2 AÑOS
 7️⃣ ESTADO DE EMERGENCIA
 8️⃣ RECOMENDACIONES FINALES POR CATEGORÍA (SIEMPRE)
-   — Aumentar % preñez · Primer entore 24 meses · Reducir mermas · Producción/ha · Emergencia si aplica
 
 Citar: (NASSEM, 2010) · (Balbuena, INTA 2003) · (Peruchena, INTA 2003) · (Detmann et al., 2014) · (Rosello Brajovich et al., INTA 2025)`;
 
@@ -141,7 +132,7 @@ export default function AgroMind(){
     if(form.v2sTernero==="si"){
       const pv=parseFloat(form.v2sPV);
       let msg="🔴 VACA 2°SERV + TERNERO AL PIE — Destete precoz obligatorio.\nTriple demanda: ~20–22 Mcal/día vs 5–8 Mcal del pastizal maduro.";
-      if(pv>0&&pv<380)msg+=`\n⚠️ Peso ${pv} kg <380 kg — riesgo máximo. Destete hiperprecoz inmediato.`;
+      if(pv>0&&pv<380)msg+=`\n⚠️ Peso ${pv} kg <380 kg — riesgo máximo.`;
       if(form.v2sDiasDestete){const dd=parseInt(form.v2sDiasDestete),ccV=parseFloat(form.v2sCC);if(!isNaN(dd)&&!isNaN(ccV)&&dd>0){const perdida=Math.min(ccV-1.0,0.010*dd).toFixed(1);msg+=`\nCon destete en ${dd} días: pérdida estimada = ${perdida} pts CC. Luego recuperación post-destete.`;}}
       setAlerta2serv(msg);
     }else setAlerta2serv("");
@@ -185,31 +176,41 @@ export default function AgroMind(){
   const exportCSV=()=>{if(!productores.length){alert("Sin datos aún.");return;}const cols=["nombre","zona","provincia","mes","clima","ndvi","supHa","vegetacion","fenologia","estadoDestete","ccActual","diasParto","diasDesteteEst","pVacas","eReprod","vacasN","ternerosN","torosN","prenezHist","pctDestete","v2sN","v2sPV","v2sCC","v2sTernero","v2sDiasDestete","pvVacaAdulta","vaq1N","vaq1PV","vaq1GDP","vaq2N","vaq2PV","diasEntore","suplem","ccParto","prenezEst","informe","fechaVisita"];const csv=[cols.join(","),...productores.map(p=>cols.map(c=>`"${String(p[c]||"").replace(/"/g,'""')}"`).join(","))].join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`agromind_${new Date().toISOString().slice(0,10)}.csv`;a.click();};
 
   const buildPrompt=()=>{
+    const hoy=new Date();
+    const fechaConsulta=hoy.toLocaleDateString("es-AR",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
     let t="ANÁLISIS TÉCNICO COMPLETO:\n\n";
+    t+=`FECHA DE CONSULTA: ${fechaConsulta}\n`;
     if(coords)t+=`UBICACIÓN: ${coords.lat.toFixed(4)}°S ${coords.lon.toFixed(4)}°W · Zona: ${form.zona}${form.provincia?' · '+form.provincia:''}\n`;
     if(sat)t+=`DATOS METEOROLÓGICOS REALES (Open-Meteo): Temp promedio 7d: ${sat.temp}°C · Tmax: ${sat.tMax}°C · Tmin: ${sat.tMin}°C · Precip 7d: ${sat.p7}mm · 30d: ${sat.p30}mm · Balance: ${sat.deficit>0?'+':''}${sat.deficit}mm · ET₀: ${sat.et}mm/d · NDVI est: ${sat.ndvi} (${sat.cond}) · Clima: ${sat.clima}\n`;
     t+=`\nDESTETE: ${form.estadoDestete||'No indicado'} · Pastizal post-destete: ${form.pastoCal||'—'}\n`;
-    t+=`CC actual: ${form.ccActual||'—'}/9 · Días al parto: ${form.diasParto||'—'} · PV vaca: ${form.pVacas||'—'} kg · Estado reproductivo: ${form.eReprod||'—'}\n`;
+    t+=`CC actual vaca: ${form.ccActual||'—'}/9 · Días al parto: ${form.diasParto||'—'} · PV vaca: ${form.pVacas||'—'} kg · Estado reproductivo: ${form.eReprod||'—'}\n`;
     if(form.diasDesteteEst)t+=`Días estimados al destete (rodeo gral): ${form.diasDesteteEst}\n`;
-    if(ccParto)t+=`CC proyectada al parto: ${ccParto}/9 → CC serv: ${curva?.ccS} → Preñez estimada: ${curva?.pr}%\n`;
-    if(form.estadoDestete==="no_ternero")t+="⚠️ TERNERO AÚN AL PIE — déficit activo 6–8 Mcal/día\n";
+    if(form.estadoDestete==="no_ternero"&&form.diasDesteteEst&&form.ccActual&&form.diasParto){
+      const cc=parseFloat(form.ccActual),diasD=parseInt(form.diasDesteteEst),diasP=parseInt(form.diasParto);
+      const tasaRec={excelente:0.022,bueno:0.016,regular:0.009,malo:0.004}[form.pastoCal]||0.013;
+      const ccPostD=Math.max(1.0,(cc-0.010*diasD));
+      const ccPartoCalc=Math.min(9.0,ccPostD+tasaRec*(diasP-diasD));
+      t+=`CÁLCULO CC 2 TRAMOS (sistema): Tramo 1 — pérdida ${diasD}d con ternero: CC ${cc} → ${ccPostD.toFixed(2)} · Tramo 2 — recuperación ${diasP-diasD}d post-destete (${form.pastoCal}, +${tasaRec}/día): CC ${ccPostD.toFixed(2)} → ${ccPartoCalc.toFixed(2)} al parto · USAR ESTE CÁLCULO, no recalcular con déficit invernal.\n`;
+    }
+    if(ccParto)t+=`CC proyectada al parto (sistema): ${ccParto}/9 → CC serv: ${curva?.ccS} → Preñez estimada: ${curva?.pr}% · RESPETAR ESTE VALOR.\n`;
+    if(form.estadoDestete==="no_ternero")t+="⚠️ TERNERO AÚN AL PIE — déficit activo 6–8 Mcal/día SOLO hasta el destete estimado.\n";
     t+=`\nVACA 2°SERV: N° ${form.v2sN||'—'} · PV ${form.v2sPV||'—'} kg · CC ${form.v2sCC||'—'}/9 · Ternero: ${form.v2sTernero||'—'}\n`;
-    if(form.v2sDiasDestete)t+=`Días estimados al destete 2°serv: ${form.v2sDiasDestete} — CALCULAR PÉRDIDA CC SOLO HASTA ESTE PUNTO\n`;
+    if(form.v2sDiasDestete)t+=`Días estimados al destete 2°serv: ${form.v2sDiasDestete} — CALCULAR PÉRDIDA CC SOLO HASTA ESTE PUNTO, luego recuperación\n`;
     if(form.v2sTernero==="si")t+="⚠️ DESTETE PRECOZ OBLIGATORIO\n";
     t+=`\nAMBIENTE: Zona ${form.zona||'—'} · Provincia ${form.provincia||'—'} · Mes ${form.mes||'—'} · Clima ${form.clima||'—'}\n`;
     t+=`Vegetación: ${form.vegetacion||'—'} · Fenología: ${form.fenologia||'—'} · Superficie: ${form.supHa||'—'} ha\n`;
     if(form.fenologia&&form.pVacas){const cons=consumoPorFenologia(form.fenologia,parseFloat(form.pVacas));if(cons)t+=`Consumo voluntario estimado vaca: ~${cons} kg MS/día (fenología: ${form.fenologia})\n`;}
-    t+=`\nVACAS: N° ${form.vacasN||'—'} · Terneros ${form.ternerosN||'—'} · Toros ${form.torosN||'—'} · Preñez hist ${form.prenezHist||'—'}% · Destete ${form.pctDestete||'—'}% · PV adulta rodeo ${form.pvVacaAdulta||'—'} kg\n`;
+    t+=`\nVACAS: N° ${form.vacasN||'—'} · Terneros ${form.ternerosN||'—'} · Toros ${form.torosN||'—'} · Preñez hist ${form.prenezHist||'—'}% · Destete ${form.pctDestete||'—'}% · PV adulta ${form.pvVacaAdulta||'—'} kg\n`;
     t+=`VAQ 1°INVIERNO: N° ${form.vaq1N||'—'} · PV ${form.vaq1PV||'—'} kg · GDP obs ${form.vaq1GDP||'—'} g/d (objetivo 600 g/d)\n`;
     t+=`VAQ 2°INVIERNO: N° ${form.vaq2N||'—'} · PV ${form.vaq2PV||'—'} kg · Días entore ${form.diasEntore||'—'} · Tendencia ${form.tendPeso||'—'}\n`;
     if(form.pvVacaAdulta){const pm=(parseFloat(form.pvVacaAdulta)*0.75).toFixed(0);t+=`Peso mínimo entore (0.75 × ${form.pvVacaAdulta} kg): ${pm} kg\n`;}
     if(form.suplem)t+=`Suplementación actual: ${form.suplem}\n`;
     if(form.consulta)t+=`\nCONSULTA: ${form.consulta}\n`;
-    t+="\n→ 8 secciones obligatorias. Temperatura REAL de campo. CC 2°serv proyectar SOLO hasta destete estimado. Consumo según fenología. Sección 8 recomendaciones por categoría siempre.";
+    t+="\n→ INSTRUCCIONES CRÍTICAS: (1) Usar la fecha de consulta para razonar la línea temporal correcta. (2) Usar datos meteorológicos REALES para temperatura, no estimaciones. (3) USAR el valor de CC al parto calculado por el sistema — no recalcular con déficit invernal. (4) Consumo voluntario según fenología. (5) Sección 8 recomendaciones por categoría siempre.";
     return t;
   };
 
-  const MSGS=["Evaluando datos meteorológicos reales...","Calculando consumo según fenología...","Proyectando CC al parto y servicio...","Analizando vaca 2° servicio...","Cuantificando déficit por categoría...","Calculando dosis exactas...","Redactando informe técnico...","Generando recomendaciones finales..."];
+  const MSGS=["Evaluando fecha y línea temporal...","Calculando consumo según fenología...","Proyectando CC al parto y servicio...","Analizando vaca 2° servicio...","Cuantificando déficit por categoría...","Calculando dosis exactas...","Redactando informe técnico...","Generando recomendaciones finales..."];
 
   const runAnalysis=async()=>{setLoading(true);setResult("");let mi=0;const iv=setInterval(()=>{setLoadMsg(MSGS[mi%MSGS.length]);mi++;},2000);try{const res=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:buildPrompt(),systemPrompt:SYS})});const data=await res.json();if(!res.ok)throw new Error(data.error||"Error");setResult(data.result);saveProductor(data.result);}catch(e){setResult("❌ Error: "+e.message);}finally{clearInterval(iv);setLoading(false);}};
 
@@ -397,81 +398,58 @@ export default function AgroMind(){
               <button onClick={()=>setForm(f=>({...f,estadoDestete:"",pastoCal:"",pVacas:"",ccActual:"",diasParto:"",diasDesteteEst:"",eReprod:"",v2sN:"",v2sPV:"",v2sCC:"",v2sTernero:"",v2sDiasDestete:"",zona:"",provincia:"",mes:"",clima:"",vegetacion:"",supHa:"",fenologia:"",vacasN:"",ternerosN:"",torosN:"",prenezHist:"",pctDestete:"",vaq1N:"",vaq1PV:"",vaq1GDP:"",vaq2N:"",vaq2PV:"",diasEntore:"",tendPeso:"",suplem:"",consulta:""}))} style={{background:"transparent",border:"1px solid rgba(122,150,104,.2)",borderRadius:4,color:"#7a9668",padding:"12px 16px",fontFamily:"monospace",fontSize:".62rem",cursor:"pointer"}}>LIMPIAR</button>
             </div>
 
-            {loading&&(
-              <div style={{background:"#141a09",border:"1px solid rgba(126,200,80,.09)",borderRadius:8,padding:18,marginBottom:14,display:"flex",alignItems:"center",gap:14}}>
-                <div style={{fontFamily:"monospace",fontSize:".6rem",color:"#7ec850",whiteSpace:"nowrap"}}>PROCESANDO</div>
-                <div style={{flex:1,height:2,background:"rgba(126,200,80,.07)",borderRadius:1,overflow:"hidden",position:"relative"}}><div style={{position:"absolute",top:0,left:0,width:"40%",height:"100%",background:"#7ec850",borderRadius:1,animation:"scan 1.2s ease-in-out infinite"}}/></div>
-                <div style={{fontFamily:"monospace",fontSize:".6rem",color:"#7a9668",whiteSpace:"nowrap"}}>{loadMsg}</div>
-              </div>
-            )}
+            {loading&&(<div style={{background:"#141a09",border:"1px solid rgba(126,200,80,.09)",borderRadius:8,padding:18,marginBottom:14,display:"flex",alignItems:"center",gap:14}}>
+              <div style={{fontFamily:"monospace",fontSize:".6rem",color:"#7ec850",whiteSpace:"nowrap"}}>PROCESANDO</div>
+              <div style={{flex:1,height:2,background:"rgba(126,200,80,.07)",borderRadius:1,overflow:"hidden",position:"relative"}}><div style={{position:"absolute",top:0,left:0,width:"40%",height:"100%",background:"#7ec850",borderRadius:1,animation:"scan 1.2s ease-in-out infinite"}}/></div>
+              <div style={{fontFamily:"monospace",fontSize:".6rem",color:"#7a9668",whiteSpace:"nowrap"}}>{loadMsg}</div>
+            </div>)}
 
-            {result&&(
-              <div style={{background:"#141a09",border:"1px solid rgba(126,200,80,.09)",borderRadius:8,padding:22,marginTop:8}}>
-                <div style={{fontFamily:"monospace",fontSize:".85rem",letterSpacing:3,color:"#7ec850",marginBottom:14,paddingBottom:10,borderBottom:"1px solid rgba(126,200,80,.09)",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-                  <span>INFORME TÉCNICO — 8 SECCIONES</span>
-                  <button onClick={()=>navigator.clipboard?.writeText(result)} style={{background:"transparent",border:"1px solid rgba(126,200,80,.2)",borderRadius:3,color:"#7ec850",padding:"4px 10px",fontFamily:"monospace",fontSize:".58rem",cursor:"pointer"}}>COPIAR</button>
-                </div>
-                <div style={{fontSize:".87rem",lineHeight:1.9}} dangerouslySetInnerHTML={{__html:renderResult(result)}}/>
-                {form.nombreProductor&&<div style={{marginTop:12,fontFamily:"monospace",fontSize:".58rem",color:"#7a9668"}}>✅ Guardado: {form.nombreProductor} — {new Date().toLocaleDateString("es-AR")}</div>}
+            {result&&(<div style={{background:"#141a09",border:"1px solid rgba(126,200,80,.09)",borderRadius:8,padding:22,marginTop:8}}>
+              <div style={{fontFamily:"monospace",fontSize:".85rem",letterSpacing:3,color:"#7ec850",marginBottom:14,paddingBottom:10,borderBottom:"1px solid rgba(126,200,80,.09)",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                <span>INFORME TÉCNICO — 8 SECCIONES</span>
+                <button onClick={()=>navigator.clipboard?.writeText(result)} style={{background:"transparent",border:"1px solid rgba(126,200,80,.2)",borderRadius:3,color:"#7ec850",padding:"4px 10px",fontFamily:"monospace",fontSize:".58rem",cursor:"pointer"}}>COPIAR</button>
               </div>
-            )}
+              <div style={{fontSize:".87rem",lineHeight:1.9}} dangerouslySetInnerHTML={{__html:renderResult(result)}}/>
+              {form.nombreProductor&&<div style={{marginTop:12,fontFamily:"monospace",fontSize:".58rem",color:"#7a9668"}}>✅ Guardado: {form.nombreProductor} — {new Date().toLocaleDateString("es-AR")}</div>}
+            </div>)}
           </div>
         )}
 
-        {tab==="planilla"&&(
-          <div style={P}>
-            <div style={{fontFamily:"monospace",fontSize:".85rem",letterSpacing:2,color:"#7ec850",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-              <span>📋 PLANILLA DE PRODUCTORES</span>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={exportCSV} style={{background:"rgba(58,143,181,.1)",border:"1px solid rgba(58,143,181,.3)",borderRadius:3,color:"#3a8fb5",padding:"6px 12px",fontFamily:"monospace",fontSize:".6rem",cursor:"pointer"}}>⬇ CSV</button>
-                <button onClick={()=>{if(confirm("¿Borrar todos los registros?")){setProductores([]);localStorage.removeItem("agm_prod");}}} style={{background:"rgba(192,72,32,.1)",border:"1px solid rgba(192,72,32,.3)",borderRadius:3,color:"#c04820",padding:"6px 12px",fontFamily:"monospace",fontSize:".6rem",cursor:"pointer"}}>🗑 LIMPIAR</button>
-              </div>
+        {tab==="planilla"&&(<div style={P}>
+          <div style={{fontFamily:"monospace",fontSize:".85rem",letterSpacing:2,color:"#7ec850",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+            <span>📋 PLANILLA DE PRODUCTORES</span>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={exportCSV} style={{background:"rgba(58,143,181,.1)",border:"1px solid rgba(58,143,181,.3)",borderRadius:3,color:"#3a8fb5",padding:"6px 12px",fontFamily:"monospace",fontSize:".6rem",cursor:"pointer"}}>⬇ CSV</button>
+              <button onClick={()=>{if(confirm("¿Borrar todos los registros?")){setProductores([]);localStorage.removeItem("agm_prod");}}} style={{background:"rgba(192,72,32,.1)",border:"1px solid rgba(192,72,32,.3)",borderRadius:3,color:"#c04820",padding:"6px 12px",fontFamily:"monospace",fontSize:".6rem",cursor:"pointer"}}>🗑 LIMPIAR</button>
             </div>
-            <div style={{fontFamily:"monospace",fontSize:".55rem",color:"#7a9668",marginBottom:14}}>{productores.length} productor{productores.length!==1?"es":""} · 1 fila por productor</div>
-            {productores.length===0?(
-              <div style={{textAlign:"center",padding:"40px 20px",fontFamily:"monospace",fontSize:".7rem",color:"#3e5230"}}>Sin registros. Completá el formulario con nombre del productor y analizá.</div>
-            ):(
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontFamily:"monospace",fontSize:".6rem"}}>
-                  <thead><tr style={{borderBottom:"1px solid rgba(126,200,80,.2)"}}>
-                    {["Productor","Zona","Prov","Mes","Clima","NDVI","ha","Fenología","Destete","CC","D.Parto","Vacas","Preñez%","V2s","Vaq1","Vaq2","CC Parto","Preñez Est","Visita"].map(h=>(
-                      <th key={h} style={{padding:"6px 8px",color:"#7a9668",textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
-                  </tr></thead>
-                  <tbody>
-                    {productores.map((p,i)=>(
-                      <tr key={i} style={{borderBottom:"1px solid rgba(126,200,80,.07)",cursor:"pointer"}} onClick={()=>{setForm(f=>({...f,...p}));setTab("analisis");}}>
-                        {[p.nombre,p.zona,p.provincia,p.mes,p.clima,p.ndvi,p.supHa,p.fenologia,p.estadoDestete,p.ccActual,p.diasParto,p.vacasN,p.prenezHist,p.v2sN,p.vaq1N,p.vaq2N,p.ccParto,p.prenezEst?p.prenezEst+"%":"",p.fechaVisita].map((v,j)=>(
-                          <td key={j} style={{padding:"6px 8px",color:"#ede8d8",whiteSpace:"nowrap"}}>{v||"—"}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div style={{fontFamily:"monospace",fontSize:".55rem",color:"#3e5230",marginTop:8}}>Clic en fila para cargar ese productor</div>
-              </div>
-            )}
           </div>
-        )}
+          <div style={{fontFamily:"monospace",fontSize:".55rem",color:"#7a9668",marginBottom:14}}>{productores.length} productor{productores.length!==1?"es":""} · 1 fila por productor</div>
+          {productores.length===0?(<div style={{textAlign:"center",padding:"40px 20px",fontFamily:"monospace",fontSize:".7rem",color:"#3e5230"}}>Sin registros. Completá el formulario con nombre del productor y analizá.</div>):(
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontFamily:"monospace",fontSize:".6rem"}}>
+                <thead><tr style={{borderBottom:"1px solid rgba(126,200,80,.2)"}}>
+                  {["Productor","Zona","Prov","Mes","Clima","NDVI","ha","Fenología","Destete","CC","D.Parto","Vacas","Preñez%","V2s","Vaq1","Vaq2","CC Parto","Preñez Est","Visita"].map(h=>(<th key={h} style={{padding:"6px 8px",color:"#7a9668",textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>))}
+                </tr></thead>
+                <tbody>
+                  {productores.map((p,i)=>(<tr key={i} style={{borderBottom:"1px solid rgba(126,200,80,.07)",cursor:"pointer"}} onClick={()=>{setForm(f=>({...f,...p}));setTab("analisis");}}>
+                    {[p.nombre,p.zona,p.provincia,p.mes,p.clima,p.ndvi,p.supHa,p.fenologia,p.estadoDestete,p.ccActual,p.diasParto,p.vacasN,p.prenezHist,p.v2sN,p.vaq1N,p.vaq2N,p.ccParto,p.prenezEst?p.prenezEst+"%":"",p.fechaVisita].map((v,j)=>(<td key={j} style={{padding:"6px 8px",color:"#ede8d8",whiteSpace:"nowrap"}}>{v||"—"}</td>))}
+                  </tr>))}
+                </tbody>
+              </table>
+              <div style={{fontFamily:"monospace",fontSize:".55rem",color:"#3e5230",marginTop:8}}>Clic en fila para cargar ese productor</div>
+            </div>
+          )}
+        </div>)}
 
-        {tab==="marco"&&(
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
-            {[
-              ["📅 Destete — La Palanca Central","#d4952a","rgba(212,149,42,.3)","Destete en febrero = caída −6–8 Mcal/día + rebrote otoñal. La velocidad de recuperación depende del pastizal y tamaño del animal. El expeller potencia después del destete, no lo reemplaza.","Balbuena INTA (2003)"],
-              ["⚠️ Vaca 2° Servicio","#8866cc","rgba(136,102,204,.35)","Triple demanda: lactando + creciendo + quedar preñada. ~20–22 Mcal/día. Déficit 12–17 Mcal. Destete precoz = ESTÁNDAR. Proyectar pérdida CC SOLO hasta destete, luego recuperación post-destete.",""],
-              ["📊 Curva CC → Preñez","#7ec850","rgba(126,200,80,.2)","CC 5.5 parto → 4.0 serv → 75% · CC 5.0 → 3.5 → 55% · CC 4.5 → 3.0 → 35%. Pérdida post-parto NEA: 1.5 pts. La palanca está en el parto.","Datos campo NEA"],
-              ["🌾 Consumo × Fenología","#7ec850","rgba(126,200,80,.15)","<10% flor: ~2.3% PV · 10–25%: ~2.1% · 25–50%: ~1.9% · >50%: ~1.6%. A mayor lignificación el B-value sube y el animal no puede compensar con cantidad. Restricción física dominante.","Detmann et al. (2014) J.Anim.Sci."],
-              ["🐄 Vaquilla 1° Invierno","#d4952a","rgba(212,149,42,.25)","Recría post-destete, primera etapa crítica. GDP objetivo: 600 g/d. Meta: ≥280 kg al 2°invierno. Suplementación proteica sin discusión en invierno. Primer entore: 24 meses.","NASSEM (2010)"],
-              ["📚 Fuentes Técnicas","#3a8fb5","rgba(58,143,181,.25)","NASSEM (2010) · Balbuena INTA CB (2003) · Peruchena INTA Ctes (2003) · Detmann et al. J.Anim.Sci. (2014) · Rosello Brajovich et al. INTA (2025) · NRC Beef (2000)",""],
-            ].map(([title,color,border,body,src])=>(
-              <div key={title} style={{background:"#141a09",border:`1px solid ${border}`,borderRadius:8,padding:16}}>
-                <div style={{fontFamily:"monospace",fontSize:".85rem",letterSpacing:2,color,marginBottom:8}}>{title}</div>
-                <p style={{fontSize:".8rem",color:"#7a9668",lineHeight:1.7}}>{body}</p>
-                {src&&<div style={{fontFamily:"monospace",fontSize:".52rem",color:"#3a8fb5",marginTop:8}}>{src}</div>}
-              </div>
-            ))}
-          </div>
-        )}
+        {tab==="marco"&&(<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
+          {[["📅 Destete — La Palanca Central","#d4952a","rgba(212,149,42,.3)","Destete en febrero = caída −6–8 Mcal/día + rebrote otoñal. La velocidad de recuperación depende del pastizal y tamaño del animal. El expeller potencia después del destete, no lo reemplaza.","Balbuena INTA (2003)"],["⚠️ Vaca 2° Servicio","#8866cc","rgba(136,102,204,.35)","Triple demanda: lactando + creciendo + quedar preñada. ~20–22 Mcal/día. Déficit 12–17 Mcal. Destete precoz = ESTÁNDAR. Proyectar pérdida CC SOLO hasta destete, luego recuperación post-destete.",""],["📊 Curva CC → Preñez","#7ec850","rgba(126,200,80,.2)","CC 5.5 parto → 4.0 serv → 75% · CC 5.0 → 3.5 → 55% · CC 4.5 → 3.0 → 35%. Pérdida post-parto NEA: 1.5 pts. La palanca está en el parto.","Datos campo NEA"],["🌾 Consumo × Fenología","#7ec850","rgba(126,200,80,.15)","<10% flor: ~2.3% PV · 10–25%: ~2.1% · 25–50%: ~1.9% · >50%: ~1.6%. A mayor lignificación el B-value sube y el animal no puede compensar con cantidad.","Detmann et al. (2014) J.Anim.Sci."],["🐄 Vaquilla 1° Invierno","#d4952a","rgba(212,149,42,.25)","Recría post-destete, primera etapa crítica. GDP objetivo: 600 g/d. Meta: ≥280 kg al 2°invierno. Suplementación proteica sin discusión en invierno. Primer entore: 24 meses.","NASSEM (2010)"],["📚 Fuentes Técnicas","#3a8fb5","rgba(58,143,181,.25)","NASSEM (2010) · Balbuena INTA CB (2003) · Peruchena INTA Ctes (2003) · Detmann et al. J.Anim.Sci. (2014) · Rosello Brajovich et al. INTA (2025) · NRC Beef (2000)",""]].map(([title,color,border,body,src])=>(
+            <div key={title} style={{background:"#141a09",border:`1px solid ${border}`,borderRadius:8,padding:16}}>
+              <div style={{fontFamily:"monospace",fontSize:".85rem",letterSpacing:2,color,marginBottom:8}}>{title}</div>
+              <p style={{fontSize:".8rem",color:"#7a9668",lineHeight:1.7}}>{body}</p>
+              {src&&<div style={{fontFamily:"monospace",fontSize:".52rem",color:"#3a8fb5",marginTop:8}}>{src}</div>}
+            </div>
+          ))}
+        </div>)}
 
       </div>
       <style>{`@keyframes scan{0%{left:-40%}100%{left:110%}} select option{background:#1a2210} *{box-sizing:border-box}`}</style>
