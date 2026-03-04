@@ -55,15 +55,20 @@ function GraficoBalance({form,sat,dispar,vaq1E}){
   const datos=MESES_C.map((mes,i)=>{
     const h=i===mc&&sat?{t:parseFloat(sat.temp)||hist[i].t,p:parseFloat(sat.p30)||hist[i].p}:hist[i];
     const ndviI=i===mc?parseFloat(ndvi):0.45;
-    const prod=35*factorT(h.t)*factorP(h.p*(i===mc?1:modENSO(enso)))*factorN(ndviI)*modENSO(i===mc?enso:enso);
-    const ofPasto=Math.round(Math.max(0,prod)*mcalKg(h.t)*supHa);
     const bajo15=h.t<15;
 
     const vN=parseInt(form.vacasN)||0;
     const v2N=parseInt(form.v2sN)||0;
     const q1N=parseInt(form.vaq1N)||0;
     const q2N=parseInt(form.vaq2N)||0;
+    const totalCab=Math.max(1,vN+v2N+q1N+q2N);
 
+    // Oferta pasto total del campo en Mcal/día
+    // 35 kg MS/ha/día base C4 × factores × util 0.45 × Mcal/kg × ha
+    const prod=35*factorT(h.t)*factorP(h.p*modENSO(enso))*factorN(ndviI)*0.45;
+    const ofPasto=Math.round(Math.max(0,prod)*mcalKg(h.t)*supHa);
+
+    // Demanda total Mcal/día (todas las categorías × cabezas)
     const eRep=i>=mesP&&i<mesP+2?"Preparto (último mes)":i>=mesP+2&&i<mesP+5?"Lactación con ternero al pie":"Gestación media (5–7 meses)";
     const dVacas=vN>0?Math.round((reqEM(form.pVacas,eRep)||13)*vN):0;
     const dV2s=v2N>0?Math.round((reqEM(form.v2sPV,"vaca2serv")||18)*v2N):0;
@@ -71,6 +76,7 @@ function GraficoBalance({form,sat,dispar,vaq1E}){
     const dQ2=q2N>0?Math.round((reqEM(form.vaq2PV,"vaq2inv")||10)*q2N):0;
     const demanda=dVacas+dV2s+dQ1+dQ2;
 
+    // CC endógena en Mcal/día totales
     let ccEndog=0;
     if(vN>0){
       if(i>=mesD&&i<mb15)ccEndog=Math.round(tR*60*vN*0.5);
@@ -88,7 +94,7 @@ function GraficoBalance({form,sat,dispar,vaq1E}){
     <div>
       <div style={{fontFamily:"monospace",fontSize:13,color:"#7ec850",marginBottom:6,letterSpacing:2}}>📊 BALANCE ENERGÉTICO ANUAL</div>
       <div style={{fontFamily:"monospace",fontSize:10,color:"#7a9668",marginBottom:12,display:"flex",gap:12,flexWrap:"wrap"}}>
-        <span>{supHa}ha · {(parseInt(form.vacasN)||0)+(parseInt(form.v2sN)||0)+(parseInt(form.vaq1N)||0)+(parseInt(form.vaq2N)||0)} cab</span>
+        <span>{supHa}ha · {(parseInt(form.vacasN)||0)+(parseInt(form.v2sN)||0)+(parseInt(form.vaq1N)||0)+(parseInt(form.vaq2N)||0)} cab · Mcal/día totales</span>
         <span style={{color:enso==="nino"?"#3a8fb5":enso==="nina"?"#c04820":"#7a9668"}}>{enso==="nino"?"🌊 El Niño +25%":enso==="nina"?"🔴 La Niña −25%":"⚪ ENSO Neutro"}</span>
         <span style={{color:"#d4952a"}}>NDVI = actividad fotosintética estimada</span>
       </div>
