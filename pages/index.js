@@ -272,9 +272,14 @@ function GraficoBalance({form,sat,dispar,vaq1E,potreros}){
     const dQ1=q1N>0&&i>=mesD?Math.round((reqEM(form.vaq1PV,"vaq1inv")||12)*q1N):0;
     const dQ2=q2N>0?Math.round((reqEM(form.vaq2PV,"vaq2inv")||10)*q2N):0;
     const demanda=dVacas+dV2s+dQ1+dQ2;
-    let ccEndog=0;
-    if(vN>0){if(i>=mesD&&i<mb15)ccEndog=Math.round(tR*60*vN*0.5);else if(i>=mesP&&i<mesP+3)ccEndog=-Math.round(1.5*vN*0.5);}
-    const ofTotal=ofPasto+Math.max(0,ccEndog);
+    // CC endógena: solo aporta cuando ofPasto < demanda
+    // Una vaca moviliza ~0.5 puntos CC/mes en déficit → ~25 Mcal/vaca/mes
+    // Aporta desde el mes en que hay déficit hasta fin de servicio (mesP+1 aprox)
+    const defBruto=Math.max(0,demanda-ofPasto);
+    const esMesServicio=i>=mesP&&i<=mesP+2; // en servicio o posparto temprano
+    // Solo moviliza CC si hay déficit real Y está en período reproductivo-lactante
+    const ccEndog=(defBruto>0&&esMesServicio)?Math.min(defBruto,Math.round(25*vN)):0;
+    const ofTotal=ofPasto+ccEndog;
     const deficit=Math.max(0,demanda-ofTotal);
     return{mes,i,dVacas,dV2s,dQ1,dQ2,demanda,ofPasto,ofTotal,deficit,bajo15,esActual:i===mc,temp:h.t};
   });
@@ -691,12 +696,13 @@ export default function AgroMind(){
 
   useEffect(()=>{if(form.provincia&&sat)setDispar(calcDisp(form.provincia,sat.ndvi,sat.deficit,sat));else setDispar(null);},[form.provincia,sat]);
 
-  // Vaq1 desde cadena o manual
+  // Vaq1 — PV entrada mayo desde calcTerneros (ponderado por modalidades de destete)
   useEffect(()=>{
-    const pvMayoEst=form.pvDestVaq?Math.round(parseFloat(form.pvDestVaq)+0.400*Math.max(0,cadena?(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24):90)):cadena?.pvMayo1InvCalc||parseFloat(form.vaq1PV)||0;
+    const tc=cadena?calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena):null;
+    const pvMayoEst=tc?.pvMayoPond||parseFloat(form.vaq1PV)||0;
     if(pvMayoEst&&sat)setVaq1E(calcVaq1({ndvi:sat.ndvi,bal:sat.deficit,pv:pvMayoEst}));
     else setVaq1E(null);
-  },[form.vaq1PV,sat,cadena]);
+  },[form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,form.vaq1PV,sat,cadena]);
 
   // Vaq2 desde salida vaq1
   useEffect(()=>{
@@ -1150,56 +1156,96 @@ export default function AgroMind(){
         <div style={{...cardS,border:"1px solid rgba(212,149,42,.25)"}}>
           <div style={{fontFamily:"monospace",fontSize:13,color:C.amber,marginBottom:4,letterSpacing:1}}>🐄 VAQUILLONA 1° INVIERNO</div>
           <div style={{fontFamily:"monospace",fontSize:10,color:"rgba(212,149,42,.55)",marginBottom:12}}>Mayo–agosto · 120 días · Objetivo: 210 kg en septiembre · GDP mín 400 g/d</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-            <div><label style={lbl}>N° Cabezas</label><input type="number" inputMode="numeric" value={form.vaq1N} onChange={e=>set("vaq1N",e.target.value)} placeholder="Ej: 40" style={inp}/></div>
-            
+          <div style={{marginBottom:10}}>
+            <label style={lbl}>N° Cabezas</label>
+            <input type="number" inputMode="numeric" value={form.vaq1N} onChange={e=>set("vaq1N",e.target.value)} placeholder="Ej: 40" style={inp}/>
           </div>
+          {/* Cadena de peso desde calcTerneros */}
           {(()=>{
-            const pvDestUser=parseFloat(form.pvDestVaq)||cadena?.pvDestCalc||0;
-            const pvMayoEst=pvDestUser>0&&cadena?Math.round(pvDestUser+0.400*Math.max(0,(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24))):cadena?.pvMayo1InvCalc||0;
-            const pvSepEst=pvMayoEst>0?Math.round(pvMayoEst+0.400*120):0;
-            const llegaraOk=pvSepEst>=210;
-            if(!pvMayoEst&&!pvDestUser)return null;
+            const tc=cadena?calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena):null;
+            const pvMayo=tc?.pvMayoPond||parseFloat(form.vaq1PV)||0;
+            if(!pvMayo)return null;
+            const pvSep=Math.round(pvMayo+0.400*120);
+            const ok=pvSep>=210;
+            // Consumo voluntario en invierno (fenología lignificada, temp <15°C)
+            const cvPct=1.6; // >50% floración en invierno NEA
+            const cvKgDia=Math.round(pvMayo*cvPct/100*10)/10;
+            const mcalKgInv=0.65*0.72; // temp<15 × fenol>50%
+            const ofertaCV=Math.round(cvKgDia*mcalKgInv*10)/10;
+            const reqVaq=reqEM(pvMayo,"vaq1inv")||0;
             return(
-              <div style={{background:"rgba(0,0,0,.2)",border:`1px solid ${C.border}`,borderRadius:10,padding:10,marginBottom:10}}>
-                <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginBottom:6,letterSpacing:1}}>CADENA DE PESO — VAQ 1° INV</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4}}>
-                  {[
-                    ["Destete",pvDestUser||cadena?.pvDestCalc,"kg",C.textDim],
-                    ["Mayo (entrada)",pvMayoEst,"kg",C.amber],
-                    ["Sep (400g/d)",pvSepEst||"—","kg",llegaraOk?C.green:C.red],
-                    ["Objetivo","210","kg",C.green],
-                  ].map(([l,v,u,col])=>(
-                    <div key={l} style={{textAlign:"center",background:"rgba(0,0,0,.2)",borderRadius:8,padding:"6px 2px"}}>
-                      <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginBottom:2}}>{l}</div>
-                      <div style={{fontFamily:"monospace",fontSize:13,fontWeight:700,color:col}}>{v}{v?u:""}</div>
+              <div>
+                {/* Hitos cadena de peso */}
+                <div style={{background:"rgba(0,0,0,.2)",border:`1px solid ${C.border}`,borderRadius:10,padding:10,marginBottom:10}}>
+                  <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginBottom:8,letterSpacing:1}}>CADENA DE PESO</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4,marginBottom:6}}>
+                    {[["PV entrada mayo",pvMayo+"kg",C.amber],
+                      ["PV sep (400g/d)",pvSep+"kg",ok?C.green:C.red],
+                      ["Objetivo","210 kg",C.green]
+                    ].map(([l,v,col])=>(
+                      <div key={l} style={{textAlign:"center",background:"rgba(0,0,0,.25)",borderRadius:8,padding:"8px 4px"}}>
+                        <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginBottom:3}}>{l}</div>
+                        <div style={{fontFamily:"monospace",fontSize:14,fontWeight:700,color:col}}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {tc?.detalle?.length>0&&(
+                    <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginBottom:4}}>
+                      {tc.detalle.map(d=>`${d.label}: ${d.n} cab · dest ${d.pvDest}kg → mayo ${d.pvMayo}kg`).join(" | ")}
                     </div>
-                  ))}
+                  )}
+                  {!ok&&<div style={{color:C.red,fontFamily:"monospace",fontSize:9,textAlign:"center"}}>⚠️ No llega a 210kg — revisar suplementación</div>}
                 </div>
-                <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginTop:6,textAlign:"center"}}>
-                  Lactancia: 700g/d · Post-destete otoñal: 400g/d · 1°inv: 400g/d mínimo
+                {/* Consumo voluntario en 1°inv */}
+                <div style={{background:"rgba(212,149,42,.05)",border:"1px solid rgba(212,149,42,.15)",borderRadius:10,padding:10,marginBottom:10}}>
+                  <div style={{fontFamily:"monospace",fontSize:9,color:C.amber,marginBottom:6,letterSpacing:1}}>CONSUMO VOLUNTARIO — 1° INVIERNO</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}>
+                    {[
+                      ["CV máx (1.6%PV)",cvKgDia+"kg MS/d",C.textDim],
+                      ["Oferta energética",ofertaCV+" Mcal/d",C.amber],
+                      ["Req. mant.+crec.",reqVaq+" Mcal/d",reqVaq>ofertaCV?C.red:C.green],
+                    ].map(([l,v,col])=>(
+                      <div key={l} style={{textAlign:"center",background:"rgba(0,0,0,.2)",borderRadius:8,padding:"6px 4px"}}>
+                        <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginBottom:2}}>{l}</div>
+                        <div style={{fontFamily:"monospace",fontSize:11,fontWeight:700,color:col}}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginTop:6}}>
+                    Pastizal lignificado &gt;50% flor · Dig &lt;55% · PB &lt;5% · mcal/kg: {(mcalKgInv).toFixed(2)} · cvMS: 1.6%PV (UF/IFAS Sollenberger 2000)
+                  </div>
+                  {reqVaq>ofertaCV&&(
+                    <div style={{marginTop:6,background:"rgba(192,72,32,.08)",borderRadius:8,padding:"6px 10px",fontFamily:"monospace",fontSize:9,color:C.red}}>
+                      ⚠️ Déficit energético: {(reqVaq-ofertaCV).toFixed(1)} Mcal/d · Suplementación necesaria
+                    </div>
+                  )}
                 </div>
-                {pvSepEst>0&&!llegaraOk&&<div style={{marginTop:6,color:C.red,fontFamily:"monospace",fontSize:9,textAlign:"center"}}>⚠️ No llega a 210kg en septiembre — revisar suplementación</div>}
               </div>
             );
           })()}
+          {/* Escenario suplementación */}
           {vaq1E&&(
             <div style={{background:"rgba(212,149,42,.07)",border:"1px solid rgba(212,149,42,.25)",borderRadius:10,padding:12}}>
-              <div style={{fontFamily:"monospace",fontSize:11,color:C.amber,textAlign:"center",marginBottom:8}}>Escenario <strong style={{fontSize:14}}>{vaq1E.esc}</strong> — {vaq1E.desc}</div>
-              <div style={{fontFamily:"monospace",fontSize:11,color:C.amber,textAlign:"center",marginBottom:10}}>
-                <strong>{vaq1E.prot} kg prot/día{vaq1E.energ>0?` + ${vaq1E.energ} kg maíz/día`:""}</strong> · {vaq1E.freq} · {vaq1E.dias} días
+              <div style={{fontFamily:"monospace",fontSize:11,color:C.amber,textAlign:"center",marginBottom:8}}>
+                Escenario <strong style={{fontSize:16}}>{vaq1E.esc}</strong> — {vaq1E.desc}
+              </div>
+              <div style={{fontFamily:"monospace",fontSize:12,color:C.amber,textAlign:"center",marginBottom:10,fontWeight:700}}>
+                {vaq1E.prot} kg prot/día{vaq1E.energ>0?` + ${vaq1E.energ} kg maíz/día`:""} · {vaq1E.freq} · {vaq1E.dias} días
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
-                {[["GDP necesario",vaq1E.gdpReal+"g/d",vaq1E.gdpReal>=500?C.green:C.amber],["PV sep.",vaq1E.pvSal+"kg",vaq1E.deficit?C.red:C.green],["Obj. mínimo","210 kg",C.green]].map(([l,v,c])=>(
+                {[["GDP real",vaq1E.gdpReal+"g/d",vaq1E.gdpReal>=400?C.green:C.amber],
+                  ["PV septiembre",vaq1E.pvSal+"kg",vaq1E.deficit?C.red:C.green],
+                  ["Obj. mínimo","210 kg",C.green]
+                ].map(([l,v,col])=>(
                   <div key={l} style={{textAlign:"center",background:"rgba(0,0,0,.3)",borderRadius:8,padding:"8px 4px"}}>
                     <div style={{fontSize:9,color:C.textDim,marginBottom:2,fontFamily:"monospace"}}>{l}</div>
-                    <div style={{fontSize:15,fontWeight:700,color:c,fontFamily:"monospace"}}>{v}</div>
+                    <div style={{fontSize:15,fontWeight:700,color:col,fontFamily:"monospace"}}>{v}</div>
                   </div>
                 ))}
               </div>
-              {vaq1E.deficit&&<div style={{textAlign:"center",color:C.red,fontFamily:"monospace",fontSize:10,marginBottom:6}}>⚠️ No llega a 210kg — revisar suplementación</div>}
+              {vaq1E.deficit&&<div style={{textAlign:"center",color:C.red,fontFamily:"monospace",fontSize:10,marginBottom:8}}>⚠️ No llega a 210kg — revisar suplementación</div>}
               <div style={{background:"rgba(0,0,0,.2)",borderRadius:8,padding:"8px 12px",fontFamily:"monospace",fontSize:10,color:C.textDim}}>
-                Post-invierno (sep→abr, 300g/d): <strong style={{color:C.text}}>{vaq1E.pvAbr2Inv} kg</strong> — ingresa como Vaq 2°inv
+                Post-invierno sep→abr (300g/d): <strong style={{color:C.text}}>{vaq1E.pvAbr2Inv} kg</strong> → ingresa como Vaq 2°inv
               </div>
             </div>
           )}
