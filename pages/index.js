@@ -490,12 +490,12 @@ Citar: (NASSEM,2010)·(Balbuena,INTA 2003)·(Peruchena,INTA 2003)·(Detmann et a
 // ═══════════════════════════════════════════════════════
 // MAPA LEAFLET INTERACTIVO
 // ═══════════════════════════════════════════════════════
-function MapaLeaflet({lat,lon,onMove}){
+function MapaLeaflet({initLat,initLon,onMove}){
+  // initLat/initLon: posición inicial al montar — NO se actualiza después
+  // Para mover el pin externamente usar movePin(lat,lon) via ref
   const divRef=useRef(null);
   const mapRef=useRef(null);
   const markerRef=useRef(null);
-  const latRef=useRef(lat);
-  const lonRef=useRef(lon);
   useEffect(()=>{
     if(!document.getElementById("leaflet-css")){
       const lk=document.createElement("link");lk.id="leaflet-css";lk.rel="stylesheet";
@@ -503,33 +503,41 @@ function MapaLeaflet({lat,lon,onMove}){
     }
     const load=()=>new Promise((res,rej)=>{
       if(window.L){res(window.L);return;}
-      const s=document.createElement("script");s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      const s=document.createElement("script");
+      s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
       s.onload=()=>res(window.L);s.onerror=rej;document.head.appendChild(s);
     });
     load().then(L=>{
       if(!divRef.current||mapRef.current)return;
-      const initLat=latRef.current,initLon=lonRef.current;
-      const m=L.map(divRef.current,{attributionControl:false}).setView([initLat,initLon],9);
+      const la=initLat||(-27.5),lo=initLon||(-59.0);
+      const m=L.map(divRef.current,{attributionControl:false}).setView([la,lo],initLat?10:5);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18}).addTo(m);
-      const ico=L.divIcon({html:`<div style="width:22px;height:22px;background:#7ec850;border:3px solid #050d02;border-radius:50%;box-shadow:0 2px 8px #0006"></div>`,iconSize:[22,22],iconAnchor:[11,11],className:""});
-      const mk=L.marker([initLat,initLon],{draggable:true,icon:ico}).addTo(m);
-      mk.on("dragend",e=>{const p=e.target.getLatLng();latRef.current=p.lat;lonRef.current=p.lng;onMove(p.lat,p.lng);});
-      m.on("click",e=>{mk.setLatLng(e.latlng);latRef.current=e.latlng.lat;lonRef.current=e.latlng.lng;onMove(e.latlng.lat,e.latlng.lng);});
+      const ico=L.divIcon({
+        html:`<div style="width:24px;height:24px;background:#7ec850;border:3px solid #050d02;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.6)"></div>`,
+        iconSize:[24,24],iconAnchor:[12,12],className:""
+      });
+      // Solo poner marcador si hay posición inicial real
+      let mk=null;
+      if(initLat){
+        mk=L.marker([la,lo],{draggable:true,icon:ico}).addTo(m);
+        mk.on("dragend",e=>{const p=e.target.getLatLng();onMove(p.lat,p.lng);});
+      }
+      // Click en mapa: mover o crear marcador
+      m.on("click",e=>{
+        if(!mk){
+          mk=L.marker(e.latlng,{draggable:true,icon:ico}).addTo(m);
+          mk.on("dragend",ev=>{const p=ev.target.getLatLng();onMove(p.lat,p.lng);});
+          markerRef.current=mk;
+        } else {
+          mk.setLatLng(e.latlng);
+        }
+        onMove(e.latlng.lat,e.latlng.lng);
+      });
       mapRef.current=m;markerRef.current=mk;
-    }).catch(()=>{});
+    }).catch(e=>console.error("Leaflet error:",e));
     return()=>{if(mapRef.current){mapRef.current.remove();mapRef.current=null;markerRef.current=null;}};
-  },[]);
-  // Solo mover el pin cuando cambia el prop lat/lon externamente (GPS o coordenadas manuales)
-  useEffect(()=>{
-    if(!markerRef.current||!mapRef.current)return;
-    const d=Math.abs(lat-latRef.current)+Math.abs(lon-lonRef.current);
-    if(d>0.001){// solo si el cambio viene de afuera
-      latRef.current=lat;lonRef.current=lon;
-      markerRef.current.setLatLng([lat,lon]);
-      mapRef.current.setView([lat,lon],12,{animate:true});
-    }
-  },[lat,lon]);
-  return <div ref={divRef} style={{width:"100%",height:240,borderRadius:12,marginTop:10,border:"1px solid rgba(126,200,80,.2)",overflow:"hidden",background:"#1a2a18"}}/>;
+  },[]);// solo al montar — NO depende de initLat/initLon para evitar loops
+  return <div ref={divRef} style={{width:"100%",height:260,borderRadius:12,marginTop:8,border:"1px solid rgba(126,200,80,.2)",overflow:"hidden",background:"#1a2a18"}}/>;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -794,8 +802,8 @@ export default function AgroMind(){
             Tocá el mapa para fijar la ubicación, o arrastrá el pin 📍
           </div>
           <MapaLeaflet
-            lat={coords?.lat||-27.5}
-            lon={coords?.lon||-59.0}
+            initLat={coords?.lat||null}
+            initLon={coords?.lon||null}
             onMove={(la,lo)=>applyLoc(la,lo,"Mapa")}
           />
           {/* Confirma ubicación actual */}
