@@ -9,7 +9,7 @@ const CLIMA_HIST={"Corrientes":[{t:28,p:130},{t:27,p:120},{t:25,p:110},{t:20,p:9
 const CLIMA_DEF=[{t:27,p:120},{t:26,p:110},{t:24,p:100},{t:20,p:80},{t:15,p:60},{t:12,p:50},{t:12,p:45},{t:14,p:50},{t:18,p:70},{t:22,p:95},{t:25,p:110},{t:26,p:120}];
 const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const MESES_C=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-const FENOLOGIAS=[{val:"menor_10",label:"<10% Floración",emoji:"🟢",desc:"PB >10% · Dig >65%"},{val:"10_25",label:"10–25% Floración",emoji:"🟡",desc:"PB 7–10% · Dig 60–65%"},{val:"25_50",label:"25–50% Floración",emoji:"🟠",desc:"PB 5–7% · Inicio lignif.",warn:"⚠ Déficit proteico"},{val:"mayor_50",label:">50% Floración",emoji:"🔴",desc:"PB <5% · Lignif. avanzada",warn:"🔴 Déficit severo"}];
+const FENOLOGIAS=[{val:"menor_10",label:"<10% Floración",emoji:"🌿",desc:"PB >10% · Dig >65% · Consumo máx 2.8%PV",cvMS:0.028,fAprov:1.00},{val:"10_25",label:"10–25% Floración",emoji:"🌾",desc:"PB 7–10% · Dig 60–65% · Consumo máx 2.4%PV",cvMS:0.024,fAprov:0.90},{val:"25_50",label:"25–50% Floración",emoji:"🍂",desc:"PB 5–7% · Dig 55–60% · Consumo máx 2.0%PV",cvMS:0.020,fAprov:0.75,warn:"⚠ Déficit proteico"},{val:"mayor_50",label:">50% Floración",emoji:"🪵",desc:"PB <5% · Dig <55% · Consumo máx 1.6%PV",cvMS:0.016,fAprov:0.55,warn:"⚠ Déficit severo"}];
 const ESTADOS_REPROD=["Gestación temprana (1–4 meses)","Gestación media (5–7 meses)","Preparto (último mes)","Lactación con ternero al pie","Vaca seca sin ternero"];
 const DISCLAIMER="Las recomendaciones generadas por AgroMind Pro tienen carácter orientativo y se basan en los datos ingresados y parámetros técnicos de referencia. No reemplazan el criterio profesional del ingeniero agrónomo o médico veterinario que asiste al establecimiento, quien deberá validar, ajustar e implementar cualquier decisión de manejo según las condiciones particulares de cada sistema productivo.";
 
@@ -33,9 +33,24 @@ const factorP=(p)=>p>=100?1.0:p>=50?0.85:p>=20?0.60:0.30;
 const factorN=(ndvi)=>Math.max(0.3,0.5+parseFloat(ndvi||0.45)*1.2);
 const mcalKg=(t)=>t>=25?2.10:t>=20?1.90:t>=15?1.50:t>=10?1.00:0.65;
 const modENSO=(e)=>e==="nino"?1.25:e==="nina"?0.75:1.0;
-const calcOfPasto=(veg,ndvi,temp,precip,enso)=>{
+// mcalKg ajustado por calidad forrajera (fenología) y temperatura
+// Temperatura reduce mcalKg por menor digestibilidad en frío
+// Fenología reduce mcalKg por lignificación (Minson 1990; Van Soest 1994)
+const mcalKgAdj=(t,fenol)=>{
+  const base=t>=25?2.10:t>=20?1.90:t>=15?1.50:t>=10?1.00:0.65;
+  const fFenol={menor_10:1.00,"10_25":0.95,"25_50":0.85,mayor_50:0.72}[fenol]||1.00;
+  return base*fFenol;
+};
+// fAprov: fracción aprovechable según estado fenológico
+const fAprovFenol=(fenol)=>({menor_10:1.00,"10_25":0.90,"25_50":0.75,mayor_50:0.55}[fenol]||1.00);
+// cvMS: consumo voluntario máx (fracción PV) según calidad forrajera
+const cvMSFenol=(fenol)=>({menor_10:0.028,"10_25":0.024,"25_50":0.020,mayor_50:0.016}[fenol]||0.025);
+// Oferta forrajera completa:
+// PPNA (kg MS/ha/día) × factorT × factorP × factorN(NDVI) × ENSO × UTIL × fAprov × mcalKg(t,fenol)
+const calcOfPasto=(veg,ndvi,temp,precip,enso,fenol)=>{
   const pb=PROD_BASE[veg]||8;
-  return Math.max(0,pb*factorN(ndvi)*factorT(temp)*factorP(precip*modENSO(enso))*UTIL)*mcalKg(temp);
+  const kgMsHa=Math.max(0,pb*factorN(ndvi)*factorT(temp)*factorP(precip*modENSO(enso))*UTIL*fAprovFenol(fenol));
+  return kgMsHa*mcalKgAdj(temp,fenol);
 };
 
 function fechaHelada(prov,ndvi){const h=HELADAS_PROV[prov];if(!h)return null;const n=parseFloat(ndvi)||0.45;const aj=n>0.55?7:n<0.35?-7:0;const hoy=new Date();const f=new Date(hoy.getFullYear(),h.mes,h.dia);f.setDate(f.getDate()+aj);if(f<hoy)f.setFullYear(hoy.getFullYear()+1);return f;}
@@ -70,13 +85,14 @@ function calcCadena(iniServ,finServ,modoDestete){
   const nacVaq=new Date(partoTemp);
   const mayo1Inv=new Date(nacVaq.getFullYear()+1,4,1); // mayo siguiente al nacimiento
   const edadMayo=Math.round((mayo1Inv-nacVaq)/(1000*60*60*24)/30); // meses
-  // GDP post-destete hasta mayo: ~800 g/d ternero, luego ~600 g/d post-destete
+  // Cadena de peso vaquillona de reposición (nacida del parto temprano)
+  // Lactancia: 700 g/d desde nacimiento hasta destete (NASSEM 2010; Balbuena INTA 2003)
   const pvNac=35; // kg al nacer
-  const diasLact=diasDest;
-  const pvDest=Math.round(pvNac+0.800*diasLact);
-  const diasPostDest=Math.round((mayo1Inv-desteTemp)/(1000*60*60*24));
-  const pvMayo1Inv=Math.round(pvDest+0.600*Math.max(0,diasPostDest));
-  return{ini,fin,diasServ,partoTemp,partoTard,desteTemp,desteTard,diasDest,terneroOtono,diasPartoTemp,diasPartoTard,nacVaq,mayo1Inv,edadMayo,pvMayo1Inv};
+  const pvDestCalc=Math.round(pvNac+0.700*diasDest);
+  // Post-destete otoñal: 400 g/d desde destete hasta mayo (campo cubre requerimientos)
+  const diasPostDest=Math.max(0,Math.round((mayo1Inv-desteTemp)/(1000*60*60*24)));
+  const pvMayo1InvCalc=Math.round(pvDestCalc+0.400*diasPostDest);
+  return{ini,fin,diasServ,partoTemp,partoTard,desteTemp,desteTard,diasDest,terneroOtono,diasPartoTemp,diasPartoTard,nacVaq,mayo1Inv,edadMayo,pvDestCalc,pvMayo1InvCalc};
 }
 
 // ── VAQ 1° INVIERNO ──────────────────────────────────
@@ -92,8 +108,7 @@ function calcVaq1({ndvi,bal,pv}){
   if(gdpReal<=450&&n>=0.40&&b>-20){esc="A";prot=+(p*0.004).toFixed(2);energ=0;freq="3×/sem";desc="Proteico 0.4%PV · GDP "+gdpReal+"g/d";}
   else if(gdpReal<=550&&(n>=0.30||b>=-40)){esc="B";prot=+(p*0.007).toFixed(2);energ=0;freq="diario";desc="Proteico 0.7%PV · GDP "+gdpReal+"g/d";}
   else{esc="C";prot=+(p*0.0065).toFixed(2);energ=+(p*0.0035).toFixed(2);freq="diario";desc="0.65%prot+0.35%maíz · GDP "+gdpReal+"g/d";}
-  // Proyección post-invierno hacia 2°inv
-  // Sep→Abr (7 meses) GDP estimado 300 g/d en campo natural
+  // Post-invierno sep→abr (210 días): campo cubre, GDP ~300 g/d
   const pvAbr2Inv=Math.round(pvSal+0.300*210);
   return{esc,prot,energ,freq,desc,gdpNec,gdpReal,pvSal,pvObj:PV_OBJ,deficit,dias:DIAS,pvAbr2Inv};
 }
@@ -154,21 +169,29 @@ function GraficoBalance({form,sat,dispar,vaq1E,potreros}){
   const mesP=Math.min(11,(mesD+Math.round(diasP/30))%12);
   const mb15=dispar?.mb15||4;
   const tR={excelente:0.022,bueno:0.016,regular:0.009,malo:0.004}[form.pastoCal]||0.013;
-  // Calcular ha efectivas desde potreros si existen, sino desde form
+  // fenología actual — para consumo voluntario y mcalKg
+  const fenolAct=form.fenologia||"menor_10";
+  // PV promedio rodeo para techo consumo voluntario
+  const pvPromRodeo=parseFloat(form.pvVacaAdulta)||380;
+  const vN=parseInt(form.vacasN)||0,v2N=parseInt(form.v2sN)||0,q1N=parseInt(form.vaq1N)||0,q2N=parseInt(form.vaq2N)||0;
+  const nTotal=Math.max(1,vN+v2N+q1N+q2N);
   const usaPotreros=potreros&&potreros.length>0&&potreros.some(p=>p.ha&&p.veg);
 
   const datos=MESES_C.map((mes,i)=>{
     const h=i===mc&&sat?{t:parseFloat(sat.temp)||hist[i].t,p:parseFloat(sat.p30)||hist[i].p}:hist[i];
     const ndviI=i===mc?parseFloat(ndvi):0.45;
     const bajo15=h.t<15;
-    const vN=parseInt(form.vacasN)||0,v2N=parseInt(form.v2sN)||0,q1N=parseInt(form.vaq1N)||0,q2N=parseInt(form.vaq2N)||0;
+    // Fenología: mes actual usa fenol real, resto usa proxy estacional
+    // En verano/primavera <25% flor, en invierno >50% flor para C4
+    const fenolMes=i===mc?fenolAct:(h.t<15?"mayor_50":h.t<20?"25_50":h.t<25?"10_25":"menor_10");
     // Oferta desde potreros individuales o global
     let ofPasto=0;
     if(usaPotreros){
       potreros.forEach(pot=>{
         const ha=parseFloat(pot.ha)||0;
         if(!ha||!pot.veg)return;
-        ofPasto+=Math.round(calcOfPasto(pot.veg,ndviI,h.t,h.p,enso)*ha);
+        const fenolPot=i===mc?(pot.fenol||"menor_10"):fenolMes;
+        ofPasto+=Math.round(calcOfPasto(pot.veg,ndviI,h.t,h.p,enso,fenolPot)*ha);
       });
     } else {
       const supHa=parseFloat(form.supHa)||100;
@@ -176,11 +199,16 @@ function GraficoBalance({form,sat,dispar,vaq1E,potreros}){
       const pctN=Math.min(100,parseFloat(form.pctNGan)||0);
       const haPast=supHa*Math.max(0,100-pctM-pctN)/100;
       const haMonte=supHa*pctM/100;
-      ofPasto=Math.round(calcOfPasto(form.vegetacion||"Pastizal natural NEA/Chaco",ndviI,h.t,h.p,enso)*haPast);
-      ofPasto+=Math.round(haMonte*0.55*0.65);
+      ofPasto=Math.round(calcOfPasto(form.vegetacion||"Pastizal natural NEA/Chaco",ndviI,h.t,h.p,enso,fenolMes)*haPast);
+      ofPasto+=Math.round(haMonte*0.55*0.65*0.55); // bosque nativo: calidad muy baja
     }
+    // Techo consumo voluntario del sistema (Mcal/día máx disponible)
+    // cvMS(fenol) × pvPromRodeo × nTotal animales × mcalKg(t,fenol)
+    const cvMaxMcal=Math.round(cvMSFenol(fenolMes)*pvPromRodeo*nTotal*mcalKgAdj(h.t,fenolMes));
+    // Oferta efectiva = mínimo entre lo producido y lo que puede consumir el rodeo
+    ofPasto=Math.min(ofPasto,cvMaxMcal);
     const eRep=i>=mesP&&i<mesP+2?"Preparto (último mes)":i>=mesP+2&&i<mesP+5?"Lactación con ternero al pie":"Gestación media (5–7 meses)";
-    const dVacas=vN>0?Math.round((reqEM(form.pVacas,eRep)||13)*vN):0;
+    const dVacas=vN>0?Math.round((reqEM(form.pvVacaAdulta,eRep)||13)*vN):0;
     const dV2s=v2N>0?Math.round((reqEM(form.v2sPV,"vaca2serv")||18)*v2N):0;
     const dQ1=q1N>0&&i>=mesD?Math.round((reqEM(form.vaq1PV,"vaq1inv")||12)*q1N):0;
     const dQ2=q2N>0?Math.round((reqEM(form.vaq2PV,"vaq2inv")||10)*q2N):0;
@@ -411,19 +439,27 @@ CURVA CC→PREÑEZ (Peruchena INTA 2003): 6.0→88%|5.5→75%|5.0→55%|4.5→35
 
 REQUERIMIENTOS (NASSEM 2010; Detmann et al. 2014): PV^0.75 × 0.077 × factor categoría.
 
-MODELO OFERTA (Paruelo & Oesterheld 2000; Peruchena INTA 2003; UF/IFAS Sollenberger 2000):
-Pastizal natural NEA: 8 kg MS/ha/día base (~3.500 kg/ha/año con NDVI=0.45)
-Megatérmicas C4: 14 kg MS/ha/día base
-Monte: máx 200 kg MS/ha/año — oferta casi nula
-Eficiencia cosecha: 0.40 (Oesterheld et al. 1998)
-Si hay potreros individuales: calcular oferta por potrero separado.
+MODELO OFERTA (Paruelo & Oesterheld 2000; Peruchena INTA 2003; UF/IFAS Sollenberger 2000; Minson 1990):
+PPNA = prodBase × factorN(NDVI) × factorT(temp) × factorP(precip × ENSO) × UTIL × fAprov(fenol)
+Oferta Mcal = PPNA × mcalKg(temp, fenol)
+Limitada por consumo voluntario: cvMS(fenol) × PV_promedio × n_animales
+
+factorN(NDVI): 0.5 + NDVI×1.2 — Paruelo & Oesterheld (2000): r²=0.71
+factorT: <10°C→0.05 | 10-15°C→0.15 | 15-20°C→0.45 | 20-25°C→0.80 | >25°C→1.00
+factorP×ENSO: Niño+25%/Niña-25% sobre precipitación mensual
+fAprov(fenol): <10%flor→1.00 | 10-25%→0.90 | 25-50%→0.75 | >50%→0.55
+mcalKg(fenol): <10%flor→2.10 | 10-25%→1.90×0.95 | 25-50%→1.90×0.85 | >50%→1.90×0.72
+cvMS(fenol): <10%flor→2.8%PV | 10-25%→2.4%PV | 25-50%→2.0%PV | >50%→1.6%PV
+Pastizal natural NEA: 8 kg MS/ha/día base | Megatérmicas C4: 14 | UTIL: 0.40
+Si hay potreros: calcular por potrero separado con su fenología individual.
 
 VAQ 1°INV (NEA: mayo-agosto, 120 días):
-Objetivo: 210 kg en septiembre. GDP mínimo: 400 g/día.
-Esc A (NDVI≥0.40): proteico 0.4%PV · 3×/sem
-Esc B (NDVI 0.30-0.40): proteico 0.7%PV · diario
+Cadena de peso: nace (35kg) → lactancia 700g/d → destete → otoñal 400g/d → mayo → 1°inv 400g/d mínimo → objetivo 210kg septiembre.
+El pastizal NO cubre los requerimientos de esta categoría en invierno — siempre requiere suplementación.
+Esc A (NDVI≥0.40, balance>-20): proteico 0.4%PV · 3×/sem
+Esc B (NDVI 0.30-0.40 o balance≥-40): proteico 0.7%PV · diario
 Esc C (NDVI<0.30 o balance<-40): 0.65%prot + 0.35%maíz · diario
-NO mencionar creep feeding. Dar dosis en kg/día solamente.
+NO mencionar creep feeding. Dar dosis en kg/día únicamente. NO mencionar ventana de recuperación ni entore.
 
 VAQ 2°INV (mayo-agosto año siguiente):
 Debe llegar al entore (24 meses, agosto) con PV ≥ 0.75×PV adulta Y ganando peso.
@@ -447,7 +483,7 @@ Citar: (NASSEM,2010)·(Balbuena,INTA 2003)·(Peruchena,INTA 2003)·(Detmann et a
 export default function AgroMind(){
   const[step,setStep]=useState(0);
   const[form,setForm]=useState({
-    nombreProductor:"",estadoDestete:"",pastoCal:"",pVacas:"",diasParto:"",eReprod:"",
+    nombreProductor:"",estadoDestete:"",pastoCal:"",diasParto:"",eReprod:"",
     iniServ:"",finServ:"",modoDestete:"tradicional",
     v2sN:"",v2sPV:"",v2sTernero:"",
     zona:"",provincia:"",mes:"",clima:"",vegetacion:"",supHa:"",pctMonte:"0",pctNGan:"0",fenologia:"",
@@ -501,8 +537,8 @@ export default function AgroMind(){
 
   // Vaq1 desde cadena o manual
   useEffect(()=>{
-    const pvEnt=form.pvDestVaq||cadena?.pvMayo1Inv?String(form.pvDestVaq||cadena?.pvMayo1Inv):form.vaq1PV;
-    if(pvEnt&&sat)setVaq1E(calcVaq1({ndvi:sat.ndvi,bal:sat.deficit,pv:pvEnt}));
+    const pvMayoEst=form.pvDestVaq?Math.round(parseFloat(form.pvDestVaq)+0.400*Math.max(0,cadena?(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24):90)):cadena?.pvMayo1InvCalc||parseFloat(form.vaq1PV)||0;
+    if(pvMayoEst&&sat)setVaq1E(calcVaq1({ndvi:sat.ndvi,bal:sat.deficit,pv:pvMayoEst}));
     else setVaq1E(null);
   },[form.vaq1PV,sat,cadena]);
 
@@ -542,15 +578,31 @@ export default function AgroMind(){
   const saveProductor=(informe)=>{
     if(!form.nombreProductor.trim())return;
     const hoy=new Date().toLocaleDateString("es-AR");
-    const r={nombre:form.nombreProductor,fechaConsulta:hoy,zona:form.zona,provincia:form.provincia,iniServ:form.iniServ,finServ:form.finServ,modoDestete:form.modoDestete,partoTemp:cadena?fmtFecha(cadena.partoTemp):"",partoTard:cadena?fmtFecha(cadena.partoTard):"",mes:form.mes,clima:form.clima,enso:form.enso,ndvi:sat?.ndvi||"",supHa:usaPotreros?potreros.reduce((s,p)=>s+(parseFloat(p.ha)||0),0):form.supHa,vegetacion:usaPotreros?potreros.map(p=>p.veg).join("|"):form.vegetacion,fenologia:form.fenologia,disparador:dispar?.tipo||"",ccDistribucion:form.ccDist.map(d=>`${d.pct}%→CC${d.cc}`).join("|"),ccPonderada:ccPond(form.ccDist).toFixed(1),diasParto:form.diasParto,pVacas:form.pVacas,vacasN:form.vacasN,v2sN:form.v2sN,v2sPV:form.v2sPV,cc2sDistribucion:form.cc2sDist.map(d=>`${d.pct}%→CC${d.cc}`).join("|"),pvVacaAdulta:form.pvVacaAdulta,vaq1N:form.vaq1N,vaq1PVentrada:cadena?.pvMayo1Inv||form.vaq1PV,vaq1Escenario:vaq1E?`Esc ${vaq1E.esc}: ${vaq1E.prot}kg prot/día · GDP ${vaq1E.gdpReal}g/d → ${vaq1E.pvSal}kg`:"",vaq2N:form.vaq2N,vaq2PVentrada:vaq1E?.pvAbr2Inv||form.vaq2PV,vaq2Escenario:vaq2E?`Esc ${vaq2E.esc}: ${vaq2E.prot}kg prot/día · GDP ${vaq2E.gdpReal}g/d → ${vaq2E.pvEntore}kg entore`:"",ccParto:ccParto||"",prenezEst:curva?.pr||"",informe:(informe||"").slice(0,400),fechaVisita:hoy};
+    const r={nombre:form.nombreProductor,fechaConsulta:hoy,zona:form.zona,provincia:form.provincia,iniServ:form.iniServ,finServ:form.finServ,modoDestete:form.modoDestete,partoTemp:cadena?fmtFecha(cadena.partoTemp):"",partoTard:cadena?fmtFecha(cadena.partoTard):"",mes:form.mes,clima:form.clima,enso:form.enso,ndvi:sat?.ndvi||"",supHa:usaPotreros?potreros.reduce((s,p)=>s+(parseFloat(p.ha)||0),0):form.supHa,vegetacion:usaPotreros?potreros.map(p=>p.veg).join("|"):form.vegetacion,fenologia:form.fenologia,disparador:dispar?.tipo||"",ccDistribucion:form.ccDist.map(d=>`${d.pct}%→CC${d.cc}`).join("|"),ccPonderada:ccPond(form.ccDist).toFixed(1),diasParto:form.diasParto,pvAdulta:form.pvVacaAdulta,vacasN:form.vacasN,v2sN:form.v2sN,v2sPV:form.v2sPV,cc2sDistribucion:form.cc2sDist.map(d=>`${d.pct}%→CC${d.cc}`).join("|"),pvVacaAdulta:form.pvVacaAdulta,vaq1N:form.vaq1N,vaq1PVentrada:cadena?.pvMayo1Inv||form.vaq1PV,vaq1Escenario:vaq1E?`Esc ${vaq1E.esc}: ${vaq1E.prot}kg prot/día · GDP ${vaq1E.gdpReal}g/d → ${vaq1E.pvSal}kg`:"",vaq2N:form.vaq2N,vaq2PVentrada:vaq1E?.pvAbr2Inv||form.vaq2PV,vaq2Escenario:vaq2E?`Esc ${vaq2E.esc}: ${vaq2E.prot}kg prot/día · GDP ${vaq2E.gdpReal}g/d → ${vaq2E.pvEntore}kg entore`:"",ccParto:ccParto||"",prenezEst:curva?.pr||"",informe:(informe||"").slice(0,400),fechaVisita:hoy,nPotreros:usaPotreros?potreros.length:0,potreros:usaPotreros?JSON.stringify(potreros.map(p=>({ha:p.ha,veg:p.veg,fenol:p.fenol}))):"[]"};
     const upd=[r,...productores.filter(p=>p.nombre!==form.nombreProductor)];
     setProductores(upd);try{localStorage.setItem("agm_prod",JSON.stringify(upd));}catch(e){}
   };
 
   const exportCSV=()=>{
     if(!productores.length){alert("Sin datos.");return;}
-    const cols=["nombre","fechaConsulta","zona","provincia","iniServ","finServ","modoDestete","partoTemp","partoTard","mes","clima","enso","ndvi","supHa","vegetacion","fenologia","disparador","ccDistribucion","ccPonderada","diasParto","pVacas","vacasN","v2sN","v2sPV","cc2sDistribucion","pvVacaAdulta","vaq1N","vaq1PVentrada","vaq1Escenario","vaq2N","vaq2PVentrada","vaq2Escenario","ccParto","prenezEst","informe","fechaVisita"];
-    const csv=[cols.join(","),...productores.map(p=>cols.map(c=>`"${String(p[c]||"").replace(/"/g,'""')}"`).join(","))].join("\n");
+    // CSV dinámico con columnas de potreros
+    const baseCols=["nombre","fechaConsulta","zona","provincia","iniServ","finServ","modoDestete","partoTemp","partoTard","mes","clima","enso","ndvi","supHa","vegetacion","fenologia","disparador","vacasN","pvAdulta","ccDistribucion","ccPonderada","diasParto","eReprod","v2sN","v2sPV","cc2sDistribucion","vaq1N","vaq1PVentrada","vaq1Escenario","vaq2N","vaq2PVentrada","vaq2Escenario","ccParto","prenezEst","informe","fechaVisita"];
+    // Máximo de potreros en los registros
+    const maxPot=Math.max(0,...productores.map(p=>parseInt(p.nPotreros)||0));
+    const potCols=[];
+    for(let i=1;i<=maxPot;i++){potCols.push(`P${i}_ha`,`P${i}_veg`,`P${i}_fenol`);}
+    const cols=[...baseCols,...potCols];
+    const csv=[cols.join(","),...productores.map(p=>{
+      return cols.map(col=>{
+        if(col.match(/^P(\d+)_(ha|veg|fenol)$/)){
+          const [,idx,field]=col.match(/^P(\d+)_(ha|veg|fenol)$/);
+          const pots=JSON.parse(p.potreros||"[]");
+          const pot=pots[parseInt(idx)-1];
+          return `"${pot?String(pot[field]||"").replace(/"/g,'""'): ""}"`;
+        }
+        return `"${String(p[col]||"").replace(/"/g,'""')}"`; 
+      }).join(",");
+    })].join("\n");
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`agromind_${new Date().toISOString().slice(0,10)}.csv`;a.click();
   };
 
@@ -570,8 +622,8 @@ export default function AgroMind(){
     }
     t+=`\nDESTETE RODEO: ${form.estadoDestete||"—"} · Pasto: ${form.pastoCal||"—"}\n`;
     t+=`DIST CC: ${form.ccDist.map(d=>`${d.pct}%→CC${d.cc}`).join(" | ")} · Pond: ${ccPond(form.ccDist).toFixed(1)}/9\n`;
-    t+=`Días parto: ${form.diasParto||"—"} · PV vaca: ${form.pVacas||"—"}kg\n`;
-    if(form.pVacas&&form.eReprod){const r=reqEM(form.pVacas,form.eReprod);if(r)t+=`Req EM (PV^0.75): ${r} Mcal/día\n`;}
+    t+=`PV vaca adulta: ${form.pvVacaAdulta||"—"}kg\n`;
+    if(form.pvVacaAdulta&&form.eReprod){const r=reqEM(form.pvVacaAdulta,form.eReprod);if(r)t+=`Req EM (PV^0.75): ${r} Mcal/día\n`;}
     if(ccParto)t+=`CC PARTO: ${ccParto}/9 → CC serv: ${curva?.ccS} → Preñez: ${curva?.pr}% — USAR ESTE VALOR\n`;
     // Potreros
     if(usaPotreros&&potreros.length){
@@ -587,7 +639,11 @@ export default function AgroMind(){
     t+=`2°SERV: N°${form.v2sN||"—"} · PV ${form.v2sPV||"—"}kg · Ternero: ${form.v2sTernero||"—"}\n`;
     t+=`DIST CC 2°SERV: ${form.cc2sDist.map(d=>`${d.pct}%→CC${d.cc}`).join(" | ")} · Pond: ${ccPond(form.cc2sDist).toFixed(1)}/9\n`;
     t+=`RODEO: ${form.vacasN||"—"} vacas · ${form.ternerosN||"—"} terneros · Preñez hist ${form.prenezHist||"—"}%\n`;
-    t+=`VAQ1: N°${form.vaq1N||"—"} · PV destete: ${form.pvDestVaq||"—"}kg · PV entrada mayo estimado: ${form.pvDestVaq?Math.round(parseFloat(form.pvDestVaq)+0.600*Math.max(0,diffDias(cadena?.desteTemp||new Date(),cadena?.mayo1Inv||new Date())/1)):cadena?.pvMayo1Inv||form.vaq1PV||"—"}kg\n`;
+    t+=(()=>{
+      const pvD=parseFloat(form.pvDestVaq)||cadena?.pvDestCalc||0;
+      const pvM=pvD>0&&cadena?Math.round(pvD+0.400*Math.max(0,(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24))):cadena?.pvMayo1InvCalc||parseFloat(form.vaq1PV)||0;
+      return `VAQ1: N°${form.vaq1N||"—"} · PV destete: ${pvD||"—"}kg · PV entrada mayo: ${pvM||"—"}kg\n`;
+    })();
     if(vaq1E)t+=`ESC VAQ1 (USAR): Esc ${vaq1E.esc} · ${vaq1E.prot}kg prot/día${vaq1E.energ>0?" + "+vaq1E.energ+"kg maíz/día":""} · ${vaq1E.freq} · GDP ${vaq1E.gdpReal}g/d → ${vaq1E.pvSal}kg sep · Post-inv: ${vaq1E.pvAbr2Inv}kg abr\n`;
     t+=`VAQ2: N°${form.vaq2N||"—"} · PV entrada mayo: ${vaq1E?.pvAbr2Inv||form.vaq2PV||"—"}kg · PV adulta: ${form.pvVacaAdulta||"—"}kg\n`;
     if(vaq2E)t+=`ESC VAQ2 (USAR): Esc ${vaq2E.esc} · ${vaq2E.prot}kg prot/día${vaq2E.energ>0?" + "+vaq2E.energ+"kg maíz/día":""} · GDP ${vaq2E.gdpReal}g/d → ${vaq2E.pvEntore}kg entore (min ${vaq2E.pvMinEntore}kg)${!vaq2E.llegas?" ⚠️NO LLEGA":""}\n`;
@@ -738,22 +794,23 @@ export default function AgroMind(){
         <div style={cardS}>
           <div style={{fontFamily:"monospace",fontSize:13,color:C.green,marginBottom:12,letterSpacing:1}}>🐄 RODEO GENERAL</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-            {[["vacasN","N° Vacas","150"],["pVacas","Peso vaca (kg)","380"],["pvVacaAdulta","PV adulta (kg)","420"]].map(([k,l,p])=>(
+            {[["vacasN","N° Vacas","150"],["pvVacaAdulta","PV vaca adulta (kg)","400"]].map(([k,l,p])=>(
               <div key={k}><label style={lbl}>{l}</label><input type="number" inputMode="numeric" value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={"Ej: "+p} style={inp}/></div>
             ))}
-            <div>
-              <label style={lbl}>Días al parto</label>
-              <input type="number" inputMode="numeric" value={form.diasParto} onChange={e=>set("diasParto",e.target.value)} placeholder={cadena?"Calc. automático":"Ej: 90"} style={{...inp,opacity:cadena?.diasPartoTemp>0?0.6:1}}/>
-              {cadena?.diasPartoTemp>0&&<div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginTop:3}}>Calculado desde fechas de servicio</div>}
-            </div>
           </div>
+          {cadena&&cadena.diasPartoTemp>0&&(
+            <div style={{background:"rgba(126,200,80,.06)",border:`1px solid rgba(126,200,80,.15)`,borderRadius:10,padding:"8px 12px",marginBottom:10,fontFamily:"monospace",fontSize:11,color:C.green}}>
+              📅 Días al parto (parto temprano): <strong>{cadena.diasPartoTemp} días</strong>
+              {cadena.diasPartoTard>0&&<span style={{color:C.amber}}> · Parto tardío: {cadena.diasPartoTard}d</span>}
+            </div>
+          )}
           <label style={lbl}>Estado Reproductivo</label>
           <select value={form.eReprod} onChange={e=>set("eReprod",e.target.value)} style={{...inp,marginBottom:10}}>
             <option value="">Seleccionar...</option>{ESTADOS_REPROD.map(e=><option key={e} value={e}>{e}</option>)}
           </select>
-          {form.pVacas&&form.eReprod&&reqEM(form.pVacas,form.eReprod)&&(
+          {form.pvVacaAdulta&&form.eReprod&&reqEM(form.pvVacaAdulta,form.eReprod)&&(
             <div style={{background:"rgba(58,143,181,.07)",border:"1px solid rgba(58,143,181,.18)",borderRadius:10,padding:10,fontFamily:"monospace",fontSize:11,color:C.blue,textAlign:"center",marginBottom:10}}>
-              Req EM (PV^0.75): <strong>{reqEM(form.pVacas,form.eReprod)} Mcal/día</strong>
+              Req EM (PV^0.75): <strong>{reqEM(form.pvVacaAdulta,form.eReprod)} Mcal/día</strong>
               <div style={{fontSize:8,color:"rgba(58,143,181,.45)",marginTop:2}}>NASSEM (2010) · Detmann et al. (2014)</div>
             </div>
           )}
@@ -806,23 +863,37 @@ export default function AgroMind(){
             <div><label style={lbl}>N° Cabezas</label><input type="number" inputMode="numeric" value={form.vaq1N} onChange={e=>set("vaq1N",e.target.value)} placeholder="Ej: 40" style={inp}/></div>
             <div>
               <label style={lbl}>Peso al destete (kg)</label>
-              <input type="number" inputMode="numeric" value={form.pvDestVaq} onChange={e=>set("pvDestVaq",e.target.value)} placeholder="Ej: 175" style={inp}/>
-              <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginTop:3}}>Peso real al momento del destete</div>
+              <input type="number" inputMode="numeric" value={form.pvDestVaq} onChange={e=>set("pvDestVaq",e.target.value)} placeholder={cadena?.pvDestCalc?"Est. "+cadena.pvDestCalc+"kg":"Ej: 175"} style={inp}/>
+              {cadena?.pvDestCalc&&!form.pvDestVaq&&<div style={{fontFamily:"monospace",fontSize:9,color:C.amber,marginTop:3}}>Estimado: {cadena.pvDestCalc}kg (35kg nac + 700g/d × {cadena.diasDest}d destete)</div>}
+              {!cadena&&<div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginTop:3}}>Peso real al momento del destete</div>}
             </div>
           </div>
           {(()=>{
-            const pvDest=parseFloat(form.pvDestVaq)||0;
-            const pvMayoEst=pvDest>0&&cadena?Math.round(pvDest+0.600*Math.max(0,(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24))):cadena?.pvMayo1Inv||0;
-            const llegaraOk=pvMayoEst>0&&(pvMayoEst+0.400*120)>=210;
-            if(!pvMayoEst)return null;
+            const pvDestUser=parseFloat(form.pvDestVaq)||cadena?.pvDestCalc||0;
+            const pvMayoEst=pvDestUser>0&&cadena?Math.round(pvDestUser+0.400*Math.max(0,(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24))):cadena?.pvMayo1InvCalc||0;
+            const pvSepEst=pvMayoEst>0?Math.round(pvMayoEst+0.400*120):0;
+            const llegaraOk=pvSepEst>=210;
+            if(!pvMayoEst&&!pvDestUser)return null;
             return(
-              <div style={{background:"rgba(0,0,0,.2)",border:`1px solid ${C.border}`,borderRadius:10,padding:10,marginBottom:10,fontFamily:"monospace",fontSize:10}}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                  <div style={{textAlign:"center"}}><div style={{fontSize:9,color:C.textDim,marginBottom:2}}>PV entrada mayo</div><div style={{fontSize:14,fontWeight:700,color:C.amber}}>{pvMayoEst} kg</div></div>
-                  <div style={{textAlign:"center"}}><div style={{fontSize:9,color:C.textDim,marginBottom:2}}>PV sep (400g/d)</div><div style={{fontSize:14,fontWeight:700,color:llegaraOk?C.green:C.red}}>{Math.round(pvMayoEst+0.400*120)} kg</div></div>
-                  <div style={{textAlign:"center"}}><div style={{fontSize:9,color:C.textDim,marginBottom:2}}>Objetivo sep</div><div style={{fontSize:14,fontWeight:700,color:C.green}}>210 kg</div></div>
+              <div style={{background:"rgba(0,0,0,.2)",border:`1px solid ${C.border}`,borderRadius:10,padding:10,marginBottom:10}}>
+                <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginBottom:6,letterSpacing:1}}>CADENA DE PESO — VAQ 1° INV</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4}}>
+                  {[
+                    ["Destete",pvDestUser||cadena?.pvDestCalc,"kg",C.textDim],
+                    ["Mayo (entrada)",pvMayoEst,"kg",C.amber],
+                    ["Sep (400g/d)",pvSepEst||"—","kg",llegaraOk?C.green:C.red],
+                    ["Objetivo","210","kg",C.green],
+                  ].map(([l,v,u,col])=>(
+                    <div key={l} style={{textAlign:"center",background:"rgba(0,0,0,.2)",borderRadius:8,padding:"6px 2px"}}>
+                      <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginBottom:2}}>{l}</div>
+                      <div style={{fontFamily:"monospace",fontSize:13,fontWeight:700,color:col}}>{v}{v?u:""}</div>
+                    </div>
+                  ))}
                 </div>
-                {!llegaraOk&&<div style={{marginTop:6,color:C.red,fontSize:9,textAlign:"center"}}>⚠️ Con 400g/d no llega a 210kg — requiere mayor suplementación</div>}
+                <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginTop:6,textAlign:"center"}}>
+                  Lactancia: 700g/d · Post-destete otoñal: 400g/d · 1°inv: 400g/d mínimo
+                </div>
+                {pvSepEst>0&&!llegaraOk&&<div style={{marginTop:6,color:C.red,fontFamily:"monospace",fontSize:9,textAlign:"center"}}>⚠️ No llega a 210kg en septiembre — revisar suplementación</div>}
               </div>
             );
           })()}
@@ -991,7 +1062,7 @@ export default function AgroMind(){
           {[
             ["📍 Zona",form.zona+(form.provincia?" · "+form.provincia:""),C.green],
             ["📅 Servicio",cadena?`${fmtFecha(cadena.ini).slice(0,6)} → ${fmtFecha(cadena.fin).slice(0,6)}`:"—",C.amber],
-            ["🌡️ Temp",sat?(sat.tMin+"–"+sat.tMax+"°C"):"—",C.amber],
+            ["🌡️ Temp / NDVI",sat?(sat.tMin+"–"+sat.tMax+"°C · "+sat.ndvi):"—",C.amber],
             ["⚡ Disparador",dispar?(dispar.dias<999?"~"+dispar.dias+"d":"-"):"—",dC],
             ["🐄 CC Parto",ccParto?(ccParto+"/9"):"—",ccC],
             ["📊 Preñez Est.",curva?(curva.pr+"%"):"—",pC],
