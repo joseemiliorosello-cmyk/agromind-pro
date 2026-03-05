@@ -788,35 +788,61 @@ export default function AgroMind(){
           <input value={form.nombreProductor} onChange={e=>set("nombreProductor",e.target.value)} placeholder="Nombre del productor o establecimiento" style={inp}/>
         </div>
         <div style={cardS}>
-          <div style={{fontFamily:"monospace",fontSize:13,color:C.green,marginBottom:12,letterSpacing:1}}>📍 UBICACIÓN GPS</div>
-          <button onClick={getGPS} disabled={gpsLoading} style={{width:"100%",background:gpsLoading?"rgba(126,200,80,.08)":C.green,color:gpsLoading?C.green:"#050d02",border:"none",borderRadius:12,padding:"18px",fontFamily:"monospace",fontSize:16,fontWeight:700,cursor:"pointer",marginBottom:12}}>
-            {gpsLoading?"📍 Localizando...":"📍 OBTENER MI UBICACIÓN"}
-          </button>
-          <div style={{fontFamily:"monospace",fontSize:11,color:C.textDim,textAlign:"center",marginBottom:12}}>— o ingresar coordenadas —</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-            <div><label style={lbl}>Latitud</label><input type="number" inputMode="decimal" value={manualLat} onChange={e=>setManualLat(e.target.value)} placeholder="-27.45" style={inp}/></div>
-            <div><label style={lbl}>Longitud</label><input type="number" inputMode="decimal" value={manualLon} onChange={e=>setManualLon(e.target.value)} placeholder="-59.12" style={inp}/></div>
+          <div style={{fontFamily:"monospace",fontSize:13,color:C.green,marginBottom:10,letterSpacing:1}}>📍 UBICACIÓN</div>
+          {/* Mapa principal — tocá cualquier punto o arrastrá el pin */}
+          <div style={{fontFamily:"monospace",fontSize:10,color:C.textDim,marginBottom:6,textAlign:"center"}}>
+            Tocá el mapa para fijar la ubicación, o arrastrá el pin 📍
           </div>
-          <button onClick={setManual} style={{width:"100%",background:"rgba(126,200,80,.08)",border:`1px solid rgba(126,200,80,.25)`,borderRadius:12,color:C.green,padding:"14px",fontFamily:"monospace",fontSize:14,cursor:"pointer",marginBottom:4}}>FIJAR COORDENADAS</button>
-          <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,textAlign:"center",marginBottom:4}}>— o tocá el mapa / arrastrá el pin —</div>
-          <MapaLeaflet lat={coords?.lat||-27.5} lon={coords?.lon||-59.0} onMove={(la,lo)=>applyLoc(la,lo,"Mapa")}/>
-          {coords&&<div style={{fontFamily:"monospace",fontSize:10,color:C.green,marginTop:6,textAlign:"center"}}>
-            📍 {coords.lat?.toFixed(4)}°S · {coords.lon?.toFixed(4)}°W · <strong>{form.zona}</strong> · {form.provincia}
-            {sat&&<span style={{color:C.textDim}}> · T{sat.temp}°C · NDVI {sat.ndvi}</span>}
-          </div>}
-          {!coords&&<div style={{fontFamily:"monospace",fontSize:10,color:C.textDim,marginTop:4,textAlign:"center"}}>Tocá el mapa o arrastrá el pin 📍</div>}
-          {satLoading&&<div style={{fontFamily:"monospace",fontSize:11,color:C.green,textAlign:"center",marginTop:8}}>🛰 Descargando datos meteorológicos...</div>}
-          {sat&&<div>
+          <MapaLeaflet
+            lat={coords?.lat||-27.5}
+            lon={coords?.lon||-59.0}
+            onMove={(la,lo)=>applyLoc(la,lo,"Mapa")}
+          />
+          {/* Confirma ubicación actual */}
+          {coords?(
+            <div style={{fontFamily:"monospace",fontSize:11,color:C.green,marginTop:8,textAlign:"center",background:"rgba(126,200,80,.06)",border:"1px solid rgba(126,200,80,.15)",borderRadius:10,padding:"8px 12px"}}>
+              ✅ {coords.lat?.toFixed(4)}°S · {coords.lon?.toFixed(4)}°W · <strong>{form.zona}</strong> · {form.provincia}
+              {sat&&<span style={{color:C.textDim,fontSize:10}}> · T{sat.temp}°C · NDVI {sat.ndvi}</span>}
+            </div>
+          ):(
+            <div style={{fontFamily:"monospace",fontSize:10,color:C.textDim,marginTop:6,textAlign:"center"}}>
+              Aún no hay ubicación fijada
+            </div>
+          )}
+          {/* GPS como alternativa rápida */}
+          <button onClick={getGPS} disabled={gpsLoading} style={{width:"100%",background:"rgba(126,200,80,.06)",border:`1px solid rgba(126,200,80,.2)`,color:C.green,borderRadius:10,padding:"12px",fontFamily:"monospace",fontSize:13,cursor:"pointer",marginTop:10,marginBottom:8}}>
+            {gpsLoading?"📍 Localizando...":"📍 Usar mi ubicación actual (GPS)"}
+          </button>
+          {/* Entrada manual de coordenadas — opción avanzada */}
+          <details style={{marginTop:4}}>
+            <summary style={{fontFamily:"monospace",fontSize:10,color:C.textDim,cursor:"pointer",marginBottom:6}}>
+              Ingresar coordenadas manualmente
+            </summary>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:8}}>
+              <div><label style={lbl}>Latitud</label><input type="number" inputMode="decimal" value={manualLat} onChange={e=>setManualLat(e.target.value)} placeholder="-27.45" style={inp}/></div>
+              <div><label style={lbl}>Longitud</label><input type="number" inputMode="decimal" value={manualLon} onChange={e=>setManualLon(e.target.value)} placeholder="-59.12" style={inp}/></div>
+              <div style={{display:"flex",alignItems:"flex-end"}}>
+                <button onClick={()=>{
+                  const la=parseFloat(manualLat),lo=parseFloat(manualLon);
+                  if(!isNaN(la)&&!isNaN(lo))applyLoc(la,lo,"Manual");
+                }} style={{width:"100%",background:"rgba(126,200,80,.1)",border:`1px solid rgba(126,200,80,.25)`,borderRadius:10,color:C.green,padding:"12px 6px",fontFamily:"monospace",fontSize:12,cursor:"pointer"}}>
+                  Fijar
+                </button>
+              </div>
+            </div>
+          </details>
+          {satLoading&&<div style={{fontFamily:"monospace",fontSize:11,color:C.green,textAlign:"center",marginTop:10}}>🛰 Cargando datos meteorológicos...</div>}
+          {sat&&(
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:12}}>
-              {[["🌡️",sat.temp+"°C",C.amber],["🌧",sat.p30+"mm",C.blue],["⚖️",(sat.deficit>0?"+":"")+sat.deficit,sat.deficit<-30?C.red:C.amber],["🛰",sat.ndvi,C.green]].map(([l,v,c])=>(
+              {[["🌡️",sat.temp+"°C",C.amber],["🌧",sat.p30+"mm",C.blue],["⚖️",(sat.deficit>0?"+":"")+sat.deficit,sat.deficit<-30?C.red:C.amber],["🛰",sat.ndvi,C.green]].map(([l,v,cl])=>(
                 <div key={l} style={{textAlign:"center",background:"rgba(0,0,0,.35)",borderRadius:10,padding:"10px 4px",border:`1px solid ${C.border}`}}>
                   <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginBottom:3}}>{l}</div>
-                  <div style={{fontFamily:"monospace",fontSize:13,color:c,fontWeight:700}}>{v}</div>
+                  <div style={{fontFamily:"monospace",fontSize:13,color:cl,fontWeight:700}}>{v}</div>
                 </div>
               ))}
             </div>
-            {dispar&&dispar.dias<60&&<div style={{marginTop:10,background:"rgba(192,72,32,.08)",border:"1px solid rgba(192,72,32,.25)",borderRadius:10,padding:10,fontFamily:"monospace",fontSize:11,color:"#e09070",textAlign:"center"}}>⚠️ {dispar.tipo} en ~{dispar.dias} días — C4 frena</div>}
-          </div>}
+          )}
+          {dispar&&dispar.dias<60&&sat&&<div style={{marginTop:10,background:"rgba(192,72,32,.08)",border:"1px solid rgba(192,72,32,.25)",borderRadius:10,padding:10,fontFamily:"monospace",fontSize:11,color:"#e09070",textAlign:"center"}}>⚠️ {dispar.tipo} en ~{dispar.dias} días — C4 frena</div>}
         </div>
         <div style={cardS}>
           <div style={{fontFamily:"monospace",fontSize:11,color:C.textDim,marginBottom:8}}>CONDICIÓN ENSO</div>
