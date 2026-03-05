@@ -61,38 +61,62 @@ function tasaPD(ndvi,tern){const n=parseFloat(ndvi)||0.45;const b=n>0.40?0.004:n
 
 // ── CADENA REPRODUCTIVA ──────────────────────────────
 // Dado inicio y fin de servicio, calcula fechas clave del rodeo
-function calcCadena(iniServ,finServ,modoDestete){
+// Tipos de destete: días de lactancia
+const DEST_TIPOS={trad:{dias:180,label:"Tradicional"},antic:{dias:90,label:"Anticipado"},hiper:{dias:50,label:"Hiperprecoz"}};
+
+function calcCadena(iniServ,finServ){
   if(!iniServ||!finServ)return null;
   const ini=new Date(iniServ),fin=new Date(finServ);
-  // Parto temprano (vaca preñada en inicio de servicio)
   const partoTemp=new Date(ini);partoTemp.setMonth(partoTemp.getMonth()+9);
-  // Parto tardío (vaca preñada al final de servicio — la crítica)
   const partoTard=new Date(fin);partoTard.setMonth(partoTard.getMonth()+9);
-  // Días de gestación: 283 días promedio bovino
   const diasServ=Math.round((fin-ini)/(1000*60*60*24));
-  // Destete según modalidad
-  const diasDest={hiperprecoz:45,precoz:90,tradicional:180}[modoDestete]||180;
-  const desteTemp=new Date(partoTemp);desteTemp.setDate(desteTemp.getDate()+diasDest);
-  const desteTard=new Date(partoTard);desteTard.setDate(desteTard.getDate()+diasDest);
-  // Vaca tardía: ¿tiene ternero al pie en otoño (marzo-mayo)?
-  const mesTard=desteTard.getMonth(); // mes de destete
-  const terneroOtono=mesTard>=4&&mesTard<=5; // may-jun (otoño real NEA)
-  // Días al parto temprano desde hoy
   const hoy=new Date();
   const diasPartoTemp=Math.round((partoTemp-hoy)/(1000*60*60*24));
   const diasPartoTard=Math.round((partoTard-hoy)/(1000*60*60*24));
-  // Vaquillona: nace en partoTemp aprox, pasa 1°inv al siguiente mayo
   const nacVaq=new Date(partoTemp);
-  const mayo1Inv=new Date(nacVaq.getFullYear()+1,4,1); // mayo siguiente al nacimiento
-  const edadMayo=Math.round((mayo1Inv-nacVaq)/(1000*60*60*24)/30); // meses
-  // Cadena de peso vaquillona de reposición (nacida del parto temprano)
-  // Lactancia: 700 g/d desde nacimiento hasta destete (NASSEM 2010; Balbuena INTA 2003)
-  const pvNac=35; // kg al nacer
-  const pvDestCalc=Math.round(pvNac+0.700*diasDest);
-  // Post-destete otoñal: 400 g/d desde destete hasta mayo (campo cubre requerimientos)
-  const diasPostDest=Math.max(0,Math.round((mayo1Inv-desteTemp)/(1000*60*60*24)));
-  const pvMayo1InvCalc=Math.round(pvDestCalc+0.400*diasPostDest);
-  return{ini,fin,diasServ,partoTemp,partoTard,desteTemp,desteTard,diasDest,terneroOtono,diasPartoTemp,diasPartoTard,nacVaq,mayo1Inv,edadMayo,pvDestCalc,pvMayo1InvCalc};
+  const mayo1Inv=new Date(nacVaq.getFullYear()+1,4,1);
+  const edadMayo=Math.round((mayo1Inv-nacVaq)/(1000*60*60*24)/30);
+  const PV_NAC=35;
+  // Calcular cadena de peso por cada tipo de destete
+  const tipos={};
+  Object.entries(DEST_TIPOS).forEach(([key,{dias,label}])=>{
+    const desteTemp=new Date(partoTemp);desteTemp.setDate(desteTemp.getDate()+dias);
+    const desteTard=new Date(partoTard);desteTard.setDate(desteTard.getDate()+dias);
+    const terneroOtono=desteTard.getMonth()>=4&&desteTard.getMonth()<=5; // may-jun
+    const pvDest=Math.round(PV_NAC+0.700*dias); // 700g/d lactancia
+    const diasPostDest=Math.max(0,Math.round((mayo1Inv-desteTemp)/(1000*60*60*24)));
+    const pvMayo=Math.round(pvDest+0.400*diasPostDest); // 400g/d post-destete
+    tipos[key]={dias,label,desteTemp,desteTard,terneroOtono,pvDest,pvMayo};
+  });
+  // Para alerta vaca tardía: usar el tradicional como referencia
+  const terneroOtono=tipos.trad.terneroOtono;
+  return{ini,fin,diasServ,partoTemp,partoTard,diasPartoTemp,diasPartoTard,nacVaq,mayo1Inv,edadMayo,tipos,terneroOtono,
+    // compatibilidad con cadena anterior
+    desteTemp:tipos.trad.desteTemp,desteTard:tipos.trad.desteTard,
+    pvDestCalc:tipos.trad.pvDest,pvMayo1InvCalc:tipos.trad.pvMayo};
+}
+
+// Terneros y PV ponderado:
+// vacas × %preñez × %destete → terneros destetados
+// distribuidos por tipo → PV destete y PV mayo ponderados
+function calcTerneros(vacasN,prenez,pctDestete,destTrad,destAntic,destHiper,cadena){
+  const vN=parseInt(vacasN)||0;
+  const prN=parseFloat(prenez)||0;
+  const pdN=parseFloat(pctDestete)||0;
+  const terneros=Math.round(vN*(prN/100)*(pdN/100));
+  const pTrad=Math.max(0,parseFloat(destTrad)||0);
+  const pAntic=Math.max(0,parseFloat(destAntic)||0);
+  const pHiper=Math.max(0,parseFloat(destHiper)||0);
+  const total=pTrad+pAntic+pHiper;
+  if(!total||!terneros||!cadena)return{terneros,pvMayoPond:0,pvDestPond:0,detalle:[]};
+  const detalle=[
+    {key:"trad",label:"Tradicional (180d)",pct:pTrad/total,n:Math.round(terneros*pTrad/total),pvDest:cadena.tipos.trad.pvDest,pvMayo:cadena.tipos.trad.pvMayo},
+    {key:"antic",label:"Anticipado (90d)",pct:pAntic/total,n:Math.round(terneros*pAntic/total),pvDest:cadena.tipos.antic.pvDest,pvMayo:cadena.tipos.antic.pvMayo},
+    {key:"hiper",label:"Hiperprecoz (50d)",pct:pHiper/total,n:Math.round(terneros*pHiper/total),pvDest:cadena.tipos.hiper.pvDest,pvMayo:cadena.tipos.hiper.pvMayo},
+  ].filter(d=>d.pct>0);
+  const pvMayoPond=Math.round(detalle.reduce((s,d)=>s+d.pct*d.pvMayo,0));
+  const pvDestPond=Math.round(detalle.reduce((s,d)=>s+d.pct*d.pvDest,0));
+  return{terneros,pvMayoPond,pvDestPond,detalle};
 }
 
 // ── VAQ 1° INVIERNO ──────────────────────────────────
@@ -164,7 +188,7 @@ function GraficoBalance({form,sat,dispar,vaq1E,potreros}){
   const prov=form.provincia||"Corrientes";
   const ndvi=sat?.ndvi||"0.45";
   const hist=getClima(prov);
-  const mesD=form.estadoDestete==="ok_feb"?1:form.estadoDestete==="ok_mar"?2:form.estadoDestete==="tard_abr"?3:mc;
+  const mesD=cadena?new Date(cadena.desteTemp).getMonth():mc;
   const diasP=parseInt(form.diasParto)||90;
   const mesP=Math.min(11,(mesD+Math.round(diasP/30))%12);
   const mb15=dispar?.mb15||4;
@@ -376,8 +400,8 @@ function buildRecomRows(form,vaq1E,vaq2E,ccParto,curva,dispar,cadena){
     rows.push({prioridad:!vaq2E.llegas?"urgente":"importante",categoria:`Vaq 2°inv (${form.vaq2N} cab)`,accion:`Esc ${vaq2E.esc}: ${vaq2E.prot}kg prot/día${vaq2E.energ>0?" + "+vaq2E.energ+"kg maíz/día":""} · ${vaq2E.freq}`,fecha:"May → Ago",resultado:`GDP ${vaq2E.gdpReal}g/d → ${vaq2E.pvEntore}kg entore${!vaq2E.llegas?" ⚠️":""}`});
   if(dispar&&dispar.dias<45&&dispar.dias<999)
     rows.push({prioridad:"importante",categoria:"Alerta forrajera",accion:`${dispar.tipo} en ~${dispar.dias} días — iniciar suplementación proteica antes`,fecha:`~${dispar.dias}d`,resultado:"Evitar pérdida CC"});
-  if(cadena?.terneroOtono)
-    rows.push({prioridad:"urgente",categoria:"Vaca tardía (fin serv.)",accion:"Ternero al pie en otoño → CC comprometida. Destete anticipado o hiperprecoz",fecha:fmtFecha(cadena.desteTemp),resultado:"Recuperación CC otoñal"});
+  if(cadena?.tipos?.trad?.terneroOtono)
+    rows.push({prioridad:"urgente",categoria:"Vaca tardía",accion:"Destete tradicional cae en otoño → CC comprometida. Usar anticipado o hiperprecoz",fecha:fmtFecha(cadena.tipos.trad.desteTemp),resultado:"Recuperar CC otoñal"});
   return rows;
 }
 
@@ -386,14 +410,14 @@ function buildRecomRows(form,vaq1E,vaq2E,ccParto,curva,dispar,cadena){
 // ═══════════════════════════════════════════════════════
 function RenderInforme({text,form,sat,dispar,vaq1E,vaq2E,ccParto,curva,cadena,potreros}){
   if(!text)return null;
-  const EMOJIS=["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣"];
-  const TITLES=["Diagnóstico Ambiental","Diagnóstico por Categoría","Destete y Proyección CC","Balance Oferta vs Demanda","Estrategia","Recomendaciones"];
-  const ICONS=["🌡️","🐄","📅","⚖️","🎯","✅"];
-  const CITES=["Open-Meteo API · NDVI: Paruelo & Oesterheld (2000)","NASSEM (2010) · Detmann et al. (2014) · Balbuena INTA (2003)","Peruchena INTA (2003) · Rosello Brajovich et al. INTA (2025)","Paruelo & Oesterheld (2000) · Peruchena INTA (2003) · Oesterheld et al. (1998) · UF/IFAS Sollenberger (2000)","NASSEM (2010) · Balbuena INTA (2003)","NASSEM (2010) · Peruchena INTA (2003) · Rosello Brajovich et al. INTA (2025)"];
+  const EMOJIS=["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣"];
+  const TITLES=["Diagnóstico Ambiental","Diagnóstico por Categoría","Destete y Proyección CC","Balance Oferta vs Demanda","Recomendaciones"];
+  const ICONS=["🌡️","🐄","📅","⚖️","✅"];
+  const CITES=["Open-Meteo API · NDVI: Paruelo & Oesterheld (2000)","NASSEM (2010) · Detmann et al. (2014) · Balbuena INTA (2003)","Peruchena INTA (2003) · Rosello Brajovich et al. INTA (2025)","Paruelo & Oesterheld (2000) · Peruchena INTA (2003) · Oesterheld et al. (1998) · UF/IFAS Sollenberger (2000)","NASSEM (2010) · Peruchena INTA (2003) · Rosello Brajovich et al. INTA (2025)"];
   const pC=curva?.pr||0;
-  const STATUSES=[dispar&&dispar.dias<30?"crit":dispar&&dispar.dias<60?"warn":"ok",pC>=75?"ok":pC>=55?"warn":"crit",ccParto&&ccParto>=5.5?"ok":ccParto&&ccParto>=5.0?"warn":"crit","warn","ok","ok"];
+  const STATUSES=[dispar&&dispar.dias<30?"crit":dispar&&dispar.dias<60?"warn":"ok",pC>=75?"ok":pC>=55?"warn":"crit",ccParto&&ccParto>=5.5?"ok":ccParto&&ccParto>=5.0?"warn":"crit","warn","ok"];
   let sections=[];let remaining=text;
-  for(let i=0;i<6;i++){const em=EMOJIS[i];const nxt=i<6?EMOJIS[i+1]:null;const st=remaining.indexOf(em);if(st===-1){sections.push("");continue;}const en=nxt?remaining.indexOf(nxt,st+1):-1;const chunk=en>-1?remaining.slice(st,en):remaining.slice(st);sections.push(chunk.split("\n").slice(1).join("\n").trim());if(en>-1)remaining=remaining.slice(en);}
+  for(let i=0;i<5;i++){const em=EMOJIS[i];const nxt=i<6?EMOJIS[i+1]:null;const st=remaining.indexOf(em);if(st===-1){sections.push("");continue;}const en=nxt?remaining.indexOf(nxt,st+1):-1;const chunk=en>-1?remaining.slice(st,en):remaining.slice(st);sections.push(chunk.split("\n").slice(1).join("\n").trim());if(en>-1)remaining=remaining.slice(en);}
   const recomRows=buildRecomRows(form,vaq1E,vaq2E,ccParto,curva,dispar,cadena);
   const rr=(t)=>t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n\n/g,"<br/><br/>").replace(/\n/g,"<br/>");
   return(
@@ -470,8 +494,7 @@ GDP mínimo 300 g/día. Dar dosis en kg/día.
 2️⃣ DIAGNÓSTICO POR CATEGORÍA: Mcal(PV^0.75) vs oferta. CC ponderada.
 3️⃣ DESTETE Y PROYECCIÓN CC: 3 tramos con números del sistema. Alerta vaca tardía si aplica.
 4️⃣ BALANCE OFERTA vs DEMANDA: por potrero si aplica. Citar fuentes.
-5️⃣ ESTRATEGIA: destete→suplementación→ajuste carga. Kg/día sin precios.
-6️⃣ RECOMENDACIONES: tabla CATEGORÍA|ACCIÓN|FECHA|KG/DÍA|RESULTADO con semáforo 🔴🟡🟢
+5️⃣ RECOMENDACIONES: tabla priorizada CATEGORÍA|ACCIÓN|FECHA|KG/DÍA|RESULTADO con semáforo 🔴🟡🟢. Incluir estrategia de suplementación con kg/día sin precios dentro de esta sección.
 
 NO incluir sección de emergencia ni impacto 1-2 años.
 AL FINAL siempre el disclaimer completo.
@@ -483,11 +506,11 @@ Citar: (NASSEM,2010)·(Balbuena,INTA 2003)·(Peruchena,INTA 2003)·(Detmann et a
 export default function AgroMind(){
   const[step,setStep]=useState(0);
   const[form,setForm]=useState({
-    nombreProductor:"",estadoDestete:"",pastoCal:"",diasParto:"",eReprod:"",
-    iniServ:"",finServ:"",modoDestete:"tradicional",
+    nombreProductor:"",pastoCal:"",diasParto:"",eReprod:"",
+    iniServ:"",finServ:"",destTrad:"100",destAntic:"0",destHiper:"0",
     v2sN:"",v2sPV:"",v2sTernero:"",
     zona:"",provincia:"",mes:"",clima:"",vegetacion:"",supHa:"",pctMonte:"0",pctNGan:"0",fenologia:"",
-    vacasN:"",ternerosN:"",torosN:"",prenezHist:"",pctDestete:"",
+    vacasN:"",torosN:"",prenez:"",pctDestete:"",
     vaq1N:"",vaq1PV:"",pvDestVaq:"",vaq2N:"",vaq2PV:"",diasEntore:"",
     pvVacaAdulta:"",suplem:"",consulta:"",enso:"neutro",
     ccDist:[{cc:6,pct:50},{cc:5,pct:30},{cc:4,pct:20}],
@@ -518,26 +541,25 @@ export default function AgroMind(){
   // Cadena reproductiva
   useEffect(()=>{
     if(form.iniServ&&form.finServ){
-      const c=calcCadena(form.iniServ,form.finServ,form.modoDestete);
+      const c=calcCadena(form.iniServ,form.finServ);
       setCadena(c);
-      if(c&&c.diasPartoTemp>0){
-        set("diasParto",String(Math.max(0,c.diasPartoTemp)));
-      }
+      if(c&&c.diasPartoTemp>0)set("diasParto",String(Math.max(0,c.diasPartoTemp)));
     } else setCadena(null);
-  },[form.iniServ,form.finServ,form.modoDestete]);
+  },[form.iniServ,form.finServ]);
 
   // CC parto
   useEffect(()=>{
     const dp=parseInt(form.diasParto);const cc=ccPond(form.ccDist);
-    if(cc>0&&dp>0){const p=calcCCParto(form.ccDist,dp,form.estadoDestete,form.pastoCal,"",sat?.ndvi||"0.45",form.provincia);setCcParto(p);setCurva(p?interpCC(p):null);}
+    if(cc>0&&dp>0){const p=calcCCParto(form.ccDist,dp,"ok_feb",form.pastoCal,"",sat?.ndvi||"0.45",form.provincia);setCcParto(p);setCurva(p?interpCC(p):null);}
     else{setCcParto(null);setCurva(null);}
-  },[form.ccDist,form.diasParto,form.estadoDestete,form.pastoCal,form.provincia,sat]);
+  },[form.ccDist,form.diasParto,form.pastoCal,form.provincia,sat]);
 
   useEffect(()=>{if(form.provincia&&sat)setDispar(calcDisp(form.provincia,sat.ndvi,sat.deficit,sat));else setDispar(null);},[form.provincia,sat]);
 
   // Vaq1 desde cadena o manual
   useEffect(()=>{
-    const pvMayoEst=form.pvDestVaq?Math.round(parseFloat(form.pvDestVaq)+0.400*Math.max(0,cadena?(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24):90)):cadena?.pvMayo1InvCalc||parseFloat(form.vaq1PV)||0;
+    const ternCalc=cadena?calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena):null;
+    const pvMayoEst=form.pvDestVaq?parseFloat(form.pvDestVaq):ternCalc?.pvMayoPond||parseFloat(form.vaq1PV)||0;
     if(pvMayoEst&&sat)setVaq1E(calcVaq1({ndvi:sat.ndvi,bal:sat.deficit,pv:pvMayoEst}));
     else setVaq1E(null);
   },[form.vaq1PV,sat,cadena]);
@@ -578,7 +600,16 @@ export default function AgroMind(){
   const saveProductor=(informe)=>{
     if(!form.nombreProductor.trim())return;
     const hoy=new Date().toLocaleDateString("es-AR");
-    const r={nombre:form.nombreProductor,fechaConsulta:hoy,zona:form.zona,provincia:form.provincia,iniServ:form.iniServ,finServ:form.finServ,modoDestete:form.modoDestete,partoTemp:cadena?fmtFecha(cadena.partoTemp):"",partoTard:cadena?fmtFecha(cadena.partoTard):"",mes:form.mes,clima:form.clima,enso:form.enso,ndvi:sat?.ndvi||"",supHa:usaPotreros?potreros.reduce((s,p)=>s+(parseFloat(p.ha)||0),0):form.supHa,vegetacion:usaPotreros?potreros.map(p=>p.veg).join("|"):form.vegetacion,fenologia:form.fenologia,disparador:dispar?.tipo||"",ccDistribucion:form.ccDist.map(d=>`${d.pct}%→CC${d.cc}`).join("|"),ccPonderada:ccPond(form.ccDist).toFixed(1),diasParto:form.diasParto,pvAdulta:form.pvVacaAdulta,vacasN:form.vacasN,v2sN:form.v2sN,v2sPV:form.v2sPV,cc2sDistribucion:form.cc2sDist.map(d=>`${d.pct}%→CC${d.cc}`).join("|"),pvVacaAdulta:form.pvVacaAdulta,vaq1N:form.vaq1N,vaq1PVentrada:cadena?.pvMayo1Inv||form.vaq1PV,vaq1Escenario:vaq1E?`Esc ${vaq1E.esc}: ${vaq1E.prot}kg prot/día · GDP ${vaq1E.gdpReal}g/d → ${vaq1E.pvSal}kg`:"",vaq2N:form.vaq2N,vaq2PVentrada:vaq1E?.pvAbr2Inv||form.vaq2PV,vaq2Escenario:vaq2E?`Esc ${vaq2E.esc}: ${vaq2E.prot}kg prot/día · GDP ${vaq2E.gdpReal}g/d → ${vaq2E.pvEntore}kg entore`:"",ccParto:ccParto||"",prenezEst:curva?.pr||"",informe:(informe||"").slice(0,400),fechaVisita:hoy,nPotreros:usaPotreros?potreros.length:0,potreros:usaPotreros?JSON.stringify(potreros.map(p=>({ha:p.ha,veg:p.veg,fenol:p.fenol}))):"[]"};
+    const tc=cadena?calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena):null;
+    const getTipo=(key)=>tc?.detalle?.find(d=>d.key===key)||{};
+    const r={nombre:form.nombreProductor,fechaConsulta:hoy,zona:form.zona,provincia:form.provincia,iniServ:form.iniServ,finServ:form.finServ,partoTemp_est:cadena?fmtFecha(cadena.partoTemp):"",partoTard_est:cadena?fmtFecha(cadena.partoTard):"",mes:form.mes,clima:form.clima,enso:form.enso,ndvi:sat?.ndvi||"",supHa:usaPotreros?potreros.reduce((s,p)=>s+(parseFloat(p.ha)||0),0):form.supHa,vegetacion:usaPotreros?potreros.map(p=>p.veg).join("|"):form.vegetacion,fenologia:form.fenologia,disparador:dispar?.tipo||"",ccDistribucion:form.ccDist.map(d=>`${d.pct}%→CC${d.cc}`).join("|"),ccPonderada:ccPond(form.ccDist).toFixed(1),diasParto:form.diasParto,pvAdulta:form.pvVacaAdulta,vacasN:form.vacasN,prenez:form.prenez,pctDestete:form.pctDestete,destTrad:form.destTrad,destAntic:form.destAntic,destHiper:form.destHiper,v2sN:form.v2sN,v2sPV:form.v2sPV,cc2sDistribucion:form.cc2sDist.map(d=>`${d.pct}%→CC${d.cc}`).join("|"),pvVacaAdulta:form.pvVacaAdulta,vaq1N:form.vaq1N,vaq1PVentrada:(()=>{const tc=cadena?calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena):null;return tc?.pvMayoPond||form.vaq1PV||"";})(),vaq1Escenario:vaq1E?`Esc ${vaq1E.esc}: ${vaq1E.prot}kg prot/día · GDP ${vaq1E.gdpReal}g/d → ${vaq1E.pvSal}kg`:"",vaq2N:form.vaq2N,vaq2PVentrada:vaq1E?.pvAbr2Inv||form.vaq2PV,vaq2Escenario:vaq2E?`Esc ${vaq2E.esc}: ${vaq2E.prot}kg prot/día · GDP ${vaq2E.gdpReal}g/d → ${vaq2E.pvEntore}kg entore`:"",ccParto:ccParto||"",prenezEst:curva?.pr||"",
+      ternerosTotales:tc?.terneros||"",
+      destTrad_pct:form.destTrad||"0",destTrad_n:getTipo("trad").n||"",destTrad_pvDest:getTipo("trad").pvDest||"",destTrad_pvMayo:getTipo("trad").pvMayo||"",
+      destAntic_pct:form.destAntic||"0",destAntic_n:getTipo("antic").n||"",destAntic_pvDest:getTipo("antic").pvDest||"",destAntic_pvMayo:getTipo("antic").pvMayo||"",
+      destHiper_pct:form.destHiper||"0",destHiper_n:getTipo("hiper").n||"",destHiper_pvDest:getTipo("hiper").pvDest||"",destHiper_pvMayo:getTipo("hiper").pvMayo||"",
+      pvMayoPond:tc?.pvMayoPond||"",
+      temp:sat?.temp||"",p30mm:sat?.p30||"",balanceHidrico:sat?.deficit||"",
+      informe:(informe||"").slice(0,400),fechaVisita:hoy,nPotreros:usaPotreros?potreros.length:0,potreros:usaPotreros?JSON.stringify(potreros.map(p=>({ha:p.ha,veg:p.veg,fenol:p.fenol}))):"[]"};
     const upd=[r,...productores.filter(p=>p.nombre!==form.nombreProductor)];
     setProductores(upd);try{localStorage.setItem("agm_prod",JSON.stringify(upd));}catch(e){}
   };
@@ -586,7 +617,7 @@ export default function AgroMind(){
   const exportCSV=()=>{
     if(!productores.length){alert("Sin datos.");return;}
     // CSV dinámico con columnas de potreros
-    const baseCols=["nombre","fechaConsulta","zona","provincia","iniServ","finServ","modoDestete","partoTemp","partoTard","mes","clima","enso","ndvi","supHa","vegetacion","fenologia","disparador","vacasN","pvAdulta","ccDistribucion","ccPonderada","diasParto","eReprod","v2sN","v2sPV","cc2sDistribucion","vaq1N","vaq1PVentrada","vaq1Escenario","vaq2N","vaq2PVentrada","vaq2Escenario","ccParto","prenezEst","informe","fechaVisita"];
+    const baseCols=["nombre","fechaConsulta","zona","provincia","iniServ","finServ","partoTemp_est","partoTard_est","mes","clima","enso","ndvi","temp","p30mm","balanceHidrico","supHa","vegetacion","fenologia","disparador","vacasN","prenez","pctDestete","ternerosTotales","destTrad_pct","destTrad_n","destTrad_pvDest","destTrad_pvMayo","destAntic_pct","destAntic_n","destAntic_pvDest","destAntic_pvMayo","destHiper_pct","destHiper_n","destHiper_pvDest","destHiper_pvMayo","pvMayoPond","pvAdulta","ccDistribucion","ccPonderada","ccParto","prenezEst","eReprod","v2sN","v2sPV","cc2sDistribucion","vaq1N","vaq1PVentrada","vaq1Escenario","vaq2N","vaq2PVentrada","vaq2Escenario","informe","fechaVisita"];
     // Máximo de potreros en los registros
     const maxPot=Math.max(0,...productores.map(p=>parseInt(p.nPotreros)||0));
     const potCols=[];
@@ -616,11 +647,11 @@ export default function AgroMind(){
     if(cadena){
       t+=`\nSERVICIO: ${fmtFecha(cadena.ini)} → ${fmtFecha(cadena.fin)} (${cadena.diasServ} días)\n`;
       t+=`PARTO TEMPRANO: ${fmtFecha(cadena.partoTemp)} · PARTO TARDÍO: ${fmtFecha(cadena.partoTard)}\n`;
-      t+=`DESTETE (${form.modoDestete}): Temprano ${fmtFecha(cadena.desteTemp)} · Tardío ${fmtFecha(cadena.desteTard)}\n`;
-      if(cadena.terneroOtono)t+=`⚠️ ALERTA: VACA TARDÍA con ternero al pie en otoño — destete anticipado o hiperprecoz\n`;
+      t+=(()=>{const tipos=["trad","antic","hiper"];const ls=tipos.map(k=>{const p=parseFloat(form["dest"+k.charAt(0).toUpperCase()+k.slice(1)])||0;if(!p)return"";const t=cadena.tipos[k];return `${t.label} ${p}%→${fmtFecha(t.desteTemp).slice(0,6)} PVdest:${t.pvDest}kg PVmayo:${t.pvMayo}kg`;}).filter(Boolean);return`DESTETE: ${ls.join(" | ")}\n`;})();
+      if(cadena.tipos.trad?.terneroOtono)t+=`⚠️ ALERTA: VACA TARDÍA con ternero al pie en otoño — usar destete anticipado o hiperprecoz\n`;
       t+=`Vaquillona: nace ~${fmtFecha(cadena.nacVaq)} · entra 1°inv ${fmtFecha(cadena.mayo1Inv)} (${cadena.edadMayo} meses) · PV entrada estimado: ${cadena.pvMayo1Inv}kg\n`;
     }
-    t+=`\nDESTETE RODEO: ${form.estadoDestete||"—"} · Pasto: ${form.pastoCal||"—"}\n`;
+    t+=`\nCALIDAD PASTO post-destete: ${form.pastoCal||"—"}\n`;
     t+=`DIST CC: ${form.ccDist.map(d=>`${d.pct}%→CC${d.cc}`).join(" | ")} · Pond: ${ccPond(form.ccDist).toFixed(1)}/9\n`;
     t+=`PV vaca adulta: ${form.pvVacaAdulta||"—"}kg\n`;
     if(form.pvVacaAdulta&&form.eReprod){const r=reqEM(form.pvVacaAdulta,form.eReprod);if(r)t+=`Req EM (PV^0.75): ${r} Mcal/día\n`;}
@@ -638,7 +669,13 @@ export default function AgroMind(){
     t+=`FORRAJE: Fenol: ${form.fenologia||"—"} · Veg: ${form.vegetacion||"—"}\n`;
     t+=`2°SERV: N°${form.v2sN||"—"} · PV ${form.v2sPV||"—"}kg · Ternero: ${form.v2sTernero||"—"}\n`;
     t+=`DIST CC 2°SERV: ${form.cc2sDist.map(d=>`${d.pct}%→CC${d.cc}`).join(" | ")} · Pond: ${ccPond(form.cc2sDist).toFixed(1)}/9\n`;
-    t+=`RODEO: ${form.vacasN||"—"} vacas · ${form.ternerosN||"—"} terneros · Preñez hist ${form.prenezHist||"—"}%\n`;
+    t+=(()=>{
+      const tc=cadena?calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena):null;
+      const det=tc?.detalle||[];
+      return `RODEO: ${form.vacasN||"—"} vacas · Preñez: ${form.prenez||"—"}% · %Destete: ${form.pctDestete||"—"}% → ${tc?.terneros||"—"} terneros destetados\n`+
+        det.map(d=>`  ${d.label}: ${d.n} terneros (${Math.round(d.pct*100)}%) · PV destete ${d.pvDest}kg · PV mayo ${d.pvMayo}kg\n`).join("")+
+        `  PV ponderado entrada mayo 1°inv: ${tc?.pvMayoPond||"—"}kg\n`;
+    })();
     t+=(()=>{
       const pvD=parseFloat(form.pvDestVaq)||cadena?.pvDestCalc||0;
       const pvM=pvD>0&&cadena?Math.round(pvD+0.400*Math.max(0,(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24))):cadena?.pvMayo1InvCalc||parseFloat(form.vaq1PV)||0;
@@ -715,95 +752,129 @@ export default function AgroMind(){
       </div>
     );
 
-    // PASO 1 — FECHAS DE SERVICIO
-    if(step===1)return(
+    // PASO 1 — FECHAS DE SERVICIO + MODALIDADES DE DESTETE
+    if(step===1){
+      const sumDest=(parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0);
+      const sumOk=Math.abs(sumDest-100)<1;
+      return(
       <div>
         <div style={cardS}>
           <div style={{fontFamily:"monospace",fontSize:13,color:C.amber,marginBottom:6,letterSpacing:1}}>📅 FECHA DE SERVICIO</div>
           <div style={{fontFamily:"monospace",fontSize:10,color:"rgba(212,149,42,.55)",marginBottom:14}}>NEA estándar: noviembre → enero/febrero (3,5 meses)</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-            <div>
-              <label style={lbl}>Inicio de servicio</label>
-              <input type="date" value={form.iniServ} onChange={e=>set("iniServ",e.target.value)} style={inp}/>
-            </div>
-            <div>
-              <label style={lbl}>Fin de servicio</label>
-              <input type="date" value={form.finServ} onChange={e=>set("finServ",e.target.value)} style={inp}/>
-            </div>
+            <div><label style={lbl}>Inicio de servicio</label><input type="date" value={form.iniServ} onChange={e=>set("iniServ",e.target.value)} style={inp}/></div>
+            <div><label style={lbl}>Fin de servicio</label><input type="date" value={form.finServ} onChange={e=>set("finServ",e.target.value)} style={inp}/></div>
           </div>
-          <label style={lbl}>Modalidad de destete</label>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:12}}>
-            {[["hiperprecoz","⚡ Hiperprecoz\n45d"],["precoz","🔶 Precoz\n90d"],["tradicional","🟢 Tradicional\n180d"]].map(([v,l])=>(
-              <button key={v} onClick={()=>set("modoDestete",v)} style={{...btnSel(form.modoDestete===v,v==="hiperprecoz"?C.blue:v==="precoz"?C.amber:C.green),fontSize:11,padding:"12px 6px",whiteSpace:"pre-line",lineHeight:1.3}}>{l}</button>
-            ))}
-          </div>
-          {cadena&&(
-            <div style={{background:"rgba(0,0,0,.3)",border:`1px solid ${C.border}`,borderRadius:12,padding:14}}>
-              <div style={{fontFamily:"monospace",fontSize:11,color:C.green,marginBottom:10,letterSpacing:1}}>📋 CADENA REPRODUCTIVA CALCULADA</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                {[
-                  ["Servicio",`${cadena.diasServ} días`,C.textDim],
-                  ["Parto temprano",fmtFecha(cadena.partoTemp),C.green],
-                  ["Parto tardío",fmtFecha(cadena.partoTard),C.amber],
-                  ["Destete temprano",fmtFecha(cadena.desteTemp),C.green],
-                  ["Destete tardío",fmtFecha(cadena.desteTard),cadena.terneroOtono?C.red:C.amber],
-                  ["Días al parto (temp.)",cadena.diasPartoTemp>0?cadena.diasPartoTemp+"d":"pasado",C.textDim],
-                ].map(([l,v,c])=>(
-                  <div key={l} style={{background:"rgba(0,0,0,.2)",borderRadius:8,padding:"8px 10px"}}>
-                    <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginBottom:2}}>{l}</div>
-                    <div style={{fontFamily:"monospace",fontSize:12,color:c,fontWeight:600}}>{v}</div>
-                  </div>
-                ))}
-              </div>
-              {cadena.terneroOtono&&(
-                <div style={{marginTop:10,background:"rgba(192,72,32,.08)",border:"1px solid rgba(192,72,32,.3)",borderRadius:8,padding:10,fontFamily:"monospace",fontSize:11,color:C.red}}>
-                  🚨 VACA TARDÍA: destete en {fmtFecha(cadena.desteTard)} — ternero al pie en otoño. Considerar destete anticipado o hiperprecoz.
-                </div>
-              )}
-              <div style={{marginTop:10,background:"rgba(212,149,42,.06)",border:"1px solid rgba(212,149,42,.2)",borderRadius:8,padding:10}}>
-                <div style={{fontFamily:"monospace",fontSize:10,color:C.amber,marginBottom:6}}>🐄 VAQUILLONA — 1° INVIERNO</div>
-                <div style={{fontFamily:"monospace",fontSize:10,color:C.textDim,lineHeight:1.6}}>
-                  Nace: <strong style={{color:C.text}}>{fmtFecha(cadena.nacVaq)}</strong><br/>
-                  Entra 1°inv: <strong style={{color:C.text}}>{fmtFecha(cadena.mayo1Inv)}</strong> ({cadena.edadMayo} meses)<br/>
-                  PV estimado entrada mayo: <strong style={{color:C.amber}}>{cadena.pvMayo1Inv} kg</strong>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
+        <div style={cardS}>
+          <div style={{fontFamily:"monospace",fontSize:13,color:C.green,marginBottom:4,letterSpacing:1}}>🐄 MODALIDAD DE DESTETE</div>
+          <div style={{fontFamily:"monospace",fontSize:10,color:"rgba(126,200,80,.4)",marginBottom:14}}>% del total de terneros destetados por modalidad. Deben sumar 100%.</div>
+          {[["destTrad","⏳ Tradicional","180 días de lactancia",C.green],["destAntic","🔶 Anticipado","90 días de lactancia",C.amber],["destHiper","⚡ Hiperprecoz","50 días de lactancia",C.blue]].map(([k,label,sub,col])=>(
+            <div key={k} style={{background:"rgba(0,0,0,.25)",border:`1px solid ${C.border}`,borderRadius:12,padding:12,marginBottom:8}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                <div>
+                  <div style={{fontFamily:"monospace",fontSize:12,color:col,fontWeight:600}}>{label}</div>
+                  <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim}}>{sub}</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <input type="number" inputMode="numeric" min="0" max="100" value={form[k]} onChange={e=>set(k,e.target.value)}
+                    style={{...inp,width:72,textAlign:"center",padding:"10px 6px",fontSize:18,fontWeight:700,color:col}}/>
+                  <span style={{fontFamily:"monospace",fontSize:14,color:C.textDim}}>%</span>
+                </div>
+              </div>
+              {cadena&&parseFloat(form[k]||0)>0&&(()=>{
+                const tipo={destTrad:"trad",destAntic:"antic",destHiper:"hiper"}[k];
+                const t=cadena.tipos[tipo];
+                return t?(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}>
+                  {[["Días lact.",t.dias+"d",C.textDim],["PV destete",t.pvDest+"kg",col],["PV mayo",t.pvMayo+"kg",C.amber]].map(([l,v,c])=>(
+                    <div key={l} style={{textAlign:"center",background:"rgba(0,0,0,.2)",borderRadius:6,padding:"4px 2px"}}>
+                      <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim}}>{l}</div>
+                      <div style={{fontFamily:"monospace",fontSize:11,fontWeight:700,color:c}}>{v}</div>
+                    </div>
+                  ))}
+                </div>):null;
+              })()}
+            </div>
+          ))}
+          <div style={{fontFamily:"monospace",fontSize:11,textAlign:"right",marginTop:4,color:sumOk?C.green:C.red}}>
+            Total: {Math.round(sumDest)}% {sumOk?"✅":"⚠️ debe ser 100%"}
+          </div>
+        </div>
+        {cadena&&(
+          <div style={{...cardS,border:"1px solid rgba(126,200,80,.2)"}}>
+            <div style={{fontFamily:"monospace",fontSize:11,color:C.green,marginBottom:10,letterSpacing:1}}>📋 CADENA REPRODUCTIVA</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
+              {[["Servicio",cadena.diasServ+" días",C.textDim],["Parto temprano",fmtFecha(cadena.partoTemp),C.green],["Parto tardío",fmtFecha(cadena.partoTard),C.amber],["Días al parto",cadena.diasPartoTemp>0?cadena.diasPartoTemp+"d":"ya ocurrió",cadena.diasPartoTemp>0?C.green:C.textDim]].map(([l,v,col])=>(
+                <div key={l} style={{background:"rgba(0,0,0,.2)",borderRadius:8,padding:"8px 10px"}}>
+                  <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginBottom:2}}>{l}</div>
+                  <div style={{fontFamily:"monospace",fontSize:12,color:col,fontWeight:600}}>{v}</div>
+                </div>
+              ))}
+            </div>
+            {cadena.terneroOtono&&(
+              <div style={{background:"rgba(192,72,32,.08)",border:"1px solid rgba(192,72,32,.3)",borderRadius:8,padding:10,fontFamily:"monospace",fontSize:11,color:C.red,marginBottom:8}}>
+                🚨 VACA TARDÍA (trad.): destete {fmtFecha(cadena.tipos.trad.desteTard)} — ternero al pie en otoño
+              </div>
+            )}
+            <div style={{background:"rgba(212,149,42,.06)",border:"1px solid rgba(212,149,42,.15)",borderRadius:8,padding:10}}>
+              <div style={{fontFamily:"monospace",fontSize:10,color:C.amber,marginBottom:6}}>🐄 VAQUILLONA — entrada 1°inv: {fmtFecha(cadena.mayo1Inv)} ({cadena.edadMayo} meses)</div>
+              {[["destTrad","trad"],["destAntic","antic"],["destHiper","hiper"]].filter(([k])=>parseFloat(form[k]||0)>0).map(([k,tk])=>{
+                const t=cadena.tipos[tk];
+                return(<div key={k} style={{fontFamily:"monospace",fontSize:10,color:C.textDim,marginBottom:3}}>
+                  {t.label}: <strong style={{color:C.text}}>{t.pvDest}kg destete</strong> → 400g/d → <strong style={{color:C.amber}}>{t.pvMayo}kg mayo</strong>
+                </div>);
+              })}
+            </div>
+          </div>
+        )}
       </div>
-    );
+    );}
 
     // PASO 2 — RODEO GENERAL
     if(step===2)return(
       <div>
         <div style={cardS}>
-          <div style={{fontFamily:"monospace",fontSize:13,color:C.amber,marginBottom:12,letterSpacing:1}}>📅 ESTADO DESTETE</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-            {[["ok_feb","✅ Feb"],["ok_mar","✅ Mar"],["tard_abr","⚠️ Abr"],["no_ternero","🔴 Con ternero"],["precoz","⚡ Precoz"],["planif","📋 Planifico"]].map(([v,l])=>(
-              <button key={v} onClick={()=>set("estadoDestete",v)} style={btnSel(form.estadoDestete===v,v==="no_ternero"?C.red:C.amber)}>{l}</button>
-            ))}
-          </div>
-          <label style={lbl}>Calidad pastizal post-destete</label>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
-            {[["excelente","🟢 Exc"],["bueno","🟡 Buen"],["regular","🟠 Reg"],["malo","🔴 Malo"]].map(([v,l])=>(
-              <button key={v} onClick={()=>set("pastoCal",v)} style={btnSel(form.pastoCal===v)}>{l}</button>
-            ))}
-          </div>
-        </div>
-        <div style={cardS}>
           <div style={{fontFamily:"monospace",fontSize:13,color:C.green,marginBottom:12,letterSpacing:1}}>🐄 RODEO GENERAL</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-            {[["vacasN","N° Vacas","150"],["pvVacaAdulta","PV vaca adulta (kg)","400"]].map(([k,l,p])=>(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            {[["vacasN","N° Vacas","150"],["torosN","N° Toros","8"],["prenez","% Preñez (tacto)","82"],["pctDestete","% Destete","80"]].map(([k,l,p])=>(
               <div key={k}><label style={lbl}>{l}</label><input type="number" inputMode="numeric" value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={"Ej: "+p} style={inp}/></div>
             ))}
           </div>
-          {cadena&&cadena.diasPartoTemp>0&&(
-            <div style={{background:"rgba(126,200,80,.06)",border:`1px solid rgba(126,200,80,.15)`,borderRadius:10,padding:"8px 12px",marginBottom:10,fontFamily:"monospace",fontSize:11,color:C.green}}>
-              📅 Días al parto (parto temprano): <strong>{cadena.diasPartoTemp} días</strong>
-              {cadena.diasPartoTard>0&&<span style={{color:C.amber}}> · Parto tardío: {cadena.diasPartoTard}d</span>}
-            </div>
-          )}
+          {(()=>{
+            const tc=cadena?calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena):null;
+            if(!tc||!tc.terneros)return null;
+            return(
+              <div style={{background:"rgba(126,200,80,.06)",border:`1px solid rgba(126,200,80,.2)`,borderRadius:10,padding:12,marginBottom:12}}>
+                <div style={{fontFamily:"monospace",fontSize:10,color:C.green,marginBottom:8,letterSpacing:1}}>🐄 TERNEROS CALCULADOS</div>
+                <div style={{fontFamily:"monospace",fontSize:22,color:C.green,fontWeight:700,textAlign:"center",marginBottom:6}}>{tc.terneros} terneros destetados</div>
+                <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,textAlign:"center",marginBottom:8}}>
+                  {form.vacasN} vacas × {form.prenez}% preñez × {form.pctDestete}% destete
+                </div>
+                {tc.detalle.map(d=>(
+                  <div key={d.key} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderTop:`1px solid ${C.border}`,fontFamily:"monospace",fontSize:10}}>
+                    <span style={{color:C.textDim}}>{d.label}</span>
+                    <span style={{color:C.text}}>{d.n} tern.</span>
+                    <span style={{color:C.amber}}>dest: {d.pvDest}kg</span>
+                    <span style={{color:C.green}}>mayo: {d.pvMayo}kg</span>
+                  </div>
+                ))}
+                <div style={{marginTop:8,background:"rgba(212,149,42,.08)",borderRadius:8,padding:"6px 10px",fontFamily:"monospace",fontSize:11,color:C.amber,textAlign:"center"}}>
+                  PV ponderado entrada 1°inv: <strong>{tc.pvMayoPond} kg</strong>
+                </div>
+              </div>
+            );
+          })()}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            {[["pvVacaAdulta","PV vaca adulta (kg)","400"]].map(([k,l,p])=>(
+              <div key={k}><label style={lbl}>{l}</label><input type="number" inputMode="numeric" value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={"Ej: "+p} style={inp}/></div>
+            ))}
+          </div>
+          <label style={lbl}>Calidad pastizal post-destete</label>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
+            {[["excelente","🌿 Exc"],["bueno","🌾 Buen"],["regular","🍂 Reg"],["malo","🪵 Malo"]].map(([v,l])=>(
+              <button key={v} onClick={()=>set("pastoCal",v)} style={btnSel(form.pastoCal===v)}>{l}</button>
+            ))}
+          </div>
           <label style={lbl}>Estado Reproductivo</label>
           <select value={form.eReprod} onChange={e=>set("eReprod",e.target.value)} style={{...inp,marginBottom:10}}>
             <option value="">Seleccionar...</option>{ESTADOS_REPROD.map(e=><option key={e} value={e}>{e}</option>)}
@@ -822,13 +893,6 @@ export default function AgroMind(){
               ))}
             </div>
           )}
-        </div>
-        <div style={cardS}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            {[["ternerosN","N° Terneros","120"],["torosN","N° Toros","8"],["prenezHist","Preñez hist %","72"],["pctDestete","% Destete","68"]].map(([k,l,p])=>(
-              <div key={k}><label style={lbl}>{l}</label><input type="number" inputMode="numeric" value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={"Ej: "+p} style={inp}/></div>
-            ))}
-          </div>
         </div>
       </div>
     );
@@ -864,13 +928,14 @@ export default function AgroMind(){
             <div>
               <label style={lbl}>Peso al destete (kg)</label>
               <input type="number" inputMode="numeric" value={form.pvDestVaq} onChange={e=>set("pvDestVaq",e.target.value)} placeholder={cadena?.pvDestCalc?"Est. "+cadena.pvDestCalc+"kg":"Ej: 175"} style={inp}/>
-              {cadena?.pvDestCalc&&!form.pvDestVaq&&<div style={{fontFamily:"monospace",fontSize:9,color:C.amber,marginTop:3}}>Estimado: {cadena.pvDestCalc}kg (35kg nac + 700g/d × {cadena.diasDest}d destete)</div>}
+              {cadena&&!form.pvDestVaq&&(()=>{const tc=calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena);return tc?.pvMayoPond?<div style={{fontFamily:"monospace",fontSize:9,color:C.amber,marginTop:3}}>PV entrada mayo ponderado calculado: {tc.pvMayoPond}kg (desde tipos de destete)</div>:null;})()}
               {!cadena&&<div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginTop:3}}>Peso real al momento del destete</div>}
             </div>
           </div>
           {(()=>{
-            const pvDestUser=parseFloat(form.pvDestVaq)||cadena?.pvDestCalc||0;
-            const pvMayoEst=pvDestUser>0&&cadena?Math.round(pvDestUser+0.400*Math.max(0,(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24))):cadena?.pvMayo1InvCalc||0;
+            const tc2=cadena?calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena):null;
+            const pvDestUser=parseFloat(form.pvDestVaq)||0;
+            const pvMayoEst=pvDestUser>0&&cadena?Math.round(pvDestUser+0.400*Math.max(0,(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24))):tc2?.pvMayoPond||cadena?.pvMayo1InvCalc||0;
             const pvSepEst=pvMayoEst>0?Math.round(pvMayoEst+0.400*120):0;
             const llegaraOk=pvSepEst>=210;
             if(!pvMayoEst&&!pvDestUser)return null;
@@ -1066,6 +1131,7 @@ export default function AgroMind(){
             ["⚡ Disparador",dispar?(dispar.dias<999?"~"+dispar.dias+"d":"-"):"—",dC],
             ["🐄 CC Parto",ccParto?(ccParto+"/9"):"—",ccC],
             ["📊 Preñez Est.",curva?(curva.pr+"%"):"—",pC],
+            ["🐄 Terneros",cadena&&form.vacasN&&form.prenez&&form.pctDestete?(()=>{const t=calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena);return t?.terneros+"cab · mayo "+t?.pvMayoPond+"kg";})():"—",C.amber],
             ["🌾 Vaq1°inv",vaq1E?("Esc "+vaq1E.esc+" · "+vaq1E.pvSal+"kg sep"):"—",vaq1E?.deficit?C.red:vaq1E?.esc==="C"?C.amber:C.green],
             ["🐄 Vaq2°inv",vaq2E?(vaq2E.pvEntore+"kg entore"+(vaq2E.llegas?" ✅":" ⚠️")):"—",vaq2E?.llegas?C.green:C.red],
           ].map(([l,v,c])=>(
