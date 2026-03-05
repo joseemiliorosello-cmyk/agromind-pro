@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 // ═══════════════════════════════════════════════════════
@@ -482,10 +482,10 @@ Citar: (NASSEM,2010)·(Balbuena,INTA 2003)·(Peruchena,INTA 2003)·(Detmann et a
 // MAPA LEAFLET INTERACTIVO
 // ═══════════════════════════════════════════════════════
 function MapaLeaflet({lat,lon,onMove}){
-  const divRef=React.useRef(null);
-  const mapRef=React.useRef(null);
-  const markerRef=React.useRef(null);
-  React.useEffect(()=>{
+  const divRef=useRef(null);
+  const mapRef=useRef(null);
+  const markerRef=useRef(null);
+  useEffect(()=>{
     if(!document.getElementById("leaflet-css")){
       const lk=document.createElement("link");lk.id="leaflet-css";lk.rel="stylesheet";
       lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lk);
@@ -507,7 +507,7 @@ function MapaLeaflet({lat,lon,onMove}){
     }).catch(()=>{});
     return()=>{if(mapRef.current){mapRef.current.remove();mapRef.current=null;markerRef.current=null;}};
   },[]);
-  React.useEffect(()=>{
+  useEffect(()=>{
     if(markerRef.current&&mapRef.current){
       markerRef.current.setLatLng([lat,lon]);
       mapRef.current.setView([lat,lon],mapRef.current.getZoom(),{animate:true});
