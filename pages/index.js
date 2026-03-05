@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 // ═══════════════════════════════════════════════════════
@@ -153,8 +153,58 @@ const CC_PR=[{ccP:6.5,ccS:5.0,pr:95},{ccP:6.0,ccS:4.5,pr:88},{ccP:5.5,ccS:4.0,pr
 function interpCC(ccP){const t=CC_PR;if(ccP>=t[0].ccP)return{ccS:t[0].ccS,pr:t[0].pr};if(ccP<=t[t.length-1].ccP)return{ccS:t[t.length-1].ccS,pr:t[t.length-1].pr};for(let i=0;i<t.length-1;i++){if(ccP<=t[i].ccP&&ccP>=t[i+1].ccP){const r=(ccP-t[i+1].ccP)/(t[i].ccP-t[i+1].ccP);return{ccS:+(t[i+1].ccS+r*(t[i].ccS-t[i+1].ccS)).toFixed(1),pr:Math.round(t[i+1].pr+r*(t[i].pr-t[i+1].pr))};}}return{ccS:2.5,pr:15};}
 function ccPond(dist){let tot=0,sum=0;(dist||[]).forEach(d=>{const p=parseFloat(d.pct)||0,c=parseFloat(d.cc)||0;sum+=p*c;tot+=p;});return tot>0?sum/tot:0;}
 function calcCCParto(dist,diasP,estD,pastoCal,diasD,ndvi,prov){const cc=ccPond(dist);if(!cc||!diasP)return null;const dp=parseInt(diasP),dd=parseInt(diasD)||0;const tR={excelente:0.022,bueno:0.016,regular:0.009,malo:0.004}[pastoCal]||0.013;const dDisp=diasHelada(prov,ndvi);const tP=tasaPD(ndvi,false);if(estD==="no_ternero"){const dT=Math.min(dd>0?dd:dp,dp);const ccPD=Math.max(1,cc-0.010*dT);const dR=dp-dT;const dB=Math.min(dR,Math.max(0,dDisp-dT));const ccPH=Math.min(9,ccPD+tR*dB);return parseFloat(Math.max(1,ccPH-tP*Math.max(0,dR-dB)).toFixed(2));}if(["ok_feb","ok_mar","precoz","tard_abr"].includes(estD)){const dB=Math.min(dp,dDisp);const ccPH=Math.min(9,cc+tR*dB);return parseFloat(Math.max(1,ccPH-tP*Math.max(0,dp-dDisp)).toFixed(2));}return cc;}
-function dZona(lat,lon){if(lat>-24)return"NEA";if(lat>-28&&lon>-58)return"NEA";if(lat>-30&&lon<-64)return"NOA";if(lat>-38&&lat<=-30&&lon>-62)return"Pampa Húmeda";if(lat>-38&&lat<=-30&&lon<=-62&&lon>-67)return"Semiárido";if(lon<-67&&lat>-35)return"Cuyo";if(lat<=-38)return"Patagonia";return"Pampa Húmeda";}
-function dProv(lat,lon){if(lat>-22&&lon>-60)return"Formosa";if(lat>-22&&lon<=-60)return"Salta";if(lat>-24&&lat<=-22&&lon>-58)return"Chaco";if(lat>-28&&lat<=-24&&lon>-57)return"Corrientes";if(lat>-30&&lat<=-28&&lon>-57)return"Misiones";if(lat>-30&&lat<=-28&&lon<=-57&&lon>-59)return"Corrientes";if(lat>-32&&lat<=-30&&lon>-58)return"Entre Ríos";return"";}
+function dZona(lat,lon){
+  // Paraguay
+  if(lat>-23&&lat<=-19&&lon>-62&&lon<=-54)return"Paraguay Oriental";
+  if(lat>-23&&lat<=-19&&lon>-63&&lon<=-62)return"Chaco Paraguayo";
+  // Brasil
+  if(lat>-25&&lat<=-10&&lon>-54&&lon<=-44)return"Brasil (Cerrado)";
+  if(lat>-35&&lat<=-25&&lon>-57&&lon<=-48)return"Brasil (Sur)";
+  if(lat>-10&&lon>-54)return"Brasil (Amazonia)";
+  // Bolivia
+  if(lat>-23&&lat<=-16&&lon>-65&&lon<=-57)return"Bolivia (Llanos)";
+  // Argentina
+  if(lat>-24)return"NEA";
+  if(lat>-28&&lon>-58)return"NEA";
+  if(lat>-30&&lon<-64)return"NOA";
+  if(lat>-38&&lat<=-30&&lon>-62)return"Pampa Húmeda";
+  if(lat>-38&&lat<=-30&&lon<=-62&&lon>-67)return"Semiárido";
+  if(lon<-67&&lat>-35)return"Cuyo";
+  if(lat<=-38)return"Patagonia";
+  return"Zona no identificada";
+}
+function dProv(lat,lon){
+  // Paraguay
+  if(lat>-19&&lat<=-23&&lon>-63&&lon<=-54){
+    if(lon>-59)return"Paraguay Oriental";
+    return"Chaco Paraguayo";
+  }
+  // Brasil (estados principales ganaderos)
+  if(lat>-25&&lat<=-10&&lon>-54&&lon<=-44)return"Mato Grosso / Goiás (BR)";
+  if(lat>-35&&lat<=-25&&lon>-57&&lon<=-48)return"Rio Grande do Sul / Paraná (BR)";
+  if(lat>-20&&lat<=-10&&lon>-57&&lon<=-54)return"Mato Grosso do Sul (BR)";
+  // Bolivia
+  if(lat>-23&&lat<=-16&&lon>-65&&lon<=-57)return"Santa Cruz / Beni (BO)";
+  // Argentina
+  if(lat>-22&&lon>-60)return"Formosa";
+  if(lat>-22&&lon<=-60)return"Salta";
+  if(lat>-24&&lat<=-22&&lon>-58)return"Chaco";
+  if(lat>-26&&lat<=-24&&lon>-57)return"Corrientes";
+  if(lat>-28&&lat<=-26&&lon>-57)return"Misiones";
+  if(lat>-30&&lat<=-28&&lon<=-57&&lon>-59)return"Corrientes";
+  if(lat>-28&&lat<=-24&&lon<=-57&&lon>-61)return"Chaco";
+  if(lat>-28&&lat<=-24&&lon<=-61&&lon>-65)return"Santiago del Estero";
+  if(lat>-30&&lat<=-28&&lon>-60&&lon<=-57)return"Entre Ríos";
+  if(lat>-32&&lat<=-30&&lon>-58)return"Entre Ríos";
+  if(lat>-32&&lat<=-28&&lon>-60&&lon<=-58)return"Santa Fe";
+  if(lat>-35&&lat<=-32&&lon>-62&&lon<=-58)return"Buenos Aires";
+  if(lat>-32&&lat<=-28&&lon<=-63&&lon>-66)return"Córdoba";
+  if(lat>-35&&lat<=-32&&lon<=-63)return"La Pampa";
+  if(lon<-67&&lat>-35)return"Mendoza";
+  if(lat<=-38&&lat>-43)return"Neuquén / Río Negro";
+  if(lat<=-43)return"Patagonia Sur";
+  return"";
+}
 const fmtFecha=(d)=>d?new Date(d).toLocaleDateString("es-AR",{day:"numeric",month:"short",year:"numeric"}):"—";
 const diffDias=(a,b)=>Math.round((new Date(b)-new Date(a))/(1000*60*60*24));
 
@@ -490,77 +540,89 @@ Citar: (NASSEM,2010)·(Balbuena,INTA 2003)·(Peruchena,INTA 2003)·(Detmann et a
 // ═══════════════════════════════════════════════════════
 // MAPA LEAFLET INTERACTIVO
 // ═══════════════════════════════════════════════════════
-function MapaLeaflet({initLat,initLon,onMove}){
-  const divRef=useRef(null);
-  const mapRef=useRef(null);
-  const markerRef=useRef(null);
-  // Ref para onMove — siempre apunta a la versión actual sin re-montar el mapa
-  const onMoveRef=useRef(onMove);
-  useEffect(()=>{onMoveRef.current=onMove;},[onMove]);
+// Geocoding via Nominatim (OpenStreetMap) — sin API key, funciona en cualquier lugar del mundo
+function SelectorUbicacion({onSelect}){
+  const[busq,setBusq]=useState("");
+  const[resultados,setResultados]=useState([]);
+  const[cargando,setCargando]=useState(false);
+  const[abierto,setAbierto]=useState(false);
+  const timerRef=React.useRef(null);
 
-  useEffect(()=>{
-    // Cargar Leaflet CSS
-    if(!document.getElementById("leaflet-css")){
-      const lk=document.createElement("link");
-      lk.id="leaflet-css";lk.rel="stylesheet";
-      lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(lk);
+  const buscar=async(q)=>{
+    if(q.length<3){setResultados([]);return;}
+    setCargando(true);
+    try{
+      const url=`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=8&accept-language=es`;
+      const res=await fetch(url,{headers:{"Accept-Language":"es"}});
+      const data=await res.json();
+      setResultados(data.map(d=>({
+        nombre:d.display_name,
+        lat:parseFloat(d.lat),
+        lon:parseFloat(d.lon),
+        tipo:d.type
+      })));
+    }catch(e){
+      setResultados([]);
+    }finally{
+      setCargando(false);
     }
-    // Cargar Leaflet JS
-    const loadL=()=>new Promise((res,rej)=>{
-      if(window.L){res(window.L);return;}
-      const s=document.createElement("script");
-      s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      s.onload=()=>res(window.L);
-      s.onerror=rej;
-      document.head.appendChild(s);
-    });
-    loadL().then(L=>{
-      if(!divRef.current||mapRef.current)return;
-      const la=initLat||(-27.5),lo=initLon||(-59.0);
-      const zoom=initLat?10:4;
-      const m=L.map(divRef.current,{attributionControl:false,zoomControl:true});
-      m.setView([la,lo],zoom);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18}).addTo(m);
-      const ico=L.divIcon({
-        html:'<div style="width:26px;height:26px;background:#7ec850;border:3px solid #050d02;border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,.7)"></div>',
-        iconSize:[26,26],iconAnchor:[13,13],className:""
-      });
-      let mk=initLat?L.marker([la,lo],{draggable:true,icon:ico}).addTo(m):null;
-      if(mk){
-        mk.on("dragend",e=>{
-          const p=e.target.getLatLng();
-          onMoveRef.current(p.lat,p.lng);
-        });
-      }
-      m.on("click",e=>{
-        const {lat,lng}=e.latlng;
-        if(!mk){
-          mk=L.marker([lat,lng],{draggable:true,icon:ico}).addTo(m);
-          mk.on("dragend",ev=>{
-            const p=ev.target.getLatLng();
-            onMoveRef.current(p.lat,p.lng);
-          });
-          markerRef.current=mk;
-        } else {
-          mk.setLatLng([lat,lng]);
-        }
-        onMoveRef.current(lat,lng);
-      });
-      mapRef.current=m;
-      if(mk)markerRef.current=mk;
-    }).catch(e=>console.error("Leaflet:",e));
-    return()=>{
-      if(mapRef.current){mapRef.current.remove();mapRef.current=null;markerRef.current=null;}
-    };
-  },[]);// eslint-disable-line — solo monta una vez
+  };
+
+  const onChange=(e)=>{
+    const v=e.target.value;
+    setBusq(v);
+    setAbierto(true);
+    clearTimeout(timerRef.current);
+    timerRef.current=setTimeout(()=>buscar(v),400);
+  };
+
+  const elegir=(r)=>{
+    setBusq(r.nombre.split(",")[0]);
+    setResultados([]);
+    setAbierto(false);
+    onSelect(r.lat,r.lon,r.nombre.split(",")[0]);
+  };
 
   return(
-    <div ref={divRef} style={{
-      width:"100%",height:260,borderRadius:12,marginTop:8,
-      border:"1px solid rgba(126,200,80,.25)",
-      overflow:"hidden",background:"#1a2a18"
-    }}/>
+    <div style={{position:"relative",marginBottom:8}}>
+      <div style={{position:"relative"}}>
+        <input
+          value={busq}
+          onChange={onChange}
+          onFocus={()=>setAbierto(true)}
+          onBlur={()=>setTimeout(()=>setAbierto(false),200)}
+          placeholder="🔍 Buscar ciudad o lugar... (NEA, NOA, Paraguay, Brasil...)"
+          style={{width:"100%",background:"rgba(0,0,0,.4)",border:"1px solid rgba(126,200,80,.35)",
+            borderRadius:10,padding:"14px 16px",fontFamily:"monospace",fontSize:13,
+            color:"#e8f5e0",outline:"none",boxSizing:"border-box"}}
+        />
+        {cargando&&(
+          <div style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",
+            fontFamily:"monospace",fontSize:11,color:"rgba(126,200,80,.6)"}}>
+            buscando...
+          </div>
+        )}
+      </div>
+      {abierto&&resultados.length>0&&(
+        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:1000,
+          background:"#0d1f0a",border:"1px solid rgba(126,200,80,.3)",borderRadius:10,
+          marginTop:4,maxHeight:300,overflowY:"auto",
+          boxShadow:"0 8px 24px rgba(0,0,0,.7)"}}>
+          {resultados.map((r,i)=>(
+            <div key={i}
+              onMouseDown={()=>elegir(r)}
+              style={{padding:"11px 16px",cursor:"pointer",
+                borderBottom:"1px solid rgba(126,200,80,.07)",
+                fontFamily:"monospace",fontSize:11,color:"#e8f5e0",lineHeight:1.4}}>
+              <div style={{fontWeight:600}}>{r.nombre.split(",")[0]}</div>
+              <div style={{fontSize:9,color:"rgba(126,200,80,.45)",marginTop:2}}>
+                {r.nombre.split(",").slice(1,3).join(",")} · {r.lat.toFixed(3)}°, {r.lon.toFixed(3)}°
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -664,7 +726,15 @@ export default function AgroMind(){
       const et=d.et0_fao_evapotranspiration.slice(-7).reduce((a,b)=>a+(b||0),0)/7;
       const deficit=Math.round((p30-et*30)*10)/10;
       const clima=deficit<-40?"Seco":deficit>40?"Húmedo":"Normal";
-      const ndviBase={NEA:0.55,"Pampa Húmeda":0.50,NOA:0.42,"Semiárido":0.38,Cuyo:0.30,Patagonia:0.28}[zona]||0.45;
+      const ndviBase={
+  "NEA":0.55,"Pampa Húmeda":0.50,"NOA":0.42,"Semiárido":0.38,
+  "Cuyo":0.30,"Patagonia":0.28,
+  "Paraguay Oriental":0.58,"Chaco Paraguayo":0.48,
+  "Brasil (Cerrado)":0.55,"Brasil (Sur)":0.52,"Brasil (Amazonia)":0.72,
+  "Bolivia (Llanos)":0.52,"Mato Grosso / Goiás (BR)":0.55,
+  "Mato Grosso do Sul (BR)":0.56,"Rio Grande do Sul / Paraná (BR)":0.52,
+  "Santa Cruz / Beni (BO)":0.50
+}[zona]||0.48;
       const pf=Math.min(Math.max((p30-20)/180,-0.15),0.25);
       const mi=MESES.indexOf(mes);
       const mf=[0.05,0.03,0,-0.03,-0.08,-0.12,-0.12,-0.08,-0.02,0.03,0.05,0.06];
@@ -833,53 +903,50 @@ export default function AgroMind(){
         </div>
         <div style={cardS}>
           <div style={{fontFamily:"monospace",fontSize:13,color:C.green,marginBottom:10,letterSpacing:1}}>📍 UBICACIÓN</div>
-          {/* Mapa principal — tocá cualquier punto o arrastrá el pin */}
-          <div style={{fontFamily:"monospace",fontSize:10,color:C.textDim,marginBottom:6,textAlign:"center"}}>
-            Tocá el mapa para fijar la ubicación, o arrastrá el pin 📍
-          </div>
-          <MapaLeaflet
-            initLat={coords?.lat||null}
-            initLon={coords?.lon||null}
-            onMove={(la,lo)=>applyLoc(la,lo,"Mapa")}
-          />
-          {/* Confirma ubicación actual */}
-          {coords?(
-            <div style={{fontFamily:"monospace",fontSize:11,color:C.green,marginTop:8,textAlign:"center",background:"rgba(126,200,80,.06)",border:"1px solid rgba(126,200,80,.15)",borderRadius:10,padding:"8px 12px"}}>
-              ✅ {coords.lat?.toFixed(4)}°S · {coords.lon?.toFixed(4)}°W
-              <br/><strong>{form.zona}</strong> · {form.provincia}
-              {sat&&!sat.error&&<span style={{color:C.textDim,fontSize:10}}> · T{sat.temp}°C · NDVI {sat.ndvi}</span>}
-            </div>
-          ):(
-            <div style={{fontFamily:"monospace",fontSize:10,color:C.textDim,marginTop:6,textAlign:"center"}}>
-              Aún no hay ubicación fijada
-            </div>
-          )}
-          {/* GPS como alternativa rápida */}
-          <button onClick={getGPS} disabled={gpsLoading} style={{width:"100%",background:"rgba(126,200,80,.06)",border:`1px solid rgba(126,200,80,.2)`,color:C.green,borderRadius:10,padding:"12px",fontFamily:"monospace",fontSize:13,cursor:"pointer",marginTop:10,marginBottom:8}}>
+          {/* Buscar por ciudad/zona */}
+          <SelectorUbicacion onSelect={(la,lo,nombre)=>applyLoc(la,lo,nombre)}/>
+          {/* GPS */}
+          <button onClick={getGPS} disabled={gpsLoading}
+            style={{width:"100%",background:"rgba(126,200,80,.06)",border:`1px solid rgba(126,200,80,.2)`,
+              color:C.green,borderRadius:10,padding:"12px",fontFamily:"monospace",fontSize:13,
+              cursor:"pointer",marginTop:8,marginBottom:6}}>
             {gpsLoading?"📍 Localizando...":"📍 Usar mi ubicación actual (GPS)"}
           </button>
-          {/* Entrada manual de coordenadas — opción avanzada */}
-          <details style={{marginTop:4}}>
-            <summary style={{fontFamily:"monospace",fontSize:10,color:C.textDim,cursor:"pointer",marginBottom:6}}>
+          {/* Coordenadas manuales */}
+          <details>
+            <summary style={{fontFamily:"monospace",fontSize:10,color:C.textDim,cursor:"pointer",padding:"4px 0"}}>
               Ingresar coordenadas manualmente
             </summary>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:8}}>
-              <div><label style={lbl}>Latitud</label><input type="number" inputMode="decimal" value={manualLat} onChange={e=>setManualLat(e.target.value)} placeholder="-27.45" style={inp}/></div>
-              <div><label style={lbl}>Longitud</label><input type="number" inputMode="decimal" value={manualLon} onChange={e=>setManualLon(e.target.value)} placeholder="-59.12" style={inp}/></div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:8,marginTop:8}}>
+              <div><label style={lbl}>Latitud</label>
+                <input type="number" inputMode="decimal" value={manualLat} onChange={e=>setManualLat(e.target.value)} placeholder="-27.45" style={inp}/>
+              </div>
+              <div><label style={lbl}>Longitud</label>
+                <input type="number" inputMode="decimal" value={manualLon} onChange={e=>setManualLon(e.target.value)} placeholder="-59.12" style={inp}/>
+              </div>
               <div style={{display:"flex",alignItems:"flex-end"}}>
-                <button onClick={()=>{
-                  const la=parseFloat(manualLat),lo=parseFloat(manualLon);
-                  if(!isNaN(la)&&!isNaN(lo))applyLoc(la,lo,"Manual");
-                }} style={{width:"100%",background:"rgba(126,200,80,.1)",border:`1px solid rgba(126,200,80,.25)`,borderRadius:10,color:C.green,padding:"12px 6px",fontFamily:"monospace",fontSize:12,cursor:"pointer"}}>
+                <button onClick={()=>{const la=parseFloat(manualLat),lo=parseFloat(manualLon);if(!isNaN(la)&&!isNaN(lo))applyLoc(la,lo,"Manual");}}
+                  style={{background:"rgba(126,200,80,.1)",border:`1px solid rgba(126,200,80,.25)`,borderRadius:10,color:C.green,padding:"12px 10px",fontFamily:"monospace",fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>
                   Fijar
                 </button>
               </div>
             </div>
           </details>
-          {satLoading&&<div style={{fontFamily:"monospace",fontSize:11,color:C.green,textAlign:"center",marginTop:10}}>🛰 Cargando datos meteorológicos...</div>}
-          {sat?.error&&<div style={{fontFamily:"monospace",fontSize:10,color:C.red,textAlign:"center",marginTop:8}}>⚠️ Error cargando datos: {sat.error}</div>}
-          {sat&&(
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:12}}>
+          {/* Resultado */}
+          {coords&&(
+            <div style={{marginTop:10,background:"rgba(126,200,80,.06)",border:"1px solid rgba(126,200,80,.2)",borderRadius:10,padding:"10px 14px"}}>
+              <div style={{fontFamily:"monospace",fontSize:11,color:C.green,marginBottom:4}}>
+                ✅ <strong>{form.zona}</strong> · {form.provincia}
+              </div>
+              <div style={{fontFamily:"monospace",fontSize:10,color:C.textDim}}>
+                {coords.lat?.toFixed(4)}°S · {coords.lon?.toFixed(4)}°W · Fuente: {coords.src}
+              </div>
+            </div>
+          )}
+          {satLoading&&<div style={{fontFamily:"monospace",fontSize:11,color:C.green,textAlign:"center",marginTop:10}}>🛰 Descargando datos meteorológicos...</div>}
+          {sat?.error&&<div style={{fontFamily:"monospace",fontSize:10,color:C.red,textAlign:"center",marginTop:8}}>⚠️ {sat.error}</div>}
+          {sat&&!sat.error&&(
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:10}}>
               {[["🌡️",sat.temp+"°C",C.amber],["🌧",sat.p30+"mm",C.blue],["⚖️",(sat.deficit>0?"+":"")+sat.deficit,sat.deficit<-30?C.red:C.amber],["🛰",sat.ndvi,C.green]].map(([l,v,cl])=>(
                 <div key={l} style={{textAlign:"center",background:"rgba(0,0,0,.35)",borderRadius:10,padding:"10px 4px",border:`1px solid ${C.border}`}}>
                   <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginBottom:3}}>{l}</div>
@@ -888,7 +955,11 @@ export default function AgroMind(){
               ))}
             </div>
           )}
-          {dispar&&dispar.dias<60&&sat&&<div style={{marginTop:10,background:"rgba(192,72,32,.08)",border:"1px solid rgba(192,72,32,.25)",borderRadius:10,padding:10,fontFamily:"monospace",fontSize:11,color:"#e09070",textAlign:"center"}}>⚠️ {dispar.tipo} en ~{dispar.dias} días — C4 frena</div>}
+          {dispar&&dispar.dias<60&&sat&&!sat.error&&(
+            <div style={{marginTop:10,background:"rgba(192,72,32,.08)",border:"1px solid rgba(192,72,32,.25)",borderRadius:10,padding:10,fontFamily:"monospace",fontSize:11,color:"#e09070",textAlign:"center"}}>
+              ⚠️ {dispar.tipo} en ~{dispar.dias} días — C4 frena
+            </div>
+          )}
         </div>
         <div style={cardS}>
           <div style={{fontFamily:"monospace",fontSize:11,color:C.textDim,marginBottom:8}}>CONDICIÓN ENSO</div>
@@ -1081,7 +1152,7 @@ export default function AgroMind(){
           <div style={{fontFamily:"monospace",fontSize:10,color:"rgba(212,149,42,.55)",marginBottom:12}}>Mayo–agosto · 120 días · Objetivo: 210 kg en septiembre · GDP mín 400 g/d</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <div><label style={lbl}>N° Cabezas</label><input type="number" inputMode="numeric" value={form.vaq1N} onChange={e=>set("vaq1N",e.target.value)} placeholder="Ej: 40" style={inp}/></div>
-            <div><label style={lbl}>N° Cabezas 2°inv</label><input type="number" inputMode="numeric" value={form.vaq2N} onChange={e=>set("vaq2N",e.target.value)} placeholder="Ej: 35" style={inp}/></div>
+            
           </div>
           {(()=>{
             const pvDestUser=parseFloat(form.pvDestVaq)||cadena?.pvDestCalc||0;
