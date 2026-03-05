@@ -19,7 +19,7 @@ const PROD_BASE={
   "Megatérmicas C4 (gatton panic, brachiaria)":14,
   "Pasturas templadas C3":10,
   "Mixta gramíneas+leguminosas":11,
-  "Monte bajo / sabana":1.5,
+  "Bosque nativo":1.5,
   "Verdeo de invierno":12,
 };
 const UTIL=0.40; // eficiencia cosecha extensiva (Oesterheld et al. 1998)
@@ -61,7 +61,7 @@ function calcCadena(iniServ,finServ,modoDestete){
   const desteTard=new Date(partoTard);desteTard.setDate(desteTard.getDate()+diasDest);
   // Vaca tardía: ¿tiene ternero al pie en otoño (marzo-mayo)?
   const mesTard=desteTard.getMonth(); // mes de destete
-  const terneroOtono=mesTard>=2&&mesTard<=4; // mar-may
+  const terneroOtono=mesTard>=4&&mesTard<=5; // may-jun (otoño real NEA)
   // Días al parto temprano desde hoy
   const hoy=new Date();
   const diasPartoTemp=Math.round((partoTemp-hoy)/(1000*60*60*24));
@@ -358,14 +358,14 @@ function buildRecomRows(form,vaq1E,vaq2E,ccParto,curva,dispar,cadena){
 // ═══════════════════════════════════════════════════════
 function RenderInforme({text,form,sat,dispar,vaq1E,vaq2E,ccParto,curva,cadena,potreros}){
   if(!text)return null;
-  const EMOJIS=["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣"];
-  const TITLES=["Diagnóstico Ambiental","Diagnóstico por Categoría","Destete y Proyección CC","Balance Oferta vs Demanda","Estrategia","Emergencia","Recomendaciones"];
-  const ICONS=["🌡️","🐄","📅","⚖️","🎯","🚨","✅"];
-  const CITES=["Open-Meteo API · NDVI: Paruelo & Oesterheld (2000)","NASSEM (2010) · Detmann et al. (2014) · Balbuena INTA (2003)","Peruchena INTA (2003) · Rosello Brajovich et al. INTA (2025)","Paruelo & Oesterheld (2000) · Peruchena INTA (2003) · Oesterheld et al. (1998) · UF/IFAS Sollenberger (2000)","NASSEM (2010) · Balbuena INTA (2003)","Balbuena INTA (2003)","NASSEM (2010) · Peruchena INTA (2003) · Rosello Brajovich et al. INTA (2025)"];
+  const EMOJIS=["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣"];
+  const TITLES=["Diagnóstico Ambiental","Diagnóstico por Categoría","Destete y Proyección CC","Balance Oferta vs Demanda","Estrategia","Recomendaciones"];
+  const ICONS=["🌡️","🐄","📅","⚖️","🎯","✅"];
+  const CITES=["Open-Meteo API · NDVI: Paruelo & Oesterheld (2000)","NASSEM (2010) · Detmann et al. (2014) · Balbuena INTA (2003)","Peruchena INTA (2003) · Rosello Brajovich et al. INTA (2025)","Paruelo & Oesterheld (2000) · Peruchena INTA (2003) · Oesterheld et al. (1998) · UF/IFAS Sollenberger (2000)","NASSEM (2010) · Balbuena INTA (2003)","NASSEM (2010) · Peruchena INTA (2003) · Rosello Brajovich et al. INTA (2025)"];
   const pC=curva?.pr||0;
-  const STATUSES=[dispar&&dispar.dias<30?"crit":dispar&&dispar.dias<60?"warn":"ok",pC>=75?"ok":pC>=55?"warn":"crit",ccParto&&ccParto>=5.5?"ok":ccParto&&ccParto>=5.0?"warn":"crit","warn","ok","ok","ok"];
+  const STATUSES=[dispar&&dispar.dias<30?"crit":dispar&&dispar.dias<60?"warn":"ok",pC>=75?"ok":pC>=55?"warn":"crit",ccParto&&ccParto>=5.5?"ok":ccParto&&ccParto>=5.0?"warn":"crit","warn","ok","ok"];
   let sections=[];let remaining=text;
-  for(let i=0;i<7;i++){const em=EMOJIS[i];const nxt=i<6?EMOJIS[i+1]:null;const st=remaining.indexOf(em);if(st===-1){sections.push("");continue;}const en=nxt?remaining.indexOf(nxt,st+1):-1;const chunk=en>-1?remaining.slice(st,en):remaining.slice(st);sections.push(chunk.split("\n").slice(1).join("\n").trim());if(en>-1)remaining=remaining.slice(en);}
+  for(let i=0;i<6;i++){const em=EMOJIS[i];const nxt=i<6?EMOJIS[i+1]:null;const st=remaining.indexOf(em);if(st===-1){sections.push("");continue;}const en=nxt?remaining.indexOf(nxt,st+1):-1;const chunk=en>-1?remaining.slice(st,en):remaining.slice(st);sections.push(chunk.split("\n").slice(1).join("\n").trim());if(en>-1)remaining=remaining.slice(en);}
   const recomRows=buildRecomRows(form,vaq1E,vaq2E,ccParto,curva,dispar,cadena);
   const rr=(t)=>t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n\n/g,"<br/><br/>").replace(/\n/g,"<br/>");
   return(
@@ -435,10 +435,9 @@ GDP mínimo 300 g/día. Dar dosis en kg/día.
 3️⃣ DESTETE Y PROYECCIÓN CC: 3 tramos con números del sistema. Alerta vaca tardía si aplica.
 4️⃣ BALANCE OFERTA vs DEMANDA: por potrero si aplica. Citar fuentes.
 5️⃣ ESTRATEGIA: destete→suplementación→ajuste carga. Kg/día sin precios.
-6️⃣ EMERGENCIA
-7️⃣ RECOMENDACIONES: tabla CATEGORÍA|ACCIÓN|FECHA|KG/DÍA|RESULTADO con semáforo 🔴🟡🟢
+6️⃣ RECOMENDACIONES: tabla CATEGORÍA|ACCIÓN|FECHA|KG/DÍA|RESULTADO con semáforo 🔴🟡🟢
 
-NO incluir sección de impacto 1-2 años.
+NO incluir sección de emergencia ni impacto 1-2 años.
 AL FINAL siempre el disclaimer completo.
 Citar: (NASSEM,2010)·(Balbuena,INTA 2003)·(Peruchena,INTA 2003)·(Detmann et al.,2014)·(Paruelo & Oesterheld,2000)·(Oesterheld et al.,1998)·(Rosello Brajovich et al.,INTA 2025)·(UF/IFAS Sollenberger,2000)`;
 
@@ -453,7 +452,7 @@ export default function AgroMind(){
     v2sN:"",v2sPV:"",v2sTernero:"",
     zona:"",provincia:"",mes:"",clima:"",vegetacion:"",supHa:"",pctMonte:"0",pctNGan:"0",fenologia:"",
     vacasN:"",ternerosN:"",torosN:"",prenezHist:"",pctDestete:"",
-    vaq1N:"",vaq1PV:"",vaq2N:"",vaq2PV:"",diasEntore:"",
+    vaq1N:"",vaq1PV:"",pvDestVaq:"",vaq2N:"",vaq2PV:"",diasEntore:"",
     pvVacaAdulta:"",suplem:"",consulta:"",enso:"neutro",
     ccDist:[{cc:6,pct:50},{cc:5,pct:30},{cc:4,pct:20}],
     cc2sDist:[{cc:5,pct:50},{cc:4,pct:30},{cc:3,pct:20}],
@@ -502,7 +501,7 @@ export default function AgroMind(){
 
   // Vaq1 desde cadena o manual
   useEffect(()=>{
-    const pvEnt=cadena?.pvMayo1Inv?String(cadena.pvMayo1Inv):form.vaq1PV;
+    const pvEnt=form.pvDestVaq||cadena?.pvMayo1Inv?String(form.pvDestVaq||cadena?.pvMayo1Inv):form.vaq1PV;
     if(pvEnt&&sat)setVaq1E(calcVaq1({ndvi:sat.ndvi,bal:sat.deficit,pv:pvEnt}));
     else setVaq1E(null);
   },[form.vaq1PV,sat,cadena]);
@@ -588,7 +587,7 @@ export default function AgroMind(){
     t+=`2°SERV: N°${form.v2sN||"—"} · PV ${form.v2sPV||"—"}kg · Ternero: ${form.v2sTernero||"—"}\n`;
     t+=`DIST CC 2°SERV: ${form.cc2sDist.map(d=>`${d.pct}%→CC${d.cc}`).join(" | ")} · Pond: ${ccPond(form.cc2sDist).toFixed(1)}/9\n`;
     t+=`RODEO: ${form.vacasN||"—"} vacas · ${form.ternerosN||"—"} terneros · Preñez hist ${form.prenezHist||"—"}%\n`;
-    t+=`VAQ1: N°${form.vaq1N||"—"} · PV entrada mayo: ${cadena?.pvMayo1Inv||form.vaq1PV||"—"}kg\n`;
+    t+=`VAQ1: N°${form.vaq1N||"—"} · PV destete: ${form.pvDestVaq||"—"}kg · PV entrada mayo estimado: ${form.pvDestVaq?Math.round(parseFloat(form.pvDestVaq)+0.600*Math.max(0,diffDias(cadena?.desteTemp||new Date(),cadena?.mayo1Inv||new Date())/1)):cadena?.pvMayo1Inv||form.vaq1PV||"—"}kg\n`;
     if(vaq1E)t+=`ESC VAQ1 (USAR): Esc ${vaq1E.esc} · ${vaq1E.prot}kg prot/día${vaq1E.energ>0?" + "+vaq1E.energ+"kg maíz/día":""} · ${vaq1E.freq} · GDP ${vaq1E.gdpReal}g/d → ${vaq1E.pvSal}kg sep · Post-inv: ${vaq1E.pvAbr2Inv}kg abr\n`;
     t+=`VAQ2: N°${form.vaq2N||"—"} · PV entrada mayo: ${vaq1E?.pvAbr2Inv||form.vaq2PV||"—"}kg · PV adulta: ${form.pvVacaAdulta||"—"}kg\n`;
     if(vaq2E)t+=`ESC VAQ2 (USAR): Esc ${vaq2E.esc} · ${vaq2E.prot}kg prot/día${vaq2E.energ>0?" + "+vaq2E.energ+"kg maíz/día":""} · GDP ${vaq2E.gdpReal}g/d → ${vaq2E.pvEntore}kg entore (min ${vaq2E.pvMinEntore}kg)${!vaq2E.llegas?" ⚠️NO LLEGA":""}\n`;
@@ -806,11 +805,27 @@ export default function AgroMind(){
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <div><label style={lbl}>N° Cabezas</label><input type="number" inputMode="numeric" value={form.vaq1N} onChange={e=>set("vaq1N",e.target.value)} placeholder="Ej: 40" style={inp}/></div>
             <div>
-              <label style={lbl}>PV entrada mayo (kg)</label>
-              <input type="number" inputMode="numeric" value={form.vaq1PV||cadena?.pvMayo1Inv||""} onChange={e=>set("vaq1PV",e.target.value)} placeholder={cadena?.pvMayo1Inv?"Est: "+cadena.pvMayo1Inv+"kg":"Ej: 175"} style={inp}/>
-              {cadena?.pvMayo1Inv&&!form.vaq1PV&&<div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginTop:3}}>Estimado desde cadena reproductiva</div>}
+              <label style={lbl}>Peso al destete (kg)</label>
+              <input type="number" inputMode="numeric" value={form.pvDestVaq} onChange={e=>set("pvDestVaq",e.target.value)} placeholder="Ej: 175" style={inp}/>
+              <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginTop:3}}>Peso real al momento del destete</div>
             </div>
           </div>
+          {(()=>{
+            const pvDest=parseFloat(form.pvDestVaq)||0;
+            const pvMayoEst=pvDest>0&&cadena?Math.round(pvDest+0.600*Math.max(0,(cadena.mayo1Inv-cadena.desteTemp)/(1000*60*60*24))):cadena?.pvMayo1Inv||0;
+            const llegaraOk=pvMayoEst>0&&(pvMayoEst+0.400*120)>=210;
+            if(!pvMayoEst)return null;
+            return(
+              <div style={{background:"rgba(0,0,0,.2)",border:`1px solid ${C.border}`,borderRadius:10,padding:10,marginBottom:10,fontFamily:"monospace",fontSize:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                  <div style={{textAlign:"center"}}><div style={{fontSize:9,color:C.textDim,marginBottom:2}}>PV entrada mayo</div><div style={{fontSize:14,fontWeight:700,color:C.amber}}>{pvMayoEst} kg</div></div>
+                  <div style={{textAlign:"center"}}><div style={{fontSize:9,color:C.textDim,marginBottom:2}}>PV sep (400g/d)</div><div style={{fontSize:14,fontWeight:700,color:llegaraOk?C.green:C.red}}>{Math.round(pvMayoEst+0.400*120)} kg</div></div>
+                  <div style={{textAlign:"center"}}><div style={{fontSize:9,color:C.textDim,marginBottom:2}}>Objetivo sep</div><div style={{fontSize:14,fontWeight:700,color:C.green}}>210 kg</div></div>
+                </div>
+                {!llegaraOk&&<div style={{marginTop:6,color:C.red,fontSize:9,textAlign:"center"}}>⚠️ Con 400g/d no llega a 210kg — requiere mayor suplementación</div>}
+              </div>
+            );
+          })()}
           {vaq1E&&(
             <div style={{background:"rgba(212,149,42,.07)",border:"1px solid rgba(212,149,42,.25)",borderRadius:10,padding:12}}>
               <div style={{fontFamily:"monospace",fontSize:11,color:C.amber,textAlign:"center",marginBottom:8}}>Escenario <strong style={{fontSize:14}}>{vaq1E.esc}</strong> — {vaq1E.desc}</div>
@@ -870,32 +885,17 @@ export default function AgroMind(){
     // PASO 4 — FORRAJE / POTREROS
     if(step===4)return(
       <div>
-        <div style={cardS}>
-          <div style={{fontFamily:"monospace",fontSize:13,color:C.green,marginBottom:8,letterSpacing:1}}>🌾 FENOLOGÍA HOY</div>
-          <div style={{fontFamily:"monospace",fontSize:9,color:"rgba(126,200,80,.4)",marginBottom:12}}>Dato primario de calidad. NDVI proyecta hacia adelante.</div>
-          {FENOLOGIAS.map(f=>(
-            <button key={f.val} onClick={()=>set("fenologia",f.val)} style={{...btnSel(form.fenologia===f.val),marginBottom:8,display:"flex",alignItems:"center",gap:12,textAlign:"left",padding:"14px 16px"}}>
-              <span style={{fontSize:22}}>{f.emoji}</span>
-              <div>
-                <div style={{fontFamily:"monospace",fontSize:13,fontWeight:700}}>{f.label}</div>
-                <div style={{fontFamily:"monospace",fontSize:10,marginTop:2,opacity:.8}}>{f.desc}</div>
-                {f.warn&&<div style={{fontFamily:"monospace",fontSize:10,color:C.red,marginTop:2}}>{f.warn}</div>}
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* POTREROS vs GLOBAL */}
+        {/* POTREROS vs GLOBAL — primero */}
         <div style={cardS}>
           <div style={{fontFamily:"monospace",fontSize:13,color:C.green,marginBottom:10,letterSpacing:1}}>🌿 ESTRUCTURA DEL CAMPO</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-            <button onClick={()=>setUsaPotreros(false)} style={btnSel(!usaPotreros)}>📐 Global</button>
-            <button onClick={()=>{setUsaPotreros(true);if(!potreros.length)addPotrero();}} style={btnSel(usaPotreros,C.blue)}>🗂 Por potrero</button>
+            <button onClick={()=>setUsaPotreros(false)} style={btnSel(!usaPotreros)}>📐 Análisis global</button>
+            <button onClick={()=>{setUsaPotreros(true);if(!potreros.length)addPotrero();}} style={btnSel(usaPotreros,C.blue)}>🗂 Análisis por potrero</button>
           </div>
 
           {!usaPotreros&&(
             <div>
-              <div style={{fontFamily:"monospace",fontSize:9,color:"rgba(126,200,80,.4)",marginBottom:10}}>Monte = oferta casi nula (máx 200 kg MS/ha/año) — Peruchena INTA (2003)</div>
+              <div style={{fontFamily:"monospace",fontSize:9,color:"rgba(126,200,80,.4)",marginBottom:10}}>Oferta calibrada por tipo de vegetación — Paruelo &amp; Oesterheld (2000)</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
                 <div><label style={lbl}>Superficie total (ha)</label><input type="number" inputMode="numeric" value={form.supHa} onChange={e=>set("supHa",e.target.value)} placeholder="Ej: 1000" style={inp}/></div>
                 <div><label style={lbl}>% Monte</label><input type="number" inputMode="numeric" value={form.pctMonte} min="0" max="100" onChange={e=>set("pctMonte",e.target.value)} placeholder="Ej: 30" style={inp}/></div>
@@ -917,6 +917,18 @@ export default function AgroMind(){
                 {Object.keys(PROD_BASE).map(o=><option key={o} value={o}>{o} — {PROD_BASE[o]} kg MS/ha/día</option>)}
               </select>
               {form.vegetacion&&<div style={{fontFamily:"monospace",fontSize:9,color:"rgba(126,200,80,.4)",marginBottom:10}}>Base: {PROD_BASE[form.vegetacion]} kg MS/ha/día · ~{Math.round(PROD_BASE[form.vegetacion]*365*UTIL)} kg MS/ha/año efectivos</div>}
+              <label style={lbl}>Estado fenológico HOY</label>
+              <div style={{fontFamily:"monospace",fontSize:9,color:"rgba(126,200,80,.4)",marginBottom:8}}>Dato primario de calidad. NDVI proyecta hacia adelante.</div>
+              {FENOLOGIAS.map(f=>(
+                <button key={f.val} onClick={()=>set("fenologia",f.val)} style={{...btnSel(form.fenologia===f.val),marginBottom:6,display:"flex",alignItems:"center",gap:10,textAlign:"left",padding:"12px 14px"}}>
+                  <span style={{fontSize:20}}>{f.emoji}</span>
+                  <div>
+                    <div style={{fontFamily:"monospace",fontSize:12,fontWeight:700}}>{f.label}</div>
+                    <div style={{fontFamily:"monospace",fontSize:9,marginTop:1,opacity:.8}}>{f.desc}</div>
+                    {f.warn&&<div style={{fontFamily:"monospace",fontSize:9,color:C.red,marginTop:1}}>{f.warn}</div>}
+                  </div>
+                </button>
+              ))}
             </div>
           )}
 
