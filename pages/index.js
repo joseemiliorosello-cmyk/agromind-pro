@@ -491,53 +491,77 @@ Citar: (NASSEM,2010)·(Balbuena,INTA 2003)·(Peruchena,INTA 2003)·(Detmann et a
 // MAPA LEAFLET INTERACTIVO
 // ═══════════════════════════════════════════════════════
 function MapaLeaflet({initLat,initLon,onMove}){
-  // initLat/initLon: posición inicial al montar — NO se actualiza después
-  // Para mover el pin externamente usar movePin(lat,lon) via ref
   const divRef=useRef(null);
   const mapRef=useRef(null);
   const markerRef=useRef(null);
+  // Ref para onMove — siempre apunta a la versión actual sin re-montar el mapa
+  const onMoveRef=useRef(onMove);
+  useEffect(()=>{onMoveRef.current=onMove;},[onMove]);
+
   useEffect(()=>{
+    // Cargar Leaflet CSS
     if(!document.getElementById("leaflet-css")){
-      const lk=document.createElement("link");lk.id="leaflet-css";lk.rel="stylesheet";
-      lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lk);
+      const lk=document.createElement("link");
+      lk.id="leaflet-css";lk.rel="stylesheet";
+      lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(lk);
     }
-    const load=()=>new Promise((res,rej)=>{
+    // Cargar Leaflet JS
+    const loadL=()=>new Promise((res,rej)=>{
       if(window.L){res(window.L);return;}
       const s=document.createElement("script");
       s.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      s.onload=()=>res(window.L);s.onerror=rej;document.head.appendChild(s);
+      s.onload=()=>res(window.L);
+      s.onerror=rej;
+      document.head.appendChild(s);
     });
-    load().then(L=>{
+    loadL().then(L=>{
       if(!divRef.current||mapRef.current)return;
       const la=initLat||(-27.5),lo=initLon||(-59.0);
-      const m=L.map(divRef.current,{attributionControl:false}).setView([la,lo],initLat?10:5);
+      const zoom=initLat?10:4;
+      const m=L.map(divRef.current,{attributionControl:false,zoomControl:true});
+      m.setView([la,lo],zoom);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18}).addTo(m);
       const ico=L.divIcon({
-        html:`<div style="width:24px;height:24px;background:#7ec850;border:3px solid #050d02;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.6)"></div>`,
-        iconSize:[24,24],iconAnchor:[12,12],className:""
+        html:'<div style="width:26px;height:26px;background:#7ec850;border:3px solid #050d02;border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,.7)"></div>',
+        iconSize:[26,26],iconAnchor:[13,13],className:""
       });
-      // Solo poner marcador si hay posición inicial real
-      let mk=null;
-      if(initLat){
-        mk=L.marker([la,lo],{draggable:true,icon:ico}).addTo(m);
-        mk.on("dragend",e=>{const p=e.target.getLatLng();onMove(p.lat,p.lng);});
+      let mk=initLat?L.marker([la,lo],{draggable:true,icon:ico}).addTo(m):null;
+      if(mk){
+        mk.on("dragend",e=>{
+          const p=e.target.getLatLng();
+          onMoveRef.current(p.lat,p.lng);
+        });
       }
-      // Click en mapa: mover o crear marcador
       m.on("click",e=>{
+        const {lat,lng}=e.latlng;
         if(!mk){
-          mk=L.marker(e.latlng,{draggable:true,icon:ico}).addTo(m);
-          mk.on("dragend",ev=>{const p=ev.target.getLatLng();onMove(p.lat,p.lng);});
+          mk=L.marker([lat,lng],{draggable:true,icon:ico}).addTo(m);
+          mk.on("dragend",ev=>{
+            const p=ev.target.getLatLng();
+            onMoveRef.current(p.lat,p.lng);
+          });
           markerRef.current=mk;
         } else {
-          mk.setLatLng(e.latlng);
+          mk.setLatLng([lat,lng]);
         }
-        onMove(e.latlng.lat,e.latlng.lng);
+        onMoveRef.current(lat,lng);
       });
-      mapRef.current=m;markerRef.current=mk;
-    }).catch(e=>console.error("Leaflet error:",e));
-    return()=>{if(mapRef.current){mapRef.current.remove();mapRef.current=null;markerRef.current=null;}};
-  },[]);// solo al montar — NO depende de initLat/initLon para evitar loops
-  return <div ref={divRef} style={{width:"100%",height:260,borderRadius:12,marginTop:8,border:"1px solid rgba(126,200,80,.2)",overflow:"hidden",background:"#1a2a18"}}/>;
+      mapRef.current=m;
+      if(mk)markerRef.current=mk;
+    }).catch(e=>console.error("Leaflet:",e));
+    return()=>{
+      if(mapRef.current){mapRef.current.remove();mapRef.current=null;markerRef.current=null;}
+    };
+  },[]);// eslint-disable-line — solo monta una vez
+
+  return(
+    <div ref={divRef} style={{
+      width:"100%",height:260,borderRadius:12,marginTop:8,
+      border:"1px solid rgba(126,200,80,.25)",
+      overflow:"hidden",background:"#1a2a18"
+    }}/>
+  );
 }
 
 // ═══════════════════════════════════════════════════════
@@ -627,22 +651,34 @@ export default function AgroMind(){
     setSatLoading(true);setSat(null);
     try{
       const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,et0_fao_evapotranspiration&timezone=auto&past_days=30&forecast_days=1`;
-      const d=(await(await fetch(url)).json()).daily;
+      const resp=await fetch(url);
+      if(!resp.ok)throw new Error("Open-Meteo HTTP "+resp.status);
+      const json=await resp.json();
+      const d=json.daily;
+      if(!d)throw new Error("Sin datos daily");
       const p30=d.precipitation_sum.slice(0,30).reduce((a,b)=>a+(b||0),0);
       const p7=d.precipitation_sum.slice(-7).reduce((a,b)=>a+(b||0),0);
-      const tMax7=d.temperature_2m_max.slice(-7),tMin7=d.temperature_2m_min.slice(-7);
+      const tMax7=d.temperature_2m_max.slice(-7);
+      const tMin7=d.temperature_2m_min.slice(-7);
       const temp=tMax7.map((t,i)=>(t+(tMin7[i]||t))/2).reduce((a,b)=>a+b,0)/tMax7.length;
       const et=d.et0_fao_evapotranspiration.slice(-7).reduce((a,b)=>a+(b||0),0)/7;
       const deficit=Math.round((p30-et*30)*10)/10;
       const clima=deficit<-40?"Seco":deficit>40?"Húmedo":"Normal";
       const ndviBase={NEA:0.55,"Pampa Húmeda":0.50,NOA:0.42,"Semiárido":0.38,Cuyo:0.30,Patagonia:0.28}[zona]||0.45;
       const pf=Math.min(Math.max((p30-20)/180,-0.15),0.25);
-      const mi=MESES.indexOf(mes);const mf=[0.05,0.03,0,-0.03,-0.08,-0.12,-0.12,-0.08,-0.02,0.03,0.05,0.06];
+      const mi=MESES.indexOf(mes);
+      const mf=[0.05,0.03,0,-0.03,-0.08,-0.12,-0.12,-0.08,-0.02,0.03,0.05,0.06];
       const ndvi=Math.min(Math.max(ndviBase+pf+(mi>=0?mf[mi]:0),0.05),0.95);
       const cond=ndvi>0.55?"Excelente":ndvi>0.40?"Buena":ndvi>0.25?"Moderada":ndvi>0.15?"Baja":"Muy baja";
-      setSat({ndvi:ndvi.toFixed(2),temp:temp.toFixed(1),tMax:Math.max(...tMax7).toFixed(1),tMin:Math.min(...tMin7).toFixed(1),p7:Math.round(p7),p30:Math.round(p30),et:et.toFixed(1),deficit,cond,clima});
+      setSat({ndvi:ndvi.toFixed(2),temp:temp.toFixed(1),
+        tMax:Math.max(...tMax7).toFixed(1),tMin:Math.min(...tMin7).toFixed(1),
+        p7:Math.round(p7),p30:Math.round(p30),et:et.toFixed(1),
+        deficit,cond,clima,lat:lat.toFixed(4),lon:lon.toFixed(4)});
       setForm(f=>({...f,clima}));
-    }catch(e){console.error(e);}finally{setSatLoading(false);}
+    }catch(e){
+      console.error("fetchSat error:",e);
+      setSat({error:e.message});
+    }finally{setSatLoading(false);}
   };
 
   const saveProductor=(informe)=>{
@@ -809,8 +845,9 @@ export default function AgroMind(){
           {/* Confirma ubicación actual */}
           {coords?(
             <div style={{fontFamily:"monospace",fontSize:11,color:C.green,marginTop:8,textAlign:"center",background:"rgba(126,200,80,.06)",border:"1px solid rgba(126,200,80,.15)",borderRadius:10,padding:"8px 12px"}}>
-              ✅ {coords.lat?.toFixed(4)}°S · {coords.lon?.toFixed(4)}°W · <strong>{form.zona}</strong> · {form.provincia}
-              {sat&&<span style={{color:C.textDim,fontSize:10}}> · T{sat.temp}°C · NDVI {sat.ndvi}</span>}
+              ✅ {coords.lat?.toFixed(4)}°S · {coords.lon?.toFixed(4)}°W
+              <br/><strong>{form.zona}</strong> · {form.provincia}
+              {sat&&!sat.error&&<span style={{color:C.textDim,fontSize:10}}> · T{sat.temp}°C · NDVI {sat.ndvi}</span>}
             </div>
           ):(
             <div style={{fontFamily:"monospace",fontSize:10,color:C.textDim,marginTop:6,textAlign:"center"}}>
@@ -840,6 +877,7 @@ export default function AgroMind(){
             </div>
           </details>
           {satLoading&&<div style={{fontFamily:"monospace",fontSize:11,color:C.green,textAlign:"center",marginTop:10}}>🛰 Cargando datos meteorológicos...</div>}
+          {sat?.error&&<div style={{fontFamily:"monospace",fontSize:10,color:C.red,textAlign:"center",marginTop:8}}>⚠️ Error cargando datos: {sat.error}</div>}
           {sat&&(
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:12}}>
               {[["🌡️",sat.temp+"°C",C.amber],["🌧",sat.p30+"mm",C.blue],["⚖️",(sat.deficit>0?"+":"")+sat.deficit,sat.deficit<-30?C.red:C.amber],["🛰",sat.ndvi,C.green]].map(([l,v,cl])=>(
