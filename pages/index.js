@@ -152,7 +152,68 @@ function reqEM(pv,cat){const p=parseFloat(pv)||0;if(!p)return null;const pm=Math
 const CC_PR=[{ccP:6.5,ccS:5.0,pr:95},{ccP:6.0,ccS:4.5,pr:88},{ccP:5.5,ccS:4.0,pr:75},{ccP:5.0,ccS:3.5,pr:55},{ccP:4.5,ccS:3.0,pr:35},{ccP:4.0,ccS:2.5,pr:15},{ccP:3.5,ccS:2.0,pr:5}];
 function interpCC(ccP){const t=CC_PR;if(ccP>=t[0].ccP)return{ccS:t[0].ccS,pr:t[0].pr};if(ccP<=t[t.length-1].ccP)return{ccS:t[t.length-1].ccS,pr:t[t.length-1].pr};for(let i=0;i<t.length-1;i++){if(ccP<=t[i].ccP&&ccP>=t[i+1].ccP){const r=(ccP-t[i+1].ccP)/(t[i].ccP-t[i+1].ccP);return{ccS:+(t[i+1].ccS+r*(t[i].ccS-t[i+1].ccS)).toFixed(1),pr:Math.round(t[i+1].pr+r*(t[i].pr-t[i+1].pr))};}}return{ccS:2.5,pr:15};}
 function ccPond(dist){let tot=0,sum=0;(dist||[]).forEach(d=>{const p=parseFloat(d.pct)||0,c=parseFloat(d.cc)||0;sum+=p*c;tot+=p;});return tot>0?sum/tot:0;}
-function calcCCParto(dist,diasP,estD,pastoCal,diasD,ndvi,prov){const cc=ccPond(dist);if(!cc||!diasP)return null;const dp=parseInt(diasP),dd=parseInt(diasD)||0;const tR={excelente:0.022,bueno:0.016,regular:0.009,malo:0.004}[pastoCal]||0.013;const dDisp=diasHelada(prov,ndvi);const tP=tasaPD(ndvi,false);if(estD==="no_ternero"){const dT=Math.min(dd>0?dd:dp,dp);const ccPD=Math.max(1,cc-0.010*dT);const dR=dp-dT;const dB=Math.min(dR,Math.max(0,dDisp-dT));const ccPH=Math.min(9,ccPD+tR*dB);return parseFloat(Math.max(1,ccPH-tP*Math.max(0,dR-dB)).toFixed(2));}if(["ok_feb","ok_mar","precoz","tard_abr"].includes(estD)){const dB=Math.min(dp,dDisp);const ccPH=Math.min(9,cc+tR*dB);return parseFloat(Math.max(1,ccPH-tP*Math.max(0,dp-dDisp)).toFixed(2));}return cc;}
+// calcTrayectoriaCC: traza la CC desde HOY hasta el servicio en 4 hitos
+// Hito 1: HOY (CC ponderada ingresada)
+// Hito 2: PARTO — recuperación pre-parto (días disponibles antes del disparador)
+// Hito 3: DESTETE — caída por lactancia (pérdida 0.5 pts CC × meses lactancia)  
+// Hito 4: SERVICIO — recuperación post-destete hasta servicio
+// Retorna {ccHoy, ccParto, ccDestete, ccServ, pr, mesesLact, diasRecupServ}
+function calcTrayectoriaCC(dist,cadena,ndvi,prov){
+  const ccHoy=ccPond(dist);
+  if(!ccHoy||!cadena)return null;
+  const ndviN=parseFloat(ndvi)||0.45;
+  const tR=0.013+(ndviN-0.35)*0.04; // tasa recuperación: mejor NDVI = más rápido
+  const tP=tasaPD(ndviN,false);      // tasa pérdida post-disparador
+  const dDisp=diasHelada(prov,ndviN);// días disponibles antes del frío
+
+  // TRAMO 1: HOY → PARTO
+  // Si el parto está cerca, hay pocos días de recuperación
+  const diasHastaPartoTemp=Math.max(0,cadena.diasPartoTemp||0);
+  const diasRecupPreParto=Math.min(diasHastaPartoTemp, dDisp);
+  const diasPerdPreParto=Math.max(0,diasHastaPartoTemp-dDisp);
+  const ccParto=parseFloat(Math.min(9,Math.max(1,
+    ccHoy + tR*diasRecupPreParto - tP*diasPerdPreParto
+  )).toFixed(2));
+
+  // TRAMO 2: PARTO → DESTETE (caída por lactancia)
+  // En NEA: destete tradicional ~180d, anticipado ~90d, hiperprecoz ~50d
+  // Pérdida CC lactancia: ~0.5 pts/mes × meses lactancia (Peruchena INTA 2003)
+  // Ponderada por modalidades de destete
+  const tipos=cadena.tipos||{};
+  const mesesLact=(
+    ((parseFloat(tipos.trad?.dias)||180)*0.333 +
+     (parseFloat(tipos.antic?.dias)||90)*0.333 +
+     (parseFloat(tipos.hiper?.dias)||50)*0.333) / 30
+  );
+  const caídaLact=Math.min(2.5, mesesLact*0.50); // máx 2.5 pts CC pérdida
+  const ccDestete=parseFloat(Math.max(1, ccParto - caídaLact).toFixed(2));
+
+  // TRAMO 3: DESTETE → SERVICIO (recuperación post-destete)
+  // Servicio empieza ~cuando termina el período de recuperación post-parto
+  // Estimamos 60-90 días post-destete para que la vaca esté en servicio
+  const diasRecupServicio=Math.min(90, dDisp);
+  const ccServ=parseFloat(Math.min(9, Math.max(1,
+    ccDestete + tR*diasRecupServicio
+  )).toFixed(2));
+
+  const curva=interpCC(ccServ);
+  return{ccHoy,ccParto,ccDestete,ccServ,pr:curva.pr,ccSTarget:curva.ccS,
+    mesesLact:mesesLact.toFixed(1),diasRecupPreParto,diasPerdPreParto,
+    caídaLact:caídaLact.toFixed(2),diasRecupServicio};
+}
+// Wrapper para compatibilidad — devuelve solo ccParto como número
+function calcCCParto(dist,diasP,estD,pastoCal,diasD,ndvi,prov){
+  const cc=ccPond(dist);
+  if(!cc||!diasP)return null;
+  const ndviN=parseFloat(ndvi)||0.45;
+  const tR=0.013+(ndviN-0.35)*0.04;
+  const tP=tasaPD(ndviN,false);
+  const dDisp=diasHelada(prov,ndviN);
+  const dp=parseInt(diasP)||90;
+  const dB=Math.min(dp,dDisp);
+  const ccPH=Math.min(9,cc+tR*dB);
+  return parseFloat(Math.max(1,ccPH-tP*Math.max(0,dp-dDisp)).toFixed(2));
+}
 function dZona(lat,lon){
   // Paraguay
   if(lat>-23&&lat<=-19&&lon>-62&&lon<=-54)return"Paraguay Oriental";
@@ -272,16 +333,19 @@ function GraficoBalance({form,sat,dispar,vaq1E,potreros}){
     const dQ1=q1N>0&&i>=mesD?Math.round((reqEM(form.vaq1PV,"vaq1inv")||12)*q1N):0;
     const dQ2=q2N>0?Math.round((reqEM(form.vaq2PV,"vaq2inv")||10)*q2N):0;
     const demanda=dVacas+dV2s+dQ1+dQ2;
-    // CC endógena: solo aporta cuando ofPasto < demanda
-    // Una vaca moviliza ~0.5 puntos CC/mes en déficit → ~25 Mcal/vaca/mes
-    // Aporta desde el mes en que hay déficit hasta fin de servicio (mesP+1 aprox)
+    // CC ENDÓGENA: la vaca moviliza reservas durante la lactancia cuando oferta < demanda
+    // Período: desde el parto hasta el destete (mesP → mesP + meses lactancia)
+    // Cantidad: ~0.5 pts CC/mes de déficit → ~25 Mcal/vaca/día de aporte máximo
+    // Esto REDUCE la CC al servicio → reduce preñez (Peruchena INTA 2003)
     const defBruto=Math.max(0,demanda-ofPasto);
-    const esMesServicio=i>=mesP&&i<=mesP+2; // en servicio o posparto temprano
-    // Solo moviliza CC si hay déficit real Y está en período reproductivo-lactante
-    const ccEndog=(defBruto>0&&esMesServicio)?Math.min(defBruto,Math.round(25*vN)):0;
+    const mesesLactGraf=3; // aprox promedio destete tradicional NEA
+    const enLactancia=(i>=mesP&&i<mesP+mesesLactGraf);
+    const ccEndog=(defBruto>0&&enLactancia)?Math.min(defBruto,Math.round(25*vN)):0;
     const ofTotal=ofPasto+ccEndog;
     const deficit=Math.max(0,demanda-ofTotal);
-    return{mes,i,dVacas,dV2s,dQ1,dQ2,demanda,ofPasto,ofTotal,deficit,bajo15,esActual:i===mc,temp:h.t};
+    // Acumular pérdida CC para proyección (referencia externa al gráfico)
+    const ccMov=enLactancia&&defBruto>0?Math.round(defBruto/(25*Math.max(1,vN))*0.5*10)/10:0;
+    return{mes,i,dVacas,dV2s,dQ1,dQ2,demanda,ofPasto,ofTotal,deficit,ccMov,bajo15,esActual:i===mc,temp:h.t};
   });
   const defMeses=datos.filter(d=>d.deficit>0);
 
@@ -438,30 +502,35 @@ function TablaRecom({rows}){
   );
 }
 
-function buildRecomRows(form,vaq1E,vaq2E,ccParto,curva,dispar,cadena){
+function buildRecomRows(form,vaq1E,vaq2E,ccParto,curva,dispar,cadena,trayCC){
   const rows=[];
   const hoy=new Date();
   const mesAct=MESES[hoy.getMonth()];
   const mesSig=MESES[(hoy.getMonth()+1)%12];
-  // CC endógena → preñez Peruchena
-  const ccActual=ccPond(form.ccDist||[]);
-  const ccServ=curva?.ccS||0;
-  const prEsp=curva?.pr||0;
-  if(ccActual>0&&ccServ>0&&ccServ<5.0){
+  // Trayectoria CC → preñez (Peruchena INTA 2003)
+  if(trayCC&&trayCC.ccServ<5.0){
     rows.push({
-      prioridad:ccServ<4.5?"urgente":"importante",
-      categoria:"CC crítica al servicio",
-      accion:`CC parto ${ccActual.toFixed(1)}/9 → CC serv proj ${ccServ}/9 → preñez ${prEsp}% (Peruchena INTA 2003). Proteico 0.5%PV en vacas CC<4.5`,
+      prioridad:trayCC.ccServ<4.5?"urgente":"importante",
+      categoria:"CC al servicio crítica",
+      accion:`Trayectoria: CC hoy ${trayCC.ccHoy}/9 → parto ${trayCC.ccParto}/9 → destete ${trayCC.ccDestete}/9 (pérdida lact. -${trayCC.caídaLact} pts) → servicio ${trayCC.ccServ}/9. Preñez esperada ${trayCC.pr||curva?.pr||"?"}% (Peruchena INTA 2003)`,
       fecha:"Ahora → servicio",
-      resultado:`+${(5.0-ccServ).toFixed(1)} pts CC → ~${Math.min(95,prEsp+20)}% preñez`
+      resultado:`CC serv ${trayCC.ccServ} → suplementar proteico para recuperar +${(5.0-trayCC.ccServ).toFixed(1)} pts`
     });
   }
   if(form.v2sN&&parseInt(form.v2sN)>0&&form.v2sTernero==="si")
     rows.push({prioridad:"urgente",categoria:`Vaca 2°Serv (${form.v2sN} cab)`,accion:"Destete precoz inmediato — triple demanda insostenible",fecha:mesAct,resultado:"-4 Mcal/día · +preñez"});
   if(ccParto&&ccParto<5.0)
     rows.push({prioridad:ccParto<4.5?"urgente":"importante",categoria:"Vacas CC baja",accion:`CC parto ${ccParto}/9 → preñez ${curva?.pr||"—"}%. Proteico 0.5%PV vacas críticas`,fecha:mesAct+" → parto",resultado:`CC +${(5.0-ccParto).toFixed(1)} pts`});
-  if(vaq1E&&form.vaq1N&&parseInt(form.vaq1N)>0)
-    rows.push({prioridad:vaq1E.esc==="C"?"urgente":vaq1E.esc==="B"?"importante":"preventivo",categoria:`Vaq 1°inv (${form.vaq1N} cab)`,accion:`Esc ${vaq1E.esc}: ${vaq1E.prot}kg prot/día${vaq1E.energ>0?" + "+vaq1E.energ+"kg maíz/día":""} · ${vaq1E.freq}`,fecha:"May → Ago (120d)",resultado:`GDP ${vaq1E.gdpReal}g/d → ${vaq1E.pvSal}kg sep${vaq1E.deficit?" ⚠️":""}`});
+  if(vaq1E){
+    const nVaqR=Math.round((parseInt(form.vacasN)||0)*(parseFloat(form.pctReposicion)||0)/100);
+    if(nVaqR>0)rows.push({
+      prioridad:vaq1E.esc==="C"?"urgente":vaq1E.esc==="B"?"importante":"preventivo",
+      categoria:`Vaquillona 1°inv (${nVaqR} cab · ${form.pctReposicion}% repos.)`,
+      accion:`Escenario ${vaq1E.esc} — déficit PROTEICO (PB<5% pastizal C4 invernal). ${vaq1E.prot}kg prot/día${vaq1E.energ>0?" + "+vaq1E.energ+"kg maíz/día":""} · ${vaq1E.freq} · 120 días`,
+      fecha:"May → Ago",
+      resultado:`GDP ${vaq1E.gdpReal}g/d → ${vaq1E.pvSal}kg sep${vaq1E.deficit?" ⚠️ No llega a 210kg":""}`
+    });
+  }
   if(vaq2E&&form.vaq2N&&parseInt(form.vaq2N)>0)
     rows.push({prioridad:!vaq2E.llegas?"urgente":"importante",categoria:`Vaq 2°inv (${form.vaq2N} cab)`,accion:`Esc ${vaq2E.esc}: ${vaq2E.prot}kg prot/día${vaq2E.energ>0?" + "+vaq2E.energ+"kg maíz/día":""} · ${vaq2E.freq}`,fecha:"May → Ago",resultado:`GDP ${vaq2E.gdpReal}g/d → ${vaq2E.pvEntore}kg entore${!vaq2E.llegas?" ⚠️":""}`});
   if(dispar&&dispar.dias<45&&dispar.dias<999)
@@ -474,7 +543,7 @@ function buildRecomRows(form,vaq1E,vaq2E,ccParto,curva,dispar,cadena){
 // ═══════════════════════════════════════════════════════
 // RENDER INFORME
 // ═══════════════════════════════════════════════════════
-function RenderInforme({text,form,sat,dispar,vaq1E,vaq2E,ccParto,curva,cadena,potreros}){
+function RenderInforme({text,form,sat,dispar,vaq1E,vaq2E,ccParto,curva,cadena,potreros,trayCC}){
   if(!text)return null;
   const EMOJIS=["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣"];
   const TITLES=["Diagnóstico Ambiental","Diagnóstico por Categoría","Destete y Proyección CC","Balance Oferta vs Demanda","Recomendaciones"];
@@ -493,7 +562,7 @@ function RenderInforme({text,form,sat,dispar,vaq1E,vaq2E,ccParto,curva,cadena,po
     sections.push(chunk.split("\n").slice(1).join("\n").trim());
     if(en>-1)remaining=remaining.slice(en);
   }
-  const recomRows=buildRecomRows(form,vaq1E,vaq2E,ccParto,curva,dispar,cadena);
+  const recomRows=buildRecomRows(form,vaq1E,vaq2E,ccParto,curva,dispar,cadena,trayCC);
   const rr=(t)=>t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>").replace(/\n\n/g,"<br/><br/>").replace(/\n/g,"<br/>");
   return(
     <div>
@@ -698,6 +767,7 @@ export default function AgroMind(){
   const[usaPotreros,setUsaPotreros]=useState(false);
 
   const[sat,setSat]=useState(null);const[satLoading,setSatLoading]=useState(false);
+  const[trayCC,setTrayCC]=useState(null);
   const[coords,setCoords]=useState(()=>{try{const s=localStorage.getItem("agm_coords");return s?JSON.parse(s):null;}catch(e){return null;}});
   const[manualLat,setManualLat]=useState("");const[manualLon,setManualLon]=useState("");
   const[loading,setLoading]=useState(false);const[loadMsg,setLoadMsg]=useState("");const[result,setResult]=useState("");
@@ -732,12 +802,17 @@ export default function AgroMind(){
     } else setCadena(null);
   },[form.iniServ,form.finServ]);
 
-  // CC parto
+  // CC trayectoria completa: HOY → parto → destete → servicio
   useEffect(()=>{
-    const dp=parseInt(form.diasParto);const cc=ccPond(form.ccDist);
-    if(cc>0&&dp>0){const p=calcCCParto(form.ccDist,dp,"ok_feb","bueno","",sat?.ndvi||"0.45",form.provincia);setCcParto(p);setCurva(p?interpCC(p):null);}
-    else{setCcParto(null);setCurva(null);}
-  },[form.ccDist,form.diasParto,form.provincia,sat]);
+    if(ccPond(form.ccDist)>0&&cadena){
+      const t=calcTrayectoriaCC(form.ccDist,cadena,sat?.ndvi||"0.45",form.provincia);
+      setTrayCC(t);
+      if(t){setCcParto(t.ccParto);setCurva(interpCC(t.ccServ));}
+      else{setCcParto(null);setCurva(null);}
+    } else {
+      setTrayCC(null);setCcParto(null);setCurva(null);
+    }
+  },[form.ccDist,cadena,form.provincia,sat]);
 
   useEffect(()=>{if(form.provincia&&sat)setDispar(calcDisp(form.provincia,sat.ndvi,sat.deficit,sat));else setDispar(null);},[form.provincia,sat]);
 
@@ -1165,11 +1240,39 @@ export default function AgroMind(){
             </div>
           )}
           <DistCC label="Distribución CC — Vacas Rodeo" dist={form.ccDist} onChange={setCCD} color={C.green}/>
-          {ccParto&&curva&&(
-            <div style={{marginTop:12,background:"rgba(0,0,0,.3)",border:`1px solid ${ccC}44`,borderRadius:10,padding:14,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,textAlign:"center"}}>
-              {[["CC Parto",ccParto+"/9",ccC],["CC Serv",curva.ccS+"/9",pC],["Preñez Est",curva.pr+"%",pC]].map(([l,v,c])=>(
-                <div key={l}><div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginBottom:3}}>{l}</div><div style={{fontFamily:"monospace",fontSize:18,fontWeight:700,color:c}}>{v}</div></div>
-              ))}
+          {trayCC&&curva&&(
+            <div style={{marginTop:12,background:"rgba(0,0,0,.25)",border:`1px solid ${ccC}44`,borderRadius:10,padding:12}}>
+              <div style={{fontFamily:"monospace",fontSize:9,color:C.textDim,marginBottom:8,letterSpacing:1}}>📉 TRAYECTORIA CC → PREÑEZ (Peruchena INTA 2003)</div>
+              {/* 4 hitos en flecha */}
+              <div style={{display:"flex",alignItems:"center",gap:2,marginBottom:10,flexWrap:"wrap"}}>
+                {[
+                  ["HOY",trayCC.ccHoy,C.textDim],
+                  ["→ PARTO",trayCC.ccParto,ccC],
+                  ["→ DESTETE",trayCC.ccDestete,trayCC.ccDestete<4?C.red:C.amber],
+                  ["→ SERVICIO",trayCC.ccServ,trayCC.ccServ<4.5?C.red:trayCC.ccServ<5?C.amber:C.green],
+                ].map(([l,v,col])=>(
+                  <div key={l} style={{textAlign:"center",background:"rgba(0,0,0,.25)",borderRadius:8,padding:"6px 8px",flex:1,minWidth:60}}>
+                    <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginBottom:2}}>{l}</div>
+                    <div style={{fontFamily:"monospace",fontSize:16,fontWeight:700,color:col}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Resumen pérdida lactancia + preñez */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
+                <div style={{background:"rgba(0,0,0,.2)",borderRadius:8,padding:"6px 10px"}}>
+                  <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginBottom:2}}>Pérdida lactancia ({trayCC.mesesLact} meses)</div>
+                  <div style={{fontFamily:"monospace",fontSize:14,fontWeight:700,color:C.red}}>-{trayCC.caídaLact} pts CC</div>
+                </div>
+                <div style={{background:`rgba(0,0,0,.2)`,borderRadius:8,padding:"6px 10px"}}>
+                  <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginBottom:2}}>Preñez estimada</div>
+                  <div style={{fontFamily:"monospace",fontSize:14,fontWeight:700,color:trayCC.ccServ<4.5?C.red:trayCC.ccServ<5?C.amber:C.green}}>{curva.pr}%</div>
+                </div>
+              </div>
+              {trayCC.ccServ<5.0&&(
+                <div style={{background:"rgba(192,72,32,.08)",border:"1px solid rgba(192,72,32,.25)",borderRadius:8,padding:"6px 10px",fontFamily:"monospace",fontSize:10,color:C.red}}>
+                  ⚠️ CC al servicio {trayCC.ccServ}/9 → preñez {curva.pr}% — recuperar CC antes del servicio
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1325,7 +1428,7 @@ export default function AgroMind(){
                 </div>
                 {/* Consumo voluntario en 1°inv */}
                 <div style={{background:"rgba(212,149,42,.05)",border:"1px solid rgba(212,149,42,.15)",borderRadius:10,padding:10,marginBottom:10}}>
-                  <div style={{fontFamily:"monospace",fontSize:9,color:C.amber,marginBottom:6,letterSpacing:1}}>📊 CONSUMO VOLUNTARIO — PASTIZAL INVERNAL</div>
+                  <div style={{fontFamily:"monospace",fontSize:9,color:C.amber,marginBottom:6,letterSpacing:1}}>🌿 PASTIZAL INVERNAL — ¿Por qué suplementar?</div>
                   <div style={{fontFamily:"monospace",fontSize:8,color:C.textDim,marginBottom:8}}>El pastizal lignificado en invierno NO cubre los requerimientos de crecimiento → siempre requiere suplementación</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4}}>
                     {[
@@ -1344,7 +1447,7 @@ export default function AgroMind(){
                   </div>
                   {reqVaq>ofertaCV&&(
                     <div style={{marginTop:6,background:"rgba(192,72,32,.08)",borderRadius:8,padding:"6px 10px",fontFamily:"monospace",fontSize:9,color:C.red}}>
-                      ⚠️ Déficit energético: {(reqVaq-ofertaCV).toFixed(1)} Mcal/d · Suplementación necesaria
+                      ⚠️ Déficit proteico: PB pasto <5% en invierno C4 · El suplemento proteico activa digestión microbiana y mejora aprovechamiento energético del pastizal
                     </div>
                   )}
                 </div>
