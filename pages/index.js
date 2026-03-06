@@ -1447,7 +1447,7 @@ export default function AgroMind(){
                   </div>
                   {reqVaq>ofertaCV&&(
                     <div style={{marginTop:6,background:"rgba(192,72,32,.08)",borderRadius:8,padding:"6px 10px",fontFamily:"monospace",fontSize:9,color:C.red}}>
-                      ⚠️ Déficit proteico: PB pasto <5% en invierno C4 · El suplemento proteico activa digestión microbiana y mejora aprovechamiento energético del pastizal
+                      ⚠️ Déficit proteico: PB pasto &lt;5% en invierno C4 · El suplemento proteico activa digestión microbiana y mejora aprovechamiento energético del pastizal
                     </div>
                   )}
                 </div>
