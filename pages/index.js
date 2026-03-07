@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSession, signOut, signIn } from "next-auth/react";
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart, Bar, Line, Area,   // FIX CRASH-1: Area agregado al import
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
 // ═══════════════════════════════════════════════════════
 // DATOS BASE
-// FIX GEO-1: toda zona internacional tiene disparador C4
-// FIX GEO-8: CLIMA_HIST expandido con PY / BR / BO
 // ═══════════════════════════════════════════════════════
 const HELADAS_PROV = {
   "Formosa":              { dia: 15, mes: 5 },
@@ -25,7 +23,6 @@ const HELADAS_PROV = {
   "Mendoza":              { dia:  1, mes: 4 },
   "Neuquén / Río Negro":  { dia:  1, mes: 3 },
   "Patagonia Sur":        { dia:  1, mes: 2 },
-  // FIX GEO-1: internacionales
   "Paraguay Oriental":         { dia: 15, mes: 5 },
   "Chaco Paraguayo":           { dia: 10, mes: 5 },
   "Santa Cruz / Beni (BO)":   { dia:  1, mes: 5 },
@@ -36,7 +33,6 @@ const HELADAS_PROV = {
   "Pantanal (BR)":             { dia: 20, mes: 5 },
 };
 
-// FIX GEO-8
 const CLIMA_HIST = {
   "Corrientes":           [{t:28,p:130},{t:27,p:120},{t:25,p:110},{t:20,p:90},{t:16,p:70},{t:13,p:60},{t:13,p:55},{t:15,p:50},{t:18,p:80},{t:22,p:110},{t:25,p:120},{t:27,p:130}],
   "Chaco":                [{t:29,p:120},{t:28,p:110},{t:26,p:110},{t:21,p:80},{t:16,p:60},{t:13,p:50},{t:13,p:45},{t:15,p:45},{t:19,p:70},{t:23,p:100},{t:26,p:110},{t:28,p:120}],
@@ -49,13 +45,10 @@ const CLIMA_HIST = {
   "Córdoba":              [{t:25,p:100},{t:24,p:90},{t:22,p:90},{t:17,p:60},{t:13,p:35},{t:10,p:25},{t:10,p:20},{t:12,p:25},{t:15,p:45},{t:19,p:75},{t:22,p:90},{t:24,p:100}],
   "Santa Fe":             [{t:26,p:110},{t:25,p:100},{t:23,p:100},{t:18,p:70},{t:14,p:50},{t:11,p:40},{t:11,p:35},{t:13,p:40},{t:16,p:60},{t:20,p:90},{t:23,p:100},{t:25,p:110}],
   "La Pampa":             [{t:24,p:80},{t:23,p:70},{t:21,p:75},{t:15,p:55},{t:11,p:38},{t:8,p:28},{t:8,p:25},{t:10,p:30},{t:13,p:48},{t:17,p:72},{t:20,p:78},{t:22,p:80}],
-  // Paraguay
   "Paraguay Oriental":         [{t:29,p:140},{t:29,p:130},{t:27,p:130},{t:22,p:100},{t:17,p:75},{t:14,p:60},{t:14,p:55},{t:16,p:55},{t:19,p:80},{t:23,p:110},{t:26,p:130},{t:28,p:140}],
   "Chaco Paraguayo":           [{t:31,p:110},{t:30,p:100},{t:28,p:100},{t:23,p:70},{t:18,p:45},{t:15,p:35},{t:15,p:30},{t:17,p:35},{t:21,p:60},{t:25,p:90},{t:28,p:100},{t:30,p:110}],
-  // Bolivia
   "Santa Cruz / Beni (BO)":   [{t:27,p:200},{t:27,p:170},{t:26,p:130},{t:23,p:80},{t:19,p:40},{t:17,p:25},{t:17,p:20},{t:18,p:30},{t:21,p:65},{t:24,p:110},{t:26,p:160},{t:27,p:190}],
   "Tarija / Chaco (BO)":      [{t:24,p:130},{t:23,p:120},{t:22,p:100},{t:17,p:50},{t:13,p:20},{t:10,p:10},{t:10,p:10},{t:12,p:15},{t:15,p:35},{t:19,p:70},{t:22,p:100},{t:23,p:120}],
-  // Brasil
   "Mato Grosso do Sul (BR)":  [{t:27,p:180},{t:27,p:160},{t:26,p:120},{t:23,p:80},{t:19,p:50},{t:17,p:30},{t:17,p:25},{t:19,p:35},{t:22,p:70},{t:25,p:120},{t:26,p:150},{t:27,p:170}],
   "Mato Grosso / Goiás (BR)": [{t:26,p:220},{t:26,p:200},{t:25,p:160},{t:24,p:90},{t:22,p:35},{t:20,p:10},{t:20,p:8},{t:22,p:15},{t:24,p:60},{t:26,p:120},{t:26,p:180},{t:26,p:210}],
   "Rio Grande do Sul (BR)":   [{t:24,p:120},{t:23,p:110},{t:21,p:100},{t:16,p:80},{t:12,p:65},{t:10,p:55},{t:10,p:50},{t:12,p:60},{t:14,p:75},{t:18,p:95},{t:21,p:110},{t:23,p:120}],
@@ -110,7 +103,6 @@ const SUPUESTOS = [
 // ═══════════════════════════════════════════════════════
 const factorT   = (t) => t >= 25 ? 1.0 : t >= 20 ? 0.80 : t >= 15 ? 0.45 : t >= 10 ? 0.15 : 0.05;
 const factorP   = (p) => p >= 100 ? 1.0 : p >= 50 ? 0.85 : p >= 20 ? 0.60 : 0.30;
-// FIX F1: techo 1.5
 const factorN   = (ndvi) => Math.min(1.5, Math.max(0.5, 0.5 + parseFloat(ndvi || 0.45) * 1.2));
 const modENSO   = (e) => e === "nino" ? 1.25 : e === "nina" ? 0.75 : 1.0;
 const mcalKgAdj = (t, fenol) => {
@@ -127,23 +119,14 @@ const calcOfPasto = (veg, ndvi, temp, precip, enso, fenol) => {
 
 // ═══════════════════════════════════════════════════════
 // GEOGRAFÍA
-// FIX GEO-2: lat>-30 cubre NEA completo (Resistencia -27.45 entra)
-// FIX GEO-3/4/5/6: claves coherentes, límites corregidos
-// FIX GEO-7: límite ampliado a -15
 // ═══════════════════════════════════════════════════════
-// FIX v12 GEO: reescritura completa de dZona/dProv
-// Bug v11: Paraguay lat>-28 capturaba Resistencia (-27.45), Corrientes capital (-27.47)
-// Fix: Misiones AR chequeada ANTES de PY · PY limitado a lat>-27 · Corrientes ANTES de Chaco
-// Verificado: Resistencia→Chaco, Corrientes→Corrientes, Formosa→Formosa, PRSP→Chaco, Asuncion→PY Oriental
 function dZona(lat, lon) {
-  // ── Internacional ────────────────────────────────────────
-  if (lat > -28 && lat <= -25 && lon > -56 && lon <= -53) return "NEA"; // Misiones AR primero
+  if (lat > -28 && lat <= -25 && lon > -56 && lon <= -53) return "NEA";
   if (lat > -27 && lat <= -20 && lon > -58 && lon <= -54) return "Paraguay Oriental";
   if (lat > -25 && lat <= -20 && lon > -63 && lon <= -58) return "Chaco Paraguayo";
   if (lat > -25 && lat <= -10 && lon > -54 && lon <= -44) return "Brasil (Cerrado)";
   if (lat > -35 && lat <= -25 && lon > -57 && lon <= -44) return "Brasil (Sur)";
   if (lat > -23 && lat <= -15 && lon > -65 && lon <= -57) return "Bolivia (Llanos)";
-  // ── Argentina ────────────────────────────────────────────
   if (lat > -32) return "NEA";
   if (lat > -38 && lat <= -32 && lon > -62) return "Pampa Húmeda";
   if (lat > -38 && lat <= -32 && lon <= -62 && lon > -67) return "Semiárido";
@@ -153,8 +136,7 @@ function dZona(lat, lon) {
 }
 
 function dProv(lat, lon) {
-  // ── Internacional — PRIMERO ───────────────────────────────
-  if (lat > -28 && lat <= -25 && lon > -56 && lon <= -53) return "Misiones"; // AR antes que PY
+  if (lat > -28 && lat <= -25 && lon > -56 && lon <= -53) return "Misiones";
   if (lat > -27 && lat <= -20 && lon > -58 && lon <= -54) return "Paraguay Oriental";
   if (lat > -25 && lat <= -20 && lon > -63 && lon <= -58) return "Chaco Paraguayo";
   if (lat > -25 && lat <= -10 && lon > -54 && lon <= -44) return "Mato Grosso / Goiás (BR)";
@@ -163,18 +145,12 @@ function dProv(lat, lon) {
   if (lat > -24 && lat <= -15 && lon > -58 && lon <= -54) return "Mato Grosso do Sul (BR)";
   if (lat > -22 && lat <= -15 && lon > -65 && lon <= -63) return "Santa Cruz / Beni (BO)";
   if (lat > -23 && lat <= -20 && lon > -66 && lon <= -63) return "Tarija / Chaco (BO)";
-  // ── Argentina — orden crítico ─────────────────────────────
   if (lat > -23 && lon <= -62) return "Salta";
   if (lat > -23 && lon > -62) return "Formosa";
-  // Santiago del Estero antes de Chaco (lon muy occidental)
   if (lat > -31 && lat <= -24 && lon > -66 && lon <= -63) return "Santiago del Estero";
-  // Formosa provincia (lat -23 a -26.5, lon -58 a -62)
   if (lat > -26.5 && lat <= -23 && lon > -62 && lon <= -58) return "Formosa";
-  // Corrientes ANTES de Chaco (lon > -59, este del río Paraná)
   if (lat > -32 && lat <= -26 && lon > -59 && lon <= -53) return "Corrientes";
-  // Chaco (captura PRSP -26.79, -60.44 y Resistencia -27.45, -59.12)
   if (lat > -29 && lat <= -22 && lon > -66 && lon <= -58) return "Chaco";
-  // Corrientes Sur (Goya -29.14, -59.26)
   if (lat > -32 && lat <= -28 && lon > -60 && lon <= -57) return "Corrientes";
   if (lat > -34 && lat <= -30 && lon > -60.5 && lon <= -57) return "Entre Ríos";
   if (lat > -34 && lat <= -28 && lon > -64 && lon <= -59) return "Santa Fe";
@@ -196,7 +172,6 @@ const ndviBase = {
   "Santa Cruz / Beni (BO)":0.50,"Tarija / Chaco (BO)":0.44,
 };
 
-// FIX BUG-2: si tempActual < 15 ya estamos en invierno → retorna 0
 function diasHelada(prov, ndvi, tempActual) {
   const h = HELADAS_PROV[prov];
   if (!h) return 999;
@@ -237,11 +212,7 @@ const ccPond = (dist) => {
 
 // ═══════════════════════════════════════════════════════
 // CADENA REPRODUCTIVA
-// FIX BUG-3: terneroOtono en cadena raíz
-// FIX IC-3:  desteTemp / desteTard en cadena raíz
-// FIX IC-4:  pvMayo1Inv calculado
-// FIX F5:    GDP hiperprecoz = 250 g/d (no 400)
-// FIX F7:    destePostMayo detecta destete tardío > mayo
+// FIX TERNERO: mayo1 calculado correctamente según mes del parto
 // ═══════════════════════════════════════════════════════
 function calcCadena(iniServ, finServ) {
   if (!iniServ || !finServ) return null;
@@ -252,41 +223,54 @@ function calcCadena(iniServ, finServ) {
   const partoTemp = new Date(ini); partoTemp.setDate(partoTemp.getDate() + 280);
   const partoTard = new Date(fin); partoTard.setDate(partoTard.getDate() + 280);
   const hoy = new Date();
+  // FIX: diasParto puede ser negativo si ya pasó → lo dejamos como está para mostrar "hace X días"
   const diasPartoTemp = Math.round((partoTemp - hoy) / (1000 * 60 * 60 * 24));
   const diasPartoTard = Math.round((partoTard - hoy) / (1000 * 60 * 60 * 24));
 
-  // FIX F5: GDP post-destete diferenciado por modalidad
   const GDP = { trad: 0.400, antic: 0.350, hiper: 0.250 };
 
-  const calcTipo = (diasLact, gdpPost) => {
+  const calcTipo = (refParto, diasLact, gdpPost) => {
     const pvDest = Math.round(35 + 0.700 * diasLact);
-    const desteT = new Date(partoTemp); desteT.setDate(desteT.getDate() + diasLact);
-    const desteTd = new Date(partoTard); desteTd.setDate(desteTd.getDate() + diasLact);
-    const mayo1 = new Date(partoTemp.getFullYear() + 1, 4, 1);
+    const desteT = new Date(refParto); desteT.setDate(desteT.getDate() + diasLact);
+    // FIX TERNERO: mayo1 del año correcto según mes del destete
+    // Si el destete es antes de mayo de su año → mayo1 es ese año
+    // Si el destete es en mayo o después → mayo1 es el año siguiente
+    const anoRef = desteT.getFullYear();
+    const mayo1candidato = new Date(anoRef, 4, 1);
+    const mayo1 = mayo1candidato > desteT ? mayo1candidato : new Date(anoRef + 1, 4, 1);
     const diasPost = Math.max(0, Math.round((mayo1 - desteT) / (1000 * 60 * 60 * 24)));
     const pvMayo = Math.round(pvDest + gdpPost * diasPost);
-    const mesTard = desteTd.getMonth();
-    const terneroOtono = mesTard >= 4 && mesTard <= 5; // may-jun
-    const destePostMayo = diasPost <= 0; // FIX F7
-    return { desteTemp: desteT, desteTard: desteTd, pvDest, pvMayo, terneroOtono, diasLact, destePostMayo };
+    const mesDeste = desteT.getMonth();
+    const terneroOtono = mesDeste >= 4 && mesDeste <= 5;
+    const destePostMayo = diasPost <= 0;
+    return { desteT, pvDest, pvMayo, terneroOtono, diasLact, destePostMayo };
   };
+
+  const tiposTrad  = calcTipo(partoTemp, 180, GDP.trad);
+  const tiposAntic = calcTipo(partoTemp, 90,  GDP.antic);
+  const tiposHiper = calcTipo(partoTemp, 50,  GDP.hiper);
+
+  // Para "tardío" solo calculamos el destete del parto tardío (tradicional)
+  const tipoTardTrad = calcTipo(partoTard, 180, GDP.trad);
 
   const tipos = {
-    trad:  calcTipo(180, GDP.trad),
-    antic: calcTipo(90,  GDP.antic),
-    hiper: calcTipo(50,  GDP.hiper),
+    trad:  { desteTemp:tiposTrad.desteT,  desteTard:tipoTardTrad.desteT, pvDest:tiposTrad.pvDest,  pvMayo:tiposTrad.pvMayo,  terneroOtono:tiposTrad.terneroOtono,  diasLact:180, destePostMayo:tiposTrad.destePostMayo  },
+    antic: { desteTemp:tiposAntic.desteT, desteTard:tipoTardTrad.desteT, pvDest:tiposAntic.pvDest, pvMayo:tiposAntic.pvMayo, terneroOtono:tiposAntic.terneroOtono, diasLact:90,  destePostMayo:tiposAntic.destePostMayo },
+    hiper: { desteTemp:tiposHiper.desteT, desteTard:tipoTardTrad.desteT, pvDest:tiposHiper.pvDest, pvMayo:tiposHiper.pvMayo, terneroOtono:tiposHiper.terneroOtono, diasLact:50,  destePostMayo:tiposHiper.destePostMayo },
   };
 
-  // FIX BUG-3: campos en raíz
-  const terneroOtono = tipos.trad.terneroOtono;
-  const desteTemp    = tipos.trad.desteTemp;
-  const desteTard    = tipos.trad.desteTard;
-  const destePostMayo = tipos.trad.destePostMayo; // FIX F7
+  const terneroOtono  = tiposTrad.terneroOtono;
+  const desteTemp     = tiposTrad.desteT;
+  const desteTard     = tipoTardTrad.desteT;
+  const destePostMayo = tiposTrad.destePostMayo;
 
+  // Vaquillona nacida ~45d después del parto temprano
   const nacVaq = new Date(partoTemp); nacVaq.setDate(nacVaq.getDate() + 45);
-  const mayo1Inv = new Date(nacVaq.getFullYear() + 1, 4, 1);
+  const anoNacVaq = nacVaq.getFullYear();
+  const mayo1Inv = new Date(anoNacVaq, 4, 1) > nacVaq
+    ? new Date(anoNacVaq, 4, 1)
+    : new Date(anoNacVaq + 1, 4, 1);
   const edadMayo = Math.round((mayo1Inv - nacVaq) / (1000 * 60 * 60 * 24 * 30));
-  // FIX IC-4: pvMayo1Inv
   const pvMayo1Inv = Math.round(35 + 0.700 * (mayo1Inv - nacVaq) / (1000 * 60 * 60 * 24));
 
   return {
@@ -298,8 +282,6 @@ function calcCadena(iniServ, finServ) {
 
 // ═══════════════════════════════════════════════════════
 // CC — INTERPOLACIÓN Y TRAYECTORIA
-// FIX BUG-1: mesesLact desde % reales del formulario
-// FIX BUG-4: supHa y vacasN como parámetros explícitos
 // ═══════════════════════════════════════════════════════
 const CC_PR = [
   {ccP:6.5,pr:95},{ccP:6.0,pr:88},{ccP:5.5,pr:75},{ccP:5.0,pr:55},
@@ -317,7 +299,6 @@ function interpCC(ccP) {
   return { pr: 15 };
 }
 
-// FIX BUG-1 + BUG-4
 function calcTrayectoriaCC(dist, cadena, destTrad, destAntic, destHiper, dDisp, supHa, vacasN) {
   const ccHoy = ccPond(dist);
   if (!ccHoy || !cadena) return null;
@@ -329,6 +310,7 @@ function calcTrayectoriaCC(dist, cadena, destTrad, destAntic, destHiper, dDisp, 
   const tP = 0.007;
   const dD = Math.max(0, dDisp || 90);
 
+  // FIX: usar Math.max(0,...) para que diasPartoTemp negativo no rompa
   const diasHastaParto = Math.max(0, cadena.diasPartoTemp || 0);
   const diasRecupPreParto = Math.min(diasHastaParto, dD);
   const diasPerdPreParto  = Math.max(0, diasHastaParto - dD);
@@ -336,7 +318,6 @@ function calcTrayectoriaCC(dist, cadena, destTrad, destAntic, destHiper, dDisp, 
     ccHoy + tR * diasRecupPreParto - tP * diasPerdPreParto
   )).toFixed(2));
 
-  // FIX BUG-1: ponderado real de % destete
   const pT = parseFloat(destTrad)  || 0;
   const pA = parseFloat(destAntic) || 0;
   const pH = parseFloat(destHiper) || 0;
@@ -373,6 +354,7 @@ function calcDistCCServicio(dist, cadena, ndvi, prov, destTrad, destAntic, destH
   const diasLactPond = (pTrad/totalD)*180 + (pAntic/totalD)*90 + (pHiper/totalD)*50;
   const mesesLact = diasLactPond / 30;
   const diasRecupPostDest = Math.min(90, dD);
+  // FIX: diasPartoTemp puede ser negativo → Math.max(0,...)
   const diasHastaParto = Math.max(0, cadena.diasPartoTemp || 0);
   const diasRecupPreParto = Math.min(diasHastaParto, dD);
   const diasPerdPreParto  = Math.max(0, diasHastaParto - dD);
@@ -392,8 +374,7 @@ function calcDistCCServicio(dist, cadena, ndvi, prov, destTrad, destAntic, destH
 }
 
 // ═══════════════════════════════════════════════════════
-// TERNEROS — FIX BUG-7: pvMayoPond unificado
-//            FIX F5: GDP hiperprecoz 250 g/d, alerta >30%
+// TERNEROS
 // ═══════════════════════════════════════════════════════
 function calcTerneros(vacasN, prenez, pctDestete, destTrad, destAntic, destHiper, cadena) {
   const vN = parseInt(vacasN) || 0;
@@ -406,9 +387,8 @@ function calcTerneros(vacasN, prenez, pctDestete, destTrad, destAntic, destHiper
   const pvTrad  = cadena.tipos.trad?.pvMayo  || 0;
   const pvAntic = cadena.tipos.antic?.pvMayo || 0;
   const pvHiper = cadena.tipos.hiper?.pvMayo || 0;
-  // FIX BUG-7: misma lógica que UI
   const pvMayoPond = Math.round((pT*pvTrad + pA*pvAntic + pH*pvHiper) / total);
-  const alertaHiper = pH > 30; // FIX F5
+  const alertaHiper = pH > 30;
   const detalle = [
     { key:"trad",  label:"Tradicional", pct:pT/total, n:Math.round(terneros*pT/total), pvDest:cadena.tipos.trad?.pvDest||0, pvMayo:pvTrad  },
     { key:"antic", label:"Anticipado",  pct:pA/total, n:Math.round(terneros*pA/total), pvDest:cadena.tipos.antic?.pvDest||0, pvMayo:pvAntic },
@@ -419,7 +399,6 @@ function calcTerneros(vacasN, prenez, pctDestete, destTrad, destAntic, destHiper
 
 // ═══════════════════════════════════════════════════════
 // VAQUILLONA 1° INVIERNO
-// FIX F2: ajuste escenario por NDVI
 // ═══════════════════════════════════════════════════════
 const DIAS_TOTAL_VAQ1 = 120;
 function calcVaq1(pvEntrada, pvAdulta, ndvi) {
@@ -435,13 +414,11 @@ function calcVaq1(pvEntrada, pvAdulta, ndvi) {
     deficit:false, mensaje:`✅ Ya supera el objetivo (${objetivo} kg)`,
   };
   const gdpNec = Math.round((necesita / DIAS_TOTAL_VAQ1) * 1000);
-  // FIX F2: GDP máx 500 g/d biológico
   const gdpReal = Math.min(500, Math.max(100, gdpNec));
   let esc, prot, energ, freq;
   if      (gdpReal <= 450 && ndviN >= 0.40) { esc="A";  prot=+(pvE*0.004 ).toFixed(2); energ=0;                     freq="3×/semana"; }
   else if (gdpReal <= 550 && ndviN >= 0.30) { esc="B";  prot=+(pvE*0.007 ).toFixed(2); energ=0;                     freq="Diario"; }
   else                                       { esc="C";  prot=+(pvE*0.0065).toFixed(2); energ=+(pvE*0.0035).toFixed(2); freq="Diario"; }
-  // FIX F2: ajuste por condición ambiental
   if (esc === "B" && ndviN > 0.60) { esc="A+"; prot=+(pvE*0.006).toFixed(2); energ=0; freq="Diario"; }
   if (esc === "A" && ndviN < 0.30) { esc="B";  prot=+(pvE*0.007).toFixed(2); energ=0; freq="Diario"; }
   const pvSal = Math.round(pvE + gdpReal * DIAS_TOTAL_VAQ1 / 1000);
@@ -450,15 +427,12 @@ function calcVaq1(pvEntrada, pvAdulta, ndvi) {
 
 // ═══════════════════════════════════════════════════════
 // VAQUILLONA 2° INVIERNO
-// FIX F3: DIAS_INV eliminado, usa DIAS_TOTAL_VAQ2
-// FIX F6: aviso pvEntrada vacío
 // ═══════════════════════════════════════════════════════
 const DIAS_TOTAL_VAQ2 = 120;
 function calcVaq2(pvEntrada, pvAdulta, ndvi) {
   const pvA = parseFloat(pvAdulta) || 320;
   const ndviN = parseFloat(ndvi) || 0.45;
   if (!pvEntrada || parseFloat(pvEntrada) < 80) {
-    // FIX F6: default 280 con aviso
     return { _aviso:"Sin PV entrada — usando 280 kg por defecto", ...calcVaq2("280", pvAdulta, ndvi) };
   }
   const pvE = parseFloat(pvEntrada);
@@ -509,7 +483,7 @@ async function fetchSat(lat, lon, zona, prov, enso, cb) {
 }
 
 // ═══════════════════════════════════════════════════════
-// SYSTEM PROMPT — FIX IC-1/2: 5 secciones alineadas
+// SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════
 const SYS = `Actuás como asesor técnico experto en sistemas de cría bovina extensiva en NEA, NOA, Paraguay, Brasil y Bolivia. 20 años de campo en pasturas megatérmicas C4.
 
@@ -543,8 +517,6 @@ Citar: (NASSEM,2010)·(Peruchena,INTA 2003)·(Detmann et al.,2014)·(Paruelo & O
 
 // ═══════════════════════════════════════════════════════
 // BUILD PROMPT
-// FIX IC-3/4: campos correctos de cadena
-// FIX BUG-3/6: cadena.terneroOtono raíz
 // ═══════════════════════════════════════════════════════
 function buildPrompt(form, coords, sat, dispar, cadena, trayCC, curva, ccPondVal,
                      distCCServ, vaq1E, vaq2E, nVaqRepos, tcSave, usaPotreros, potreros) {
@@ -557,14 +529,10 @@ function buildPrompt(form, coords, sat, dispar, cadena, trayCC, curva, ccPondVal
   if (cadena) {
     t += `\nSERVICIO: ${fmtFecha(cadena.ini)} → ${fmtFecha(cadena.fin)} (${cadena.diasServ}d)\n`;
     t += `PARTO: temprano ${fmtFecha(cadena.partoTemp)} · tardío ${fmtFecha(cadena.partoTard)}\n`;
-    // FIX IC-3: campos raíz
     t += `DESTETE: temprano ${fmtFecha(cadena.desteTemp)} · tardío ${fmtFecha(cadena.desteTard)}\n`;
     t += `MODALIDADES: Trad ${form.destTrad||0}% / Antic ${form.destAntic||0}% / Hiper ${form.destHiper||0}%\n`;
-    // FIX BUG-3: campo raíz
     if (cadena.terneroOtono) t += `⚠️ ALERTA CRÍTICA: VACA TARDÍA con ternero al pie en otoño — destete anticipado o hiperprecoz URGENTE\n`;
-    // FIX F7
     if (cadena.destePostMayo) t += `⚠️ DESTETE TARDÍO: vacas de fin de servicio destetan después de mayo\n`;
-    // FIX IC-4: pvMayo1Inv
     t += `Vaquillona: nace ~${fmtFecha(cadena.nacVaq)} · mayo 1°inv: ${fmtFecha(cadena.mayo1Inv)} (${cadena.edadMayo}m) · PV est: ${cadena.pvMayo1Inv}kg\n`;
   }
   t += `\nDIST CC: ${form.ccDist.map(d=>`${d.pct}%→CC${d.cc}`).join(" | ")} · Pond: ${ccPondVal.toFixed(1)}/9\n`;
@@ -597,10 +565,7 @@ function buildPrompt(form, coords, sat, dispar, cadena, trayCC, curva, ccPondVal
 }
 
 // ═══════════════════════════════════════════════════════
-// ESTILOS GLOBALES — JetBrains Mono · safe-area · animaciones
-// FIX E1: fuente coherente  FIX E2: fontSize min 11px
-// FIX E3: textDim ratio 4.6:1  FIX E6: animación pasos
-// FIX UX-7: safe-area-inset-bottom
+// ESTILOS GLOBALES
 // ═══════════════════════════════════════════════════════
 if (typeof document !== "undefined" && !document.getElementById("agm-styles")) {
   const s = document.createElement("style");
@@ -627,17 +592,13 @@ if (typeof document !== "undefined" && !document.getElementById("agm-styles")) {
   document.head.appendChild(s);
 }
 
-// Design tokens
 const C = {
   bg:"#08100a", card:"#0f1a10", border:"rgba(126,200,80,.14)", borderAct:"rgba(126,200,80,.35)",
   green:"#7ec850", greenDim:"rgba(126,200,80,.55)",
   amber:"#d4952a", amberDim:"rgba(212,149,42,.55)",
   red:"#c04820",   redDim:"rgba(192,72,32,.55)",
   blue:"#4a9fd4",
-  text:"#d8ecd0",
-  // FIX E3: #8aaa7a → ratio 4.6:1 AA (era #7a9668 = 3.2:1)
-  textDim:"#8aaa7a",
-  textFaint:"rgba(160,190,140,.32)",
+  text:"#d8ecd0", textDim:"#8aaa7a", textFaint:"rgba(160,190,140,.32)",
   font:"'JetBrains Mono',monospace",
 };
 
@@ -647,15 +608,12 @@ const T = {
     borderRadius:10, color:C.text, padding:"14px 12px",
     fontSize:16, fontFamily:C.font, boxSizing:"border-box", outline:"none",
   },
-  // FIX E2: fontSize mínimo 11px
   lbl: {
     fontFamily:C.font, fontSize:11, color:C.textDim, textTransform:"uppercase",
     letterSpacing:1.2, display:"block", marginBottom:6,
   },
   card: { background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:16, marginBottom:12 },
 };
-
-// ─── Componentes base ────────────────────────────────
 
 function BtnSel({ active, color, onClick, children, style={} }) {
   const cl = color || C.green;
@@ -709,7 +667,6 @@ function MetricCard({ label, value, color, sub, style={} }) {
   );
 }
 
-// FIX UX-2: DistCC con cards verticales, no tabla 5 columnas ilegible en móvil
 function DistCC({ dist, onChange, label }) {
   const suma = dist.reduce((s,d) => s + (parseFloat(d.pct)||0), 0);
   const ok = Math.abs(suma - 100) < 1;
@@ -737,7 +694,6 @@ function DistCC({ dist, onChange, label }) {
   );
 }
 
-// FIX UX-5: GPS mensajes en español
 function getGPS_safe(onSuccess, onError) {
   if (!navigator.geolocation) { onError("Tu dispositivo no soporta geolocalización."); return; }
   navigator.geolocation.getCurrentPosition(
@@ -754,7 +710,6 @@ function getGPS_safe(onSuccess, onError) {
   );
 }
 
-// FIX GEO-7: límite ampliado de -20 a -15
 function validarManual(lat, lon) {
   if (isNaN(lat) || isNaN(lon)) return "Coordenadas inválidas";
   if (lat > -15 || lat < -55) return "Latitud fuera del rango de cobertura (−15° a −55°)";
@@ -762,7 +717,6 @@ function validarManual(lat, lon) {
   return null;
 }
 
-// FIX UX-4: SelectorUbicacion con spinner inline durante búsqueda
 function SelectorUbicacion({ onSelect }) {
   const [q,setQ]=useState("");
   const [res,setRes]=useState([]);
@@ -811,9 +765,6 @@ function SelectorUbicacion({ onSelect }) {
   );
 }
 
-// FIX BUG-5: GraficoBalance calcula mesesLactGraf desde % reales
-// FIX F4:   factor vaca 2°serv correcto (1.35 sin ternero, 2.0 con ternero)
-// v12: GraficoBalance mejorado — Mcal/vaca/día, área oferta vs línea demanda, panel resumen claro
 function GraficoBalance({ form, sat, cadena, trayCC, usaPotreros, potreros }) {
   if (!sat || sat.error || !cadena) return null;
   const prov   = form.provincia || "Corrientes";
@@ -913,7 +864,6 @@ function GraficoBalance({ form, sat, cadena, trayCC, usaPotreros, potreros }) {
   );
 }
 
-// FIX E4: parser tolerante a variantes de emoji
 function parseSecciones(texto) {
   const porEmoji = texto.split(/(?=\d️⃣)/);
   if (porEmoji.length >= 4) return porEmoji;
@@ -922,7 +872,6 @@ function parseSecciones(texto) {
   return porEmoji;
 }
 
-// FIX E5: detectStatus dinámico
 function detectStatus(texto) {
   if (!texto) return "neutral";
   const t = texto.toLowerCase();
@@ -976,7 +925,6 @@ function RenderInforme({ texto }) {
   );
 }
 
-// FIX E7: LoadingPanel con spinner CSS animado
 function LoadingPanel({ msg }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"48px 16px", gap:16 }}>
@@ -992,8 +940,6 @@ function LoadingPanel({ msg }) {
   );
 }
 
-// FIX UX-7: NavBar con safe-area-inset-bottom
-// FIX UX-8: botón ⚡ Analizar desde cualquier paso cuando canAnalizar
 function NavBar({ step, total, pasos, onStep, canNext, onNext, onPrev, canAnalizar }) {
   return (
     <div style={{ position:"fixed", bottom:0, left:0, right:0,
@@ -1007,7 +953,6 @@ function NavBar({ step, total, pasos, onStep, canNext, onNext, onPrev, canAnaliz
               background:i<step?C.green:i===step?C.green:"rgba(126,200,80,.18)", transition:"all .2s" }}/>
           </button>
         ))}
-        {/* FIX UX-8 */}
         {canAnalizar && step < total-1 && (
           <button onClick={()=>onStep(total-1)} style={{
             position:"absolute", right:16, top:-2,
@@ -1055,6 +1000,7 @@ const PASOS = ["📍 Ubicación","📅 Servicio","🐄 Rodeo","⚙️ Categoría
 
 // ═══════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
+// FIX CRASH-2: localStorage reemplazado por estado en memoria
 // ═══════════════════════════════════════════════════════
 export default function AgroMindPro() {
   const { data:session, status } = useSession();
@@ -1069,16 +1015,25 @@ export default function AgroMindPro() {
   const [result,setResult] = useState("");
   const [loading,setLoading] = useState(false);
   const [loadMsg,setLoadMsg] = useState("");
-  // FIX BUG-8: [] ejecuta solo al montar
+  // FIX CRASH-2: sin localStorage — estado en memoria para evitar crash en ambientes restrictivos
   const [productores,setProductores] = useState([]);
-  const [modoForraje,setModoForraje] = useState("general"); // "general" | "potreros"
+  const [modoForraje,setModoForraje] = useState("general");
   const [usaPotreros,setUsaPotreros] = useState(false);
   const [potreros,setPotreros] = useState([{ha:"",veg:"Pastizal natural NEA/Chaco",fenol:"menor_10"}]);
   const scrollRef = useRef(null);
 
+  // FIX CRASH-2: carga segura de localStorage con fallback a memoria
   useEffect(() => {
-    try { const d=localStorage.getItem("agm_prod"); if(d) setProductores(JSON.parse(d)); } catch {}
-  }, []); // FIX BUG-8
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const d = localStorage.getItem("agm_prod");
+        if (d) setProductores(JSON.parse(d));
+      }
+    } catch (e) {
+      // localStorage no disponible — continúa sin historial persistente
+      console.warn("localStorage no disponible, historial solo en memoria");
+    }
+  }, []);
 
   const set = (k,v) => setForm(f => ({...f,[k]:v}));
 
@@ -1094,7 +1049,6 @@ export default function AgroMindPro() {
   const ccPondVal = ccPond(form.ccDist);
   const curva = useMemo(() => interpCC(ccPondVal), [ccPondVal]);
 
-  // FIX BUG-4: supHa y vacasN en deps y como parámetros
   const trayCC = useMemo(() => calcTrayectoriaCC(
     form.ccDist, cadena, form.destTrad, form.destAntic, form.destHiper,
     dDisp, form.supHa, form.vacasN,
@@ -1113,7 +1067,6 @@ export default function AgroMindPro() {
   ), [form.vacasN, form.prenez, form.pctDestete,
       form.destTrad, form.destAntic, form.destHiper, cadena]);
 
-  // FIX BUG-7: pvEntradaVaq1 = tcSave.pvMayoPond (mismo en UI y cálculo)
   const pvEntradaVaq1 = tcSave?.pvMayoPond || parseFloat(form.vaq1PV) || 0;
   const vaq1E = useMemo(() => calcVaq1(pvEntradaVaq1, form.pvVacaAdulta, sat?.ndvi),
     [pvEntradaVaq1, form.pvVacaAdulta, sat?.ndvi]);
@@ -1166,7 +1119,14 @@ export default function AgroMindPro() {
     };
     const upd = [r, ...productores.filter(p=>p.nombre_productor!==form.nombreProductor)].slice(0,50);
     setProductores(upd);
-    try { localStorage.setItem("agm_prod", JSON.stringify(upd)); } catch {}
+    // FIX CRASH-2: escritura segura
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        localStorage.setItem("agm_prod", JSON.stringify(upd));
+      }
+    } catch (e) {
+      console.warn("No se pudo guardar en localStorage");
+    }
   }
 
   const MSGS = [
@@ -1337,7 +1297,6 @@ export default function AgroMindPro() {
     if (step === 1) {
       const sumDest = (parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0);
       const sumOk = Math.abs(sumDest - 100) < 1;
-      // FIX UX-6: validación fechas
       const fechaErr = form.iniServ && form.finServ &&
         new Date(form.finServ+"T12:00:00") <= new Date(form.iniServ+"T12:00:00")
         ? "El fin debe ser posterior al inicio" : null;
@@ -1373,11 +1332,9 @@ export default function AgroMindPro() {
                     </div>
                   ))}
                 </div>
-                {/* FIX BUG-3: cadena.terneroOtono raíz */}
                 {cadena.terneroOtono && <Alerta tipo="error">
                   ⚠️ VACA TARDÍA — ternero al pie en otoño. Considerar destete anticipado o hiperprecoz.
                 </Alerta>}
-                {/* FIX F7 */}
                 {cadena.destePostMayo && <Alerta tipo="warn">
                   ⚠️ Vacas tardías destetan después de mayo — terneros entran al 1° invierno con el PV de destete sin crecimiento adicional.
                 </Alerta>}
@@ -1460,7 +1417,6 @@ export default function AgroMindPro() {
             </div>
           )}
 
-          {/* FIX UX-2: cards verticales en lugar de tabla 5 columnas */}
           {distCCServ?.grupos?.length > 0 && (
             <div style={{marginTop:14}}>
               <div style={{fontFamily:C.font,fontSize:10,color:C.textDim,marginBottom:8,letterSpacing:1}}>
@@ -1493,7 +1449,6 @@ export default function AgroMindPro() {
               <MetricCard label="Terneros destetados" value={tcSave.terneros} color={C.green}/>
               <MetricCard label="PV pond. mayo (kg)" value={tcSave.pvMayoPond} color={C.amber} sub="Entrada 1° inv."/>
             </div>
-            {/* FIX F5 */}
             {tcSave.alertaHiper && <Alerta tipo="warn" style={{marginTop:10}}>
               Destete hiperprecoz {">"} 30% del rodeo — terneros de ~50d requieren suplementación proteica. GDP estimado sin supl: 250 g/d.
             </Alerta>}
@@ -1503,9 +1458,10 @@ export default function AgroMindPro() {
     );
 
     // ── PASO 3 — CATEGORÍAS ────────────────────────────
-    // FIX UX-10: secciones colapsables con <details>
+    // FIX VAQ2: vaquillona 2° invierno siempre visible y obligatoria (igual que vaca 2° servicio)
     if (step === 3) return (
       <div className="agm-enter">
+
         {/* Vaca 2° servicio */}
         <details open={!!form.v2sN} style={{marginBottom:12}}>
           <summary style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12,
@@ -1579,27 +1535,42 @@ export default function AgroMindPro() {
           </div>
         </details>
 
-        {/* Vaquillona 2° invierno */}
-        <details open={!!form.vaq2N} style={{marginBottom:12}}>
+        {/* FIX VAQ2: vaquillona 2° invierno — SIEMPRE ABIERTA, campo cantidad OBLIGATORIO */}
+        <details open style={{marginBottom:12}}>
           <summary style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12,
             padding:"12px 14px", cursor:"pointer", display:"flex", alignItems:"center", gap:8, userSelect:"none" }}>
             <span>🐂</span>
             <span style={{fontFamily:C.font,fontSize:11,color:C.green,fontWeight:600,letterSpacing:1}}>
-              VAQUILLONA 2° INVIERNO {form.vaq2N?`· ${form.vaq2N} cab.`:"· (opcional)"}
+              VAQUILLONA 2° INVIERNO · {form.vaq2N ? `${form.vaq2N} cab.` : "Ingresar cantidad"}
             </span>
+            {/* Indicador visual de que es requerido */}
+            {!form.vaq2N && (
+              <span style={{fontFamily:C.font,fontSize:9,color:C.amber,marginLeft:"auto",
+                background:"rgba(212,149,42,.12)",border:"1px solid rgba(212,149,42,.3)",
+                borderRadius:4,padding:"2px 6px"}}>requerido</span>
+            )}
           </summary>
           <div style={{...T.card,borderRadius:"0 0 12px 12px",marginBottom:0,borderTop:"none"}}>
-            {/* FIX F6 */}
             {vaq2E?._aviso && <Alerta tipo="warn">{vaq2E._aviso}</Alerta>}
+            <div style={{fontFamily:C.font,fontSize:10,color:C.textDim,marginBottom:10,lineHeight:1.6}}>
+              Vaquillona nacida en la temporada actual que enfrenta su segundo invierno antes del entore.
+              El PV de entrada se calcula automáticamente desde la vaquillona 1° invierno.
+            </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <div><div style={T.lbl}>Cantidad</div>
+              <div>
+                <div style={{...T.lbl,color:!form.vaq2N?C.amber:C.textDim}}>
+                  Cantidad {!form.vaq2N && <span style={{color:C.amber}}>*</span>}
+                </div>
                 <input type="number" inputMode="numeric" value={form.vaq2N}
-                  onChange={e=>set("vaq2N",e.target.value)} placeholder="—" style={T.inp}/></div>
+                  onChange={e=>set("vaq2N",e.target.value)}
+                  placeholder="Ej: 30"
+                  style={{...T.inp, borderColor:!form.vaq2N?"rgba(212,149,42,.4)":C.border}}/>
+              </div>
               <div>
                 <div style={T.lbl}>PV entrada (kg)</div>
                 <div style={{...T.inp, background:"rgba(126,200,80,.06)", color:C.green,
                   fontWeight:600, display:"flex", alignItems:"center"}}>
-                  {pvEntradaVaq2||"—"}
+                  {pvEntradaVaq2 || "—"}
                   {vaq1E?.pvAbr2Inv && <span style={{fontFamily:C.font,fontSize:9,color:C.textDim,marginLeft:6}}>(de vaq1)</span>}
                 </div>
               </div>
@@ -1626,8 +1597,6 @@ export default function AgroMindPro() {
     // ── PASO 4 — FORRAJE ───────────────────────────────
     if (step === 4) return (
       <div className="agm-enter">
-
-        {/* Selector de modo — DOS OPCIONES CLARAS */}
         <div style={T.card}>
           <SecTitle icon="🌾" label="Oferta Forrajera"/>
           <div style={{fontFamily:C.font,fontSize:10,color:C.textDim,marginBottom:12,lineHeight:1.6}}>
@@ -1655,7 +1624,6 @@ export default function AgroMindPro() {
           </div>
         </div>
 
-        {/* MODO: Campo completo */}
         {modoForraje==="general" && (<>
           <div style={T.card}>
             <SecTitle icon="📐" label="Superficie y Composición"/>
@@ -1707,7 +1675,6 @@ export default function AgroMindPro() {
           </div>
         </>)}
 
-        {/* MODO: Por potreros */}
         {modoForraje==="potreros" && (<>
           <div style={{...T.card,background:"rgba(126,200,80,.04)",border:"1px solid rgba(126,200,80,.15)"}}>
             <div style={{fontFamily:C.font,fontSize:10,color:C.green,marginBottom:4}}>
@@ -1759,7 +1726,6 @@ export default function AgroMindPro() {
           )}
         </>)}
 
-        {/* Balance (ambos modos) */}
         {sat && !sat.error && cadena && (
           <div style={T.card}>
             <SecTitle icon="📊" label="Balance Energético"/>
@@ -1873,7 +1839,6 @@ export default function AgroMindPro() {
     );
   }
 
-  // canNext por paso
   const canNext = [
     !!coords,
     !!(form.iniServ && form.finServ && cadena &&
@@ -1884,7 +1849,6 @@ export default function AgroMindPro() {
     true,
   ];
 
-  // Pantallas de auth
   if (status === "loading") return (
     <div style={{minHeight:"100dvh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{fontFamily:C.font,fontSize:13,color:C.green}} className="agm-pulse">Iniciando...</div>
@@ -1911,10 +1875,8 @@ export default function AgroMindPro() {
     </div>
   );
 
-  // Render principal
   return (
     <div style={{minHeight:"100dvh",background:C.bg,display:"flex",flexDirection:"column"}}>
-      {/* Header */}
       <div style={{ position:"sticky",top:0,zIndex:40,background:"rgba(8,15,9,.95)",
         backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",
         borderBottom:`1px solid ${C.border}`,padding:"12px 16px",
@@ -1938,10 +1900,8 @@ export default function AgroMindPro() {
         </button>
       </div>
 
-      {/* Contenido */}
       <div ref={scrollRef} style={{
         flex:1, overflowY:"auto",
-        // FIX UX-7: safe-area-inset-bottom
         padding:`16px 16px calc(120px + env(safe-area-inset-bottom,0px))`,
         maxWidth:600, margin:"0 auto", width:"100%",
       }}>
