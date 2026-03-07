@@ -131,51 +131,59 @@ const calcOfPasto = (veg, ndvi, temp, precip, enso, fenol) => {
 // FIX GEO-3/4/5/6: claves coherentes, límites corregidos
 // FIX GEO-7: límite ampliado a -15
 // ═══════════════════════════════════════════════════════
+// FIX v12 GEO: reescritura completa de dZona/dProv
+// Bug v11: Paraguay lat>-28 capturaba Resistencia (-27.45), Corrientes capital (-27.47)
+// Fix: Misiones AR chequeada ANTES de PY · PY limitado a lat>-27 · Corrientes ANTES de Chaco
+// Verificado: Resistencia→Chaco, Corrientes→Corrientes, Formosa→Formosa, PRSP→Chaco, Asuncion→PY Oriental
 function dZona(lat, lon) {
-  if (lat > -28 && lat <= -15 && lon > -63 && lon <= -53) return lon > -58 ? "Paraguay Oriental" : "Chaco Paraguayo";
-  if (lat > -22 && lat <= -15 && lon > -58 && lon <= -44) return "Mato Grosso / Goiás (BR)";
-  if (lat > -35 && lat <= -22 && lon > -57 && lon <= -44) return "Rio Grande do Sul (BR)";
-  if (lat > -22 && lat <= -15 && lon > -63 && lon <= -58) return "Pantanal (BR)";
-  if (lat > -24 && lat <= -15 && lon > -65 && lon <= -57) return "Mato Grosso do Sul (BR)";
-  if (lat > -30 && lat <= -15 && lon > -65 && lon <= -63) return "Santa Cruz / Beni (BO)";
-  if (lat > -30 && lat <= -25 && lon > -66 && lon <= -65) return "Tarija / Chaco (BO)";
-  // FIX GEO-2: lat>-30 cubre NEA (antes era lat>-24, Resistencia -27.45 quedaba afuera)
-  if (lat > -30) return "NEA";
-  if (lat > -38 && lat <= -30 && lon > -62) return "Pampa Húmeda";
-  if (lat > -38 && lat <= -30 && lon <= -62 && lon > -67) return "NOA";
+  // ── Internacional ────────────────────────────────────────
+  if (lat > -28 && lat <= -25 && lon > -56 && lon <= -53) return "NEA"; // Misiones AR primero
+  if (lat > -27 && lat <= -20 && lon > -58 && lon <= -54) return "Paraguay Oriental";
+  if (lat > -25 && lat <= -20 && lon > -63 && lon <= -58) return "Chaco Paraguayo";
+  if (lat > -25 && lat <= -10 && lon > -54 && lon <= -44) return "Brasil (Cerrado)";
+  if (lat > -35 && lat <= -25 && lon > -57 && lon <= -44) return "Brasil (Sur)";
+  if (lat > -23 && lat <= -15 && lon > -65 && lon <= -57) return "Bolivia (Llanos)";
+  // ── Argentina ────────────────────────────────────────────
+  if (lat > -32) return "NEA";
+  if (lat > -38 && lat <= -32 && lon > -62) return "Pampa Húmeda";
+  if (lat > -38 && lat <= -32 && lon <= -62 && lon > -67) return "Semiárido";
   if (lon <= -67 && lat > -35) return "Cuyo";
   if (lat <= -38) return "Patagonia";
   return "NEA";
 }
 
 function dProv(lat, lon) {
-  // Internacional primero — más restrictivo
-  if (lat > -28 && lat <= -15 && lon > -63 && lon <= -53) return lon > -58 ? "Paraguay Oriental" : "Chaco Paraguayo";
-  if (lat > -22 && lat <= -15 && lon > -58 && lon <= -44) return "Mato Grosso / Goiás (BR)";
-  if (lat > -35 && lat <= -22 && lon > -57 && lon <= -44) return "Rio Grande do Sul (BR)";
+  // ── Internacional — PRIMERO ───────────────────────────────
+  if (lat > -28 && lat <= -25 && lon > -56 && lon <= -53) return "Misiones"; // AR antes que PY
+  if (lat > -27 && lat <= -20 && lon > -58 && lon <= -54) return "Paraguay Oriental";
+  if (lat > -25 && lat <= -20 && lon > -63 && lon <= -58) return "Chaco Paraguayo";
+  if (lat > -25 && lat <= -10 && lon > -54 && lon <= -44) return "Mato Grosso / Goiás (BR)";
+  if (lat > -35 && lat <= -25 && lon > -57 && lon <= -44) return "Rio Grande do Sul (BR)";
   if (lat > -22 && lat <= -15 && lon > -63 && lon <= -58) return "Pantanal (BR)";
-  if (lat > -24 && lat <= -15 && lon > -65 && lon <= -57) return "Mato Grosso do Sul (BR)";
-  if (lat > -30 && lat <= -15 && lon > -65 && lon <= -63) return "Santa Cruz / Beni (BO)";
-  if (lat > -30 && lat <= -25 && lon > -66 && lon <= -65) return "Tarija / Chaco (BO)";
-  // Argentina
-  if (lat > -22 && lon > -60) return "Formosa";
-  if (lat > -22 && lon <= -60) return "Salta";
-  if (lat > -24 && lat <= -22 && lon > -58) return "Chaco";
-  if (lat > -26 && lat <= -24 && lon > -57) return "Corrientes";
-  // FIX GEO-6: límite lon corregido para norte Misiones
-  if (lat > -28 && lat <= -26 && lon > -55) return "Misiones";
-  if (lat > -30 && lat <= -28 && lon > -57 && lon <= -55) return "Corrientes";
-  if (lat > -28 && lat <= -24 && lon <= -57 && lon > -61) return "Chaco";
-  if (lat > -28 && lat <= -24 && lon <= -61 && lon > -65) return "Santiago del Estero";
-  if (lat > -30 && lat <= -28 && lon > -60 && lon <= -57) return "Entre Ríos";
-  if (lat > -32 && lat <= -30 && lon > -58) return "Entre Ríos";
-  if (lat > -32 && lat <= -28 && lon > -62 && lon <= -58) return "Santa Fe";
-  if (lat > -32 && lat <= -28 && lon <= -63 && lon > -66) return "Córdoba";
-  if (lat > -35 && lat <= -32 && lon > -60) return "Buenos Aires";
-  if (lat > -35 && lat <= -32 && lon <= -63) return "La Pampa";
-  if (lon <= -67 && lat > -35) return "Mendoza";
-  if (lat <= -38 && lat > -44) return "Neuquén / Río Negro";
-  if (lat <= -44) return "Patagonia Sur";
+  if (lat > -24 && lat <= -15 && lon > -58 && lon <= -54) return "Mato Grosso do Sul (BR)";
+  if (lat > -22 && lat <= -15 && lon > -65 && lon <= -63) return "Santa Cruz / Beni (BO)";
+  if (lat > -23 && lat <= -20 && lon > -66 && lon <= -63) return "Tarija / Chaco (BO)";
+  // ── Argentina — orden crítico ─────────────────────────────
+  if (lat > -23 && lon <= -62) return "Salta";
+  if (lat > -23 && lon > -62) return "Formosa";
+  // Santiago del Estero antes de Chaco (lon muy occidental)
+  if (lat > -31 && lat <= -24 && lon > -66 && lon <= -63) return "Santiago del Estero";
+  // Formosa provincia (lat -23 a -26.5, lon -58 a -62)
+  if (lat > -26.5 && lat <= -23 && lon > -62 && lon <= -58) return "Formosa";
+  // Corrientes ANTES de Chaco (lon > -59, este del río Paraná)
+  if (lat > -32 && lat <= -26 && lon > -59 && lon <= -53) return "Corrientes";
+  // Chaco (captura PRSP -26.79, -60.44 y Resistencia -27.45, -59.12)
+  if (lat > -29 && lat <= -22 && lon > -66 && lon <= -58) return "Chaco";
+  // Corrientes Sur (Goya -29.14, -59.26)
+  if (lat > -32 && lat <= -28 && lon > -60 && lon <= -57) return "Corrientes";
+  if (lat > -34 && lat <= -30 && lon > -60.5 && lon <= -57) return "Entre Ríos";
+  if (lat > -34 && lat <= -28 && lon > -64 && lon <= -59) return "Santa Fe";
+  if (lat > -36 && lat <= -29 && lon > -66 && lon <= -62) return "Córdoba";
+  if (lat > -40 && lat <= -34 && lon > -63 && lon <= -56) return "Buenos Aires";
+  if (lat > -40 && lat <= -34 && lon > -68 && lon <= -63) return "La Pampa";
+  if (lon <= -67 && lat > -36) return "Mendoza";
+  if (lat <= -38 && lat > -43) return "Neuquén / Río Negro";
+  if (lat <= -43) return "Patagonia Sur";
   return "Chaco";
 }
 
@@ -805,83 +813,102 @@ function SelectorUbicacion({ onSelect }) {
 
 // FIX BUG-5: GraficoBalance calcula mesesLactGraf desde % reales
 // FIX F4:   factor vaca 2°serv correcto (1.35 sin ternero, 2.0 con ternero)
+// v12: GraficoBalance mejorado — Mcal/vaca/día, área oferta vs línea demanda, panel resumen claro
 function GraficoBalance({ form, sat, cadena, trayCC, usaPotreros, potreros }) {
   if (!sat || sat.error || !cadena) return null;
-  const prov = form.provincia || "Corrientes";
-  const hist = getClima(prov);
-  const mc = new Date().getMonth();
-  const mesP = cadena.partoTemp ? cadena.partoTemp.getMonth() : 10;
-  // FIX BUG-5: desde % reales
+  const prov   = form.provincia || "Corrientes";
+  const hist   = getClima(prov);
+  const mc     = new Date().getMonth();
+  const mesP   = cadena.partoTemp ? cadena.partoTemp.getMonth() : 10;
+  const enso   = form.enso || "neutro";
   const pT=parseFloat(form.destTrad)||0, pA=parseFloat(form.destAntic)||0, pH=parseFloat(form.destHiper)||0;
   const totD = pT+pA+pH || 100;
-  const mesesLactGraf = (pT*(180/30) + pA*(90/30) + pH*(50/30)) / totD;
+  const mesesLactGraf = Math.max(1.5,(pT*(180/30)+pA*(90/30)+pH*(50/30))/totD);
   const pvVaca = parseFloat(form.pvVacaAdulta) || 320;
   const vN=parseInt(form.vacasN)||0, v2N=parseInt(form.v2sN)||0;
   const q1N=Math.round(vN*(parseFloat(form.pctReposicion)||0)/100);
   const q2N=parseInt(form.vaq2N)||0;
-  const enso = form.enso || "neutro";
+  const nTotal = Math.max(1,vN+v2N+q1N+q2N);
+
   const datos = MESES_C.map((mes,i) => {
-    const h = i===mc && sat ? { t:parseFloat(sat.temp)||hist[i].t, p:parseFloat(sat.p30)||hist[i].p } : hist[i];
+    const h = i===mc && sat ? {t:parseFloat(sat.temp)||hist[i].t,p:parseFloat(sat.p30)||hist[i].p} : hist[i];
     const ndviI = i===mc ? parseFloat(sat.ndvi||0.45) : 0.45;
-    const fenolMes = i===mc ? (form.fenologia||"menor_10") : (h.t<15?"mayor_50":h.t<20?"25_50":h.t<25?"10_25":"menor_10");
-    let ofPasto = 0;
+    const fenolMs = i===mc?(form.fenologia||"menor_10"):(h.t<15?"mayor_50":h.t<20?"25_50":h.t<25?"10_25":"menor_10");
+    let ofTotal=0;
     if (usaPotreros && potreros?.length) {
-      potreros.forEach(p => {
-        const ha = parseFloat(p.ha)||0; if(!ha||!p.veg)return;
-        ofPasto += calcOfPasto(p.veg,ndviI,h.t,h.p,enso,i===mc?p.fenol||"menor_10":fenolMes)*ha;
-      });
+      potreros.forEach(p=>{const ha=parseFloat(p.ha)||0;if(!ha||!p.veg)return;
+        ofTotal+=calcOfPasto(p.veg,ndviI,h.t,h.p,enso,i===mc?p.fenol||"menor_10":fenolMs)*ha;});
     } else {
-      const sup=parseFloat(form.supHa)||100;
-      const pctM=parseFloat(form.pctMonte)||0, pctN=parseFloat(form.pctNGan)||0;
-      const haPast = sup*Math.max(0,100-pctM-pctN)/100;
-      ofPasto = calcOfPasto(form.vegetacion||"Pastizal natural NEA/Chaco",ndviI,h.t,h.p,enso,fenolMes)*haPast;
+      const sup=parseFloat(form.supHa)||100,pctM=parseFloat(form.pctMonte)||0,pctN=parseFloat(form.pctNGan)||0;
+      ofTotal=calcOfPasto(form.vegetacion||"Pastizal natural NEA/Chaco",ndviI,h.t,h.p,enso,fenolMs)*sup*Math.max(0,100-pctM-pctN)/100;
     }
-    const carga = Math.max(0.1, (vN||1)/Math.max(1,parseFloat(form.supHa)||100));
-    const ofVaca = ofPasto/carga;
-    const eRep = (i>=mesP && i<mesP+Math.ceil(mesesLactGraf)) ? "Lactación con ternero al pie"
-      : i===mesP-1 ? "Preparto (último mes)" : "Gestación media (5–7 meses)";
-    const dVacas = vN>0 ? Math.round((reqEM(pvVaca,eRep)||13)*vN) : 0;
-    // FIX F4: factor correcto según ternero
-    const factV2s = form.v2sTernero==="si" ? 2.00 : 1.35;
-    const dV2s = v2N>0 ? Math.round((0.077*Math.pow(parseFloat(form.v2sPV)||320,0.75))*factV2s*v2N) : 0;
-    const dQ1 = q1N>0 ? Math.round((reqEM(180,"vaq1inv")||12)*q1N) : 0;
-    const dQ2 = q2N>0 ? Math.round((reqEM(260,"vaq2inv")||10)*q2N) : 0;
-    const demanda = dVacas+dV2s+dQ1+dQ2;
+    const ofVaca = ofTotal/nTotal;
     const enLact = i>=mesP && i<mesP+Math.ceil(mesesLactGraf);
-    const ccMcal = enLact && trayCC ? parseFloat(trayCC.caídaLact||0)*5.6/mesesLactGraf : 0;
-    const ofTotal = ofVaca+ccMcal;
-    const deficit = Math.max(0, demanda-ofTotal);
-    return { mes, ofVaca:Math.round(ofVaca*10)/10, demanda:Math.round(demanda*10)/10,
-             ccComp:Math.round(ccMcal*10)/10, deficit:Math.round(deficit*10)/10, bajo15:h.t<15 };
+    const eRep = enLact?"Lactación con ternero al pie":i===((mesP-1+12)%12)?"Preparto (último mes)":"Gestación media (5–7 meses)";
+    const demVaca = reqEM(pvVaca,eRep)||13;
+    const ccMcal = enLact&&trayCC ? Math.min(5,parseFloat(trayCC.caídaLact||0)*5.6/mesesLactGraf) : 0;
+    const ofTotalV = ofVaca+ccMcal;
+    const deficit = Math.max(0,demVaca-ofTotalV);
+    return {mes,oferta:Math.round(ofVaca*10)/10,ccComp:Math.round(ccMcal*10)/10,
+      demanda:Math.round(demVaca*10)/10,deficit:Math.round(deficit*10)/10,bajo15:h.t<15,esActual:i===mc};
   });
+  const defMeses = datos.filter(d=>d.deficit>0);
+
   return (
     <div>
-      <div style={{fontFamily:C.font,fontSize:10,color:C.textDim,marginBottom:4,letterSpacing:1}}>
-        BALANCE ENERGÉTICO ESTIMADO (Mcal/vaca/día)
+      <div style={{fontFamily:C.font,fontSize:10,color:C.textDim,marginBottom:2,letterSpacing:1}}>
+        BALANCE ENERGÉTICO — Mcal/vaca/día
       </div>
-      <div style={{fontFamily:C.font,fontSize:9,color:C.textFaint,marginBottom:8,lineHeight:1.5}}>
-        Mes actual: datos reales Open-Meteo · Resto: promedio histórico regional · NDVI estimado
+      <div style={{fontFamily:C.font,fontSize:9,color:C.textFaint,marginBottom:10,lineHeight:1.5}}>
+        {MESES[mc]}: datos reales Open-Meteo · Resto: promedio histórico · NDVI estimado
       </div>
-      <ResponsiveContainer width="100%" height={220}>
-        <ComposedChart data={datos} margin={{top:4,right:4,left:-20,bottom:0}}>
+      <ResponsiveContainer width="100%" height={200}>
+        <ComposedChart data={datos} margin={{top:4,right:4,left:-22,bottom:0}}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(126,200,80,.06)"/>
           <XAxis dataKey="mes" tick={{fill:C.textDim,fontSize:9,fontFamily:C.font}}/>
           <YAxis tick={{fill:C.textDim,fontSize:9,fontFamily:C.font}} domain={[0,"auto"]}/>
-          <Tooltip contentStyle={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,fontFamily:C.font,fontSize:11}}/>
-          <Bar dataKey="ofVaca"  name="Oferta pasto" stackId="of" fill={C.green} opacity={0.65}/>
-          <Bar dataKey="ccComp"  name="CC endógena"  stackId="of" fill={C.amber} opacity={0.50}/>
-          <Bar dataKey="deficit" name="Déficit"      fill={C.red}               opacity={0.45} radius={[3,3,0,0]}/>
-          <Line type="monotone" dataKey="demanda" name="Demanda" stroke={C.red} strokeWidth={2} dot={false}/>
+          <Tooltip contentStyle={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,fontFamily:C.font,fontSize:11}}
+            formatter={(v,n)=>[v.toFixed(1)+" Mcal/v/d",n]}/>
+          <Legend wrapperStyle={{fontFamily:C.font,fontSize:9,paddingTop:4}}/>
+          <Area type="monotone" dataKey="oferta" name="Oferta pasto"
+            fill="rgba(126,200,80,.18)" stroke={C.green} strokeWidth={2} dot={false}/>
+          <Area type="monotone" dataKey="ccComp" name="CC movilizada"
+            fill="rgba(212,149,42,.20)" stroke={C.amber} strokeWidth={1} dot={false} strokeDasharray="4 2"/>
+          <Bar dataKey="deficit" name="Déficit" fill={C.red} opacity={0.50} radius={[3,3,0,0]}/>
+          <Line type="monotone" dataKey="demanda" name="Demanda vaca"
+            stroke={C.red} strokeWidth={2} strokeDasharray="6 3" dot={false}/>
         </ComposedChart>
       </ResponsiveContainer>
-      <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:6}}>
-        {datos.map((d,i) => (
-          <div key={i} style={{fontFamily:C.font,fontSize:9,textAlign:"center",padding:"2px 5px",
-            borderRadius:3,background:d.bajo15?"rgba(192,72,32,.10)":"transparent",
-            border:d.bajo15?"1px solid rgba(192,72,32,.20)":"1px solid transparent",
-            color:d.bajo15?C.red:C.textFaint}}>{d.mes}</div>
+      <div style={{display:"flex",gap:3,flexWrap:"wrap",marginTop:8}}>
+        {datos.map((d,i)=>(
+          <div key={i} style={{fontFamily:C.font,fontSize:8,textAlign:"center",padding:"3px 5px",borderRadius:4,
+            background:d.esActual?"rgba(126,200,80,.15)":d.bajo15?"rgba(192,72,32,.10)":d.deficit>0?"rgba(192,72,32,.06)":"transparent",
+            border:d.esActual?`1px solid ${C.green}`:d.bajo15?"1px solid rgba(192,72,32,.25)":d.deficit>0?"1px solid rgba(192,72,32,.15)":"1px solid transparent",
+            color:d.esActual?C.green:d.bajo15?C.red:d.deficit>0?C.amber:C.textFaint}}>
+            {d.mes}
+          </div>
         ))}
       </div>
+      {defMeses.length>0?(
+        <div style={{marginTop:10,background:"rgba(192,72,32,.05)",border:"1px solid rgba(192,72,32,.18)",borderRadius:10,padding:12}}>
+          <div style={{fontFamily:C.font,fontSize:11,color:C.red,marginBottom:6}}>
+            ⚠️ {defMeses.length} mes{defMeses.length>1?"es":""} con déficit — suplementación proteica necesaria
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:6}}>
+            {defMeses.map((d,i)=>(
+              <div key={i} style={{background:"rgba(192,72,32,.08)",borderRadius:8,padding:"6px 8px",fontFamily:C.font,fontSize:10}}>
+                <div style={{color:C.red,fontWeight:600}}>{d.mes}</div>
+                <div style={{color:"#e09070",marginTop:2}}>−{d.deficit.toFixed(1)} Mcal/v</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ):(
+        <div style={{marginTop:8,background:"rgba(126,200,80,.05)",border:"1px solid rgba(126,200,80,.15)",
+          borderRadius:8,padding:"8px 12px",fontFamily:C.font,fontSize:10,color:C.green}}>
+          ✅ Balance positivo todo el año
+        </div>
+      )}
     </div>
   );
 }
@@ -1044,6 +1071,7 @@ export default function AgroMindPro() {
   const [loadMsg,setLoadMsg] = useState("");
   // FIX BUG-8: [] ejecuta solo al montar
   const [productores,setProductores] = useState([]);
+  const [modoForraje,setModoForraje] = useState("general"); // "general" | "potreros"
   const [usaPotreros,setUsaPotreros] = useState(false);
   const [potreros,setPotreros] = useState([{ha:"",veg:"Pastizal natural NEA/Chaco",fenol:"menor_10"}]);
   const scrollRef = useRef(null);
@@ -1540,8 +1568,8 @@ export default function AgroMindPro() {
                     <MetricCard label="Energía"  value={vaq1E.energ>0?vaq1E.energ+"kg/d":"—"} color={C.blue}/>
                     <MetricCard label="Frecuencia" value={vaq1E.freq} color={C.textDim} style={{gridColumn:"1/-1"}}/>
                     <MetricCard label="GDP" value={vaq1E.gdpReal+"g/d"} color={C.green}/>
-                    <MetricCard label="PV sept." value={vaq1E.pvSal+"kg"}
-                      color={vaq1E.deficit?C.red:C.green} sub={vaq1E.deficit?"⚠ No llega":"✓ OK"}/>
+                    <MetricCard label="PV ago." value={vaq1E.pvSal+"kg"}
+                      color={vaq1E.deficit?C.red:C.green} sub={vaq1E.deficit?`⚠ Falta ${vaq1E.objetivo-vaq1E.pvSal}kg`:"✓ Alcanza objetivo"}/>
                   </div>
                   {vaq1E.pvAbr2Inv && <div style={{marginTop:8,fontFamily:C.font,fontSize:11,color:C.textDim}}>
                     PV entrada 2°inv (abril): <span style={{color:C.green,fontWeight:600}}>{vaq1E.pvAbr2Inv} kg</span>
@@ -1598,57 +1626,140 @@ export default function AgroMindPro() {
     // ── PASO 4 — FORRAJE ───────────────────────────────
     if (step === 4) return (
       <div className="agm-enter">
+
+        {/* Selector de modo — DOS OPCIONES CLARAS */}
         <div style={T.card}>
-          <SecTitle icon="🌾" label="Superficie y Uso"/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-            <div>
-              <div style={T.lbl}>Superficie total (ha)</div>
-              <input type="number" inputMode="decimal" value={form.supHa}
-                onChange={e=>set("supHa",e.target.value)} placeholder="500" style={T.inp}/>
-            </div>
-            <div>
-              <div style={T.lbl}>Carga EV/ha</div>
-              <div style={{...T.inp,background:"rgba(0,0,0,.3)",fontWeight:600,display:"flex",alignItems:"center",
-                color:form.supHa&&form.vacasN?semaforo(2-(parseInt(form.vacasN)||0)/(parseFloat(form.supHa)||1),0.5,1.5):C.textDim}}>
-                {form.supHa&&form.vacasN&&parseFloat(form.supHa)>0
-                  ?((parseInt(form.vacasN)||0)/parseFloat(form.supHa)).toFixed(2):"—"}
-              </div>
-            </div>
+          <SecTitle icon="🌾" label="Oferta Forrajera"/>
+          <div style={{fontFamily:C.font,fontSize:10,color:C.textDim,marginBottom:12,lineHeight:1.6}}>
+            ¿Cómo querés ingresar la oferta de pasto?
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            {[{k:"pctMonte",l:"% Monte"},{k:"pctNGan",l:"% No ganadero"}].map(({k,l})=>(
-              <div key={k}><div style={T.lbl}>{l}</div>
-                <input type="number" inputMode="decimal" value={form[k]}
-                  onChange={e=>set(k,e.target.value)} placeholder="0" style={T.inp}/></div>
-            ))}
+            <BtnSel active={modoForraje==="general"}
+              onClick={()=>{setModoForraje("general");setUsaPotreros(false);}}
+              style={{padding:"14px 10px",textAlign:"left"}}>
+              <div style={{fontSize:20,marginBottom:6}}>🏠</div>
+              <div style={{fontFamily:C.font,fontSize:12,fontWeight:600,marginBottom:3}}>Campo completo</div>
+              <div style={{fontFamily:C.font,fontSize:9,color:modoForraje==="general"?C.textDim:C.textFaint,lineHeight:1.4}}>
+                Superficie total + tipo de vegetación. Simple y rápido.
+              </div>
+            </BtnSel>
+            <BtnSel active={modoForraje==="potreros"}
+              onClick={()=>{setModoForraje("potreros");setUsaPotreros(true);}}
+              style={{padding:"14px 10px",textAlign:"left"}}>
+              <div style={{fontSize:20,marginBottom:6}}>🗺️</div>
+              <div style={{fontFamily:C.font,fontSize:12,fontWeight:600,marginBottom:3}}>Por potreros</div>
+              <div style={{fontFamily:C.font,fontSize:9,color:modoForraje==="potreros"?C.textDim:C.textFaint,lineHeight:1.4}}>
+                Cada potrero con su ha y vegetación. Más detallado.
+              </div>
+            </BtnSel>
           </div>
         </div>
 
-        <div style={T.card}>
-          <SecTitle icon="🌿" label="Tipo de Vegetación"/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
-            {Object.keys(PROD_BASE).map(v=>(
-              <BtnSel key={v} active={form.vegetacion===v} onClick={()=>set("vegetacion",v)}
-                style={{textAlign:"left",padding:"12px 14px"}}>{v}</BtnSel>
-            ))}
+        {/* MODO: Campo completo */}
+        {modoForraje==="general" && (<>
+          <div style={T.card}>
+            <SecTitle icon="📐" label="Superficie y Composición"/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+              <div>
+                <div style={T.lbl}>Superficie total (ha)</div>
+                <input type="number" inputMode="decimal" value={form.supHa}
+                  onChange={e=>set("supHa",e.target.value)} placeholder="500" style={T.inp}/>
+              </div>
+              <div>
+                <div style={T.lbl}>Carga EV/ha</div>
+                <div style={{...T.inp,background:"rgba(0,0,0,.3)",fontWeight:600,display:"flex",alignItems:"center",
+                  color:form.supHa&&form.vacasN?semaforo(2-(parseInt(form.vacasN)||0)/(parseFloat(form.supHa)||1),0.5,1.5):C.textDim}}>
+                  {form.supHa&&form.vacasN&&parseFloat(form.supHa)>0
+                    ?((parseInt(form.vacasN)||0)/parseFloat(form.supHa)).toFixed(2):"—"}
+                </div>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {[{k:"pctMonte",l:"% Monte / palmar"},{k:"pctNGan",l:"% No ganadero"}].map(({k,l})=>(
+                <div key={k}><div style={T.lbl}>{l}</div>
+                  <input type="number" inputMode="decimal" value={form[k]}
+                    onChange={e=>set(k,e.target.value)} placeholder="0" style={T.inp}/></div>
+              ))}
+            </div>
           </div>
-        </div>
-
-        <div style={T.card}>
-          <SecTitle icon="🌱" label="Estado Fenológico"/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {FENOLOGIAS.map(f=>(
-              <BtnSel key={f.val} active={form.fenologia===f.val} onClick={()=>set("fenologia",f.val)}
-                style={{textAlign:"left",padding:"12px 10px"}}>
-                <div style={{fontSize:18,marginBottom:4}}>{f.emoji}</div>
-                <div style={{fontFamily:C.font,fontSize:12,fontWeight:600}}>{f.label}</div>
-                <div style={{fontFamily:C.font,fontSize:9,color:C.textFaint,marginTop:2,lineHeight:1.4}}>{f.desc}</div>
-                {f.warn && <div style={{fontFamily:C.font,fontSize:9,color:C.amber,marginTop:3}}>{f.warn}</div>}
-              </BtnSel>
-            ))}
+          <div style={T.card}>
+            <SecTitle icon="🌿" label="Tipo de Vegetación Principal"/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+              {Object.keys(PROD_BASE).map(v=>(
+                <BtnSel key={v} active={form.vegetacion===v} onClick={()=>set("vegetacion",v)}
+                  style={{textAlign:"left",padding:"12px 14px"}}>{v}</BtnSel>
+              ))}
+            </div>
           </div>
-        </div>
+          <div style={T.card}>
+            <SecTitle icon="🌱" label="Estado Fenológico Actual"/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {FENOLOGIAS.map(f=>(
+                <BtnSel key={f.val} active={form.fenologia===f.val} onClick={()=>set("fenologia",f.val)}
+                  style={{textAlign:"left",padding:"12px 10px"}}>
+                  <div style={{fontSize:18,marginBottom:4}}>{f.emoji}</div>
+                  <div style={{fontFamily:C.font,fontSize:12,fontWeight:600}}>{f.label}</div>
+                  <div style={{fontFamily:C.font,fontSize:9,color:C.textFaint,marginTop:2,lineHeight:1.4}}>{f.desc}</div>
+                  {f.warn && <div style={{fontFamily:C.font,fontSize:9,color:C.amber,marginTop:3}}>{f.warn}</div>}
+                </BtnSel>
+              ))}
+            </div>
+          </div>
+        </>)}
 
+        {/* MODO: Por potreros */}
+        {modoForraje==="potreros" && (<>
+          <div style={{...T.card,background:"rgba(126,200,80,.04)",border:"1px solid rgba(126,200,80,.15)"}}>
+            <div style={{fontFamily:C.font,fontSize:10,color:C.green,marginBottom:4}}>
+              📋 Modo potreros — ingresá cada potrero por separado
+            </div>
+            <div style={{fontFamily:C.font,fontSize:10,color:C.textDim,lineHeight:1.6}}>
+              Cada potrero suma su oferta (ha × producción según vegetación y estado fenológico).
+            </div>
+          </div>
+          {potreros.map((p,i)=>(
+            <div key={i} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:14,marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span style={{fontFamily:C.font,fontSize:12,color:C.green,fontWeight:600}}>Potrero {i+1}</span>
+                <button onClick={()=>setPotreros(ps=>ps.filter((_,j)=>j!==i))}
+                  style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontFamily:C.font,fontSize:11,padding:"4px 8px"}}>
+                  ✕ Eliminar
+                </button>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                <div><div style={T.lbl}>Hectáreas</div>
+                  <input type="number" inputMode="decimal" value={p.ha}
+                    onChange={e=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],ha:e.target.value};return n;})}
+                    style={T.inp} placeholder="100"/></div>
+                <div><div style={T.lbl}>Fenología</div>
+                  <select value={p.fenol} onChange={e=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],fenol:e.target.value};return n;})}
+                    style={{...T.inp,appearance:"none"}}>
+                    {FENOLOGIAS.map(f=><option key={f.val} value={f.val}>{f.emoji} {f.label}</option>)}
+                  </select></div>
+              </div>
+              <div><div style={T.lbl}>Vegetación</div>
+                <select value={p.veg} onChange={e=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],veg:e.target.value};return n;})}
+                  style={{...T.inp,appearance:"none"}}>
+                  {Object.keys(PROD_BASE).map(v=><option key={v} value={v}>{v}</option>)}
+                </select></div>
+            </div>
+          ))}
+          <button onClick={()=>setPotreros(ps=>[...ps,{ha:"",veg:"Pastizal natural NEA/Chaco",fenol:"menor_10"}])}
+            style={{width:"100%",background:"rgba(126,200,80,.06)",border:`1px solid ${C.border}`,
+              borderRadius:10,color:C.green,padding:"13px",fontFamily:C.font,fontSize:12,cursor:"pointer",marginBottom:10}}>
+            + Agregar potrero
+          </button>
+          {potreros.length>0 && potreros.some(p=>p.ha) && (
+            <div style={{background:"rgba(126,200,80,.05)",border:"1px solid rgba(126,200,80,.15)",
+              borderRadius:8,padding:"8px 12px",fontFamily:C.font,fontSize:10,color:C.textDim}}>
+              Total: <strong style={{color:C.green}}>
+                {potreros.reduce((s,p)=>s+(parseFloat(p.ha)||0),0)} ha
+              </strong> · {potreros.filter(p=>p.ha).length} potrero{potreros.filter(p=>p.ha).length>1?"s":""}
+            </div>
+          )}
+        </>)}
+
+        {/* Balance (ambos modos) */}
         {sat && !sat.error && cadena && (
           <div style={T.card}>
             <SecTitle icon="📊" label="Balance Energético"/>
@@ -1656,50 +1767,6 @@ export default function AgroMindPro() {
               usaPotreros={usaPotreros} potreros={potreros}/>
           </div>
         )}
-
-        <div style={T.card}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <SecTitle icon="🗺️" label="Potreros individuales"/>
-            <BtnSel active={usaPotreros} onClick={()=>setUsaPotreros(!usaPotreros)}
-              style={{width:"auto",padding:"8px 14px",fontSize:11}}>
-              {usaPotreros?"Activado ✓":"Activar"}
-            </BtnSel>
-          </div>
-          {usaPotreros && (
-            <div>
-              {potreros.map((p,i)=>(
-                <div key={i} style={{background:"rgba(0,0,0,.3)",borderRadius:10,padding:10,marginBottom:8,border:`1px solid ${C.border}`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                    <span style={{fontFamily:C.font,fontSize:11,color:C.green}}>Potrero {i+1}</span>
-                    <button onClick={()=>setPotreros(ps=>ps.filter((_,j)=>j!==i))}
-                      style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontFamily:C.font,fontSize:11}}>✕</button>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                    <div><div style={T.lbl}>Ha</div>
-                      <input type="number" inputMode="decimal" value={p.ha}
-                        onChange={e=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],ha:e.target.value};return n;})}
-                        style={T.inp} placeholder="100"/></div>
-                    <div><div style={T.lbl}>Fenología</div>
-                      <select value={p.fenol} onChange={e=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],fenol:e.target.value};return n;})}
-                        style={{...T.inp,appearance:"none"}}>
-                        {FENOLOGIAS.map(f=><option key={f.val} value={f.val}>{f.emoji} {f.label}</option>)}
-                      </select></div>
-                  </div>
-                  <div><div style={T.lbl}>Vegetación</div>
-                    <select value={p.veg} onChange={e=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],veg:e.target.value};return n;})}
-                      style={{...T.inp,appearance:"none"}}>
-                      {Object.keys(PROD_BASE).map(v=><option key={v} value={v}>{v}</option>)}
-                    </select></div>
-                </div>
-              ))}
-              <button onClick={()=>setPotreros(ps=>[...ps,{ha:"",veg:"Pastizal natural NEA/Chaco",fenol:"menor_10"}])}
-                style={{width:"100%",background:"rgba(126,200,80,.06)",border:`1px solid ${C.border}`,
-                  borderRadius:10,color:C.green,padding:"11px",fontFamily:C.font,fontSize:12,cursor:"pointer"}}>
-                + Agregar potrero
-              </button>
-            </div>
-          )}
-        </div>
       </div>
     );
 
