@@ -202,8 +202,8 @@ function calcTrayectoriaCCv2(params) {
   const mcalSuplLact = mcalSuplemento(supl2,parseFloat(dosis2)||0);
   const reducCaida = mcalSuplLact>0 ? Math.min(0.35, mcalSuplLact*0.035) : 0;
 
-  const caídaLact = Math.min(2.5,mesesLact*(tasaCaida-reducCaida));
-  const ccMinLact = Math.max(1,ccParto-caídaLact);
+  const caidaLact = Math.min(2.5,mesesLact*(tasaCaida-reducCaida));
+  const ccMinLact = Math.max(1,ccParto-caidaLact);
 
   // Anestro posparto
   const anestro = calcAnestro(ccParto,ccMinLact,biotipo,primerParto);
@@ -224,7 +224,7 @@ function calcTrayectoriaCCv2(params) {
 
   return {
     ccHoy:ccH, ccParto, ccMinLact, ccDestete, ccServ, pr,
-    mesesLact:mesesLactStr, caídaLact:caídaLact.toFixed(2),
+    mesesLact:mesesLactStr, caidaLact:caidaLact.toFixed(2),
     anestro, tasaCaida:tasaCaida.toFixed(3),
     diasRecupPreParto, diasPerdPreParto, diasRecupServicio,
     boostPreParto:boostPreParto.toFixed(2),
@@ -238,7 +238,7 @@ function calcDistCCv2(params) {
   const {dist, cadena, ndvi, prov, destTrad, destAntic, destHiper,
          supHa, vacasN, dDisp, biotipo,
          supl1, dosis1, supl2, dosis2, supl3, dosis3} = params;
-  if(!dist||!cadena) return {grupos:[],caídaLact:"0",mesesLact:"0",diasLactPond:0};
+  if(!dist||!cadena) return {grupos:[],caidaLact:"0",mesesLact:"0",diasLactPond:0};
   const ndviN=parseFloat(ndvi)||0.45;
   const ha=parseFloat(supHa)||100;
   const vN2=parseFloat(vacasN)||50;
@@ -279,7 +279,7 @@ function calcDistCCv2(params) {
     const urgencia=ccServ<4.5?"urgente":ccServ<5.0?"importante":"preventivo";
     return {ccHoy:ccH,pct,ccParto,ccMinLact,ccDestete,ccServ,pr,recDestete,urgencia,anestro,caida:+caida.toFixed(2)};
   }).filter(Boolean);
-  return {grupos,caídaLact:(mesesLact*0.50).toFixed(2),mesesLact:mesesLact.toFixed(1),diasLactPond:Math.round(diasLactPond)};
+  return {grupos,caidaLact:(mesesLact*0.50).toFixed(2),mesesLact:mesesLact.toFixed(1),diasLactPond:Math.round(diasLactPond)};
 }
 
 // ─── CADENA REPRODUCTIVA ──────────────────────────────────────────
@@ -409,7 +409,9 @@ const T={
   textFaint:"#4a6048",
   font:     "'IBM Plex Mono', 'Courier New', monospace",
   fontSans: "'IBM Plex Sans', 'Helvetica Neue', sans-serif",
+  sans:     "'IBM Plex Sans', 'Helvetica Neue', sans-serif",
   radius:   14,
+  r:        14,
 };
 
 // ─── PALETA DE ESCENARIOS ────────────────────────────────────────
@@ -592,7 +594,7 @@ function GraficoBalance({form,sat,cadena,tray,usaPotreros,potreros}){
     const enLact=i>=mesP&&i<mesP+Math.ceil(mesesLactGraf);
     const eRep=enLact?"Lactación con ternero al pie":i===((mesP-1+12)%12)?"Preparto (último mes)":"Gestación media (5–7 meses)";
     const demVaca=reqEM(pvVaca,eRep,form.biotipo)||13;
-    const ccMcal=enLact&&tray?Math.min(5,parseFloat(tray.caídaLact||0)*5.6/mesesLactGraf):0;
+    const ccMcal=enLact&&tray?Math.min(5,parseFloat(tray.caidaLact||0)*5.6/mesesLactGraf):0;
     const suplMcal=enLact?mcalSuplDia:0;
     const ofTotalV=ofVaca+ccMcal+suplMcal;
     const deficit=Math.max(0,demVaca-ofTotalV);
@@ -731,9 +733,14 @@ function SimuladorEscenarios({form,sat,cadena,dispar,dist,baseParams}){
           <div key={lbl} style={{display:"flex",borderBottom:`1px solid ${T.border}`}}>
             <div style={{flex:2,padding:"10px 14px",fontFamily:T.fontSans,fontSize:11,color:T.textDim}}>{lbl}</div>
             {escenarios.map((e,i)=>{
-              const val=key.includes(".")?e.tray?.[key.split(".")[0]]?.[key.split(".")[1]]:"—":e.tray?.[key]||"—";
-              const isPreñez=key==="pr";
-              const c=isPreñez?(val>=55?T.green:val>=35?T.amber:T.red):ESC_COLORS[i];
+              let val="—";
+              if(e.tray){
+                if(key.includes(".")){const parts=key.split(".");const parent=e.tray[parts[0]];val=parent&&parent[parts[1]]!=null?parent[parts[1]]:"—";}
+                else{val=e.tray[key]!=null?e.tray[key]:"—";}
+              }
+              const isP=key==="pr";
+              const numVal=parseFloat(val)||0;
+              const c=isP?(numVal>=55?T.green:numVal>=35?T.amber:T.red):ESC_COLORS[i];
               return<div key={i} style={{flex:1,padding:"10px 8px",fontFamily:T.font,fontSize:12,color:c,fontWeight:700,textAlign:"center"}}>{val}{u}</div>;
             })}
           </div>
@@ -836,7 +843,7 @@ function buildPrompt(form,coords,sat,dispar,cadena,tray,dist){
   if(tray){
     t+=`TRAY CC: Hoy:${tray.ccHoy} → Parto:${tray.ccParto} → CcMin:${tray.ccMinLact} → Destete:${tray.ccDestete} → Serv:${tray.ccServ} → Preñez:${tray.pr}%\n`;
     t+=`Anestro posparto estimado: ${tray.anestro?.dias}d (${tray.anestro?.riesgo?"🔴 riesgo falta servicio":"✅ dentro del período de servicio"})\n`;
-    t+=`Caída CC lactancia: ${tray.caídaLact} unidades en ${tray.mesesLact} meses\n`;
+    t+=`Caída CC lactancia: ${tray.caidaLact} unidades en ${tray.mesesLact} meses\n`;
   }
   // Suplementación cargada
   if(form.supl1) t+=`SUPL. GESTACIÓN/INV: ${form.supl1} ${form.dosis1||0}kg/día\n`;
@@ -1001,6 +1008,9 @@ function evaluarSanidad(vacunas, toros, historiaAbortos, programaSanit) {
   return { alerts };
 }
 // ═══════════════════════════════════════════════════════
+// ─── ALIAS DE TOKENS (C = T para compatibilidad) ─────────────────
+const C=T;
+
 // FORM_DEF COMPLETO v13
 // ═══════════════════════════════════════════════════════
 const FORM_DEF={
@@ -1190,7 +1200,7 @@ export default function AgroMindPro(){
   const ccPondVal=useMemo(()=>ccPond(form.distribucionCC),[form.distribucionCC]);
   const nVaqRepos=Math.round((parseInt(form.vacasN)||0)*(parseFloat(form.pctReposicion)||20)/100);
   const tcSave=useMemo(()=>calcTerneros(form.vacasN,form.prenez,form.pctDestete,form.destTrad,form.destAntic,form.destHiper,cadena),[form,cadena]);
-  const pvEntradaVaq2=form.vaq2PV||tcSave?.pvMayoPond&&Math.round(tcSave.pvMayoPond*0.85+tcSave.pvMayoPond*0.40)||"";
+  const pvEntradaVaq2=form.vaq2PV||(tcSave&&tcSave.pvMayoPond?Math.round(tcSave.pvMayoPond*0.85+tcSave.pvMayoPond*0.40):"")||"";
   const ndviN=sat?.ndvi||0.45;
   const vaq1E=useMemo(()=>calcVaq1(tcSave?.pvMayoPond||form.vaq1PV,form.pvVacaAdulta,ndviN,form.edadVaqMayo,form.tipoDesteteVaq),[tcSave,form,ndviN]);
   const vaq2E=useMemo(()=>calcVaq2(pvEntradaVaq2||form.vaq2PV,form.pvVacaAdulta,ndviN),[pvEntradaVaq2,form.vaq2PV,form.pvVacaAdulta,ndviN]);
@@ -1271,7 +1281,7 @@ export default function AgroMindPro(){
     if(tray){
       t+=`\nTRAYECTORIA CC (${form.biotipo||"Brangus 3/8"}):\n`;
       t+=`  ${tray.ccHoy}→${tray.ccParto}→${tray.ccMinLact}→${tray.ccDestete}→${tray.ccServ} · Preñez: ${tray.pr}% · Anestro: ${tray.anestro?.dias}d ${tray.anestro?.riesgo?"⚠️":"✅"}\n`;
-      t+=`  Caída: −${tray.caídaLact} en ${tray.mesesLact}m · Tasa: ${tray.tasaCaida}pts/mes\n`;
+      t+=`  Caída: −${tray.caidaLact} en ${tray.mesesLact}m · Tasa: ${tray.tasaCaida}pts/mes\n`;
     }
     if(form.supl1)t+=`SUPL.Gestación: ${form.supl1} ${form.dosis1}kg/d (${mcalSuplemento(form.supl1,parseFloat(form.dosis1)).toFixed(1)} Mcal)\n`;
     if(form.supl2)t+=`SUPL.Lactancia: ${form.supl2} ${form.dosis2}kg/d (${mcalSuplemento(form.supl2,parseFloat(form.dosis2)).toFixed(1)} Mcal)\n`;
