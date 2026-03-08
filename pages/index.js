@@ -1104,7 +1104,7 @@ function PanelAgua({ form, set, sat }) {
               <div style={{ fontFamily:C.sans, fontSize:12, color: e.alerta === "alta" ? C.red : C.amber, fontWeight:600 }}>{e.nombre}</div>
               <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginTop:2 }}>{e.impacto}</div>
             </div>
-          ) : null)}
+          ))}
         </div>
       </div>
     </div>
@@ -2154,7 +2154,7 @@ export default function AgroMindPro() {
                 </select>
               </div>
             </div>
-          ) : null)}
+          ))}
           <button onClick={()=>setPotreros(ps=>[...ps,{ha:"",veg:"Pastizal natural NEA/Chaco",fenol:"menor_10"}])}
             style={{ width:"100%", background:`${C.green}06`, border:`1px solid ${C.border}`, borderRadius:10, color:C.green, padding:12, fontFamily:C.sans, fontSize:12, cursor:"pointer", marginBottom:10 }}>
             + Agregar potrero
