@@ -1135,10 +1135,11 @@ function GraficoCCEscenarios({ escenarios, cadena, mesesLact }) {
 
   const CustomDot = (props) => {
     const { cx, cy, index, dataKey } = props;
-    if (index === mesServ)
+    if (index === mesServ) {
       const fillColor = ESC_COLORS[ESC_NAMES.indexOf(dataKey)];
       if (!fillColor) return null;
       return <circle cx={cx} cy={cy} r={5} fill={fillColor} stroke={T.bg} strokeWidth={1.5} />;
+    }
     return null;
   };
 
