@@ -1682,14 +1682,14 @@ export default function AgroMindPro() {
     [form.vacasN, form.prenez, form.pctDestete, form.destTrad, form.destAntic, form.destHiper, cadena]
   );
 
-  // Vaq2 recibe el PV de SALIDA del 1° invierno (agosto) para proyectar primavera-verano
-  const pvSalidaVaq1  = vaq1E?.pvSal ? String(vaq1E.pvSal) : "";
-  const pvEntradaVaq2 = form.vaq2PV || pvSalidaVaq1 || "";
-
   const vaq1E = useMemo(() =>
     calcVaq1(tcSave?.pvMayoPond || form.vaq1PV, form.pvVacaAdulta, ndviN, form.edadVaqMayo, form.tipoDesteteVaq),
     [tcSave, form.vaq1PV, form.pvVacaAdulta, ndviN, form.edadVaqMayo, form.tipoDesteteVaq]
   );
+
+  // Vaq2 recibe el PV de SALIDA del 1° invierno (agosto) para proyectar primavera-verano
+  const pvSalidaVaq1  = vaq1E?.pvSal ? String(vaq1E.pvSal) : "";
+  const pvEntradaVaq2 = form.vaq2PV || pvSalidaVaq1 || "";
 
   const vaq2E = useMemo(() =>
     calcVaq2(pvEntradaVaq2 || form.vaq2PV, form.pvVacaAdulta, ndviN),
