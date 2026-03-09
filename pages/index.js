@@ -450,6 +450,72 @@ function calcVaq2(pvEntradaVaq1Sal, pvAdulta, ndvi) {
   };
 }
 
+// ─── VACAS 2° SERVICIO — MOTOR COMPLETO ─────────────────────────
+// Categoría crítica: crecimiento + lactación + gestación simultáneos
+// Requerimientos NRC 2000: +10-15% sobre vaca adulta en lactación
+// Umbral anestro: entre 1° parto (mayor) y adulta
+function calcV2S(pvV2s, pvAdulta, ccActual, conTernero, biotipo, cadena) {
+  const pv   = parseFloat(pvV2s)   || 0;
+  const pva  = parseFloat(pvAdulta) || 320;
+  const ccA  = parseFloat(ccActual) || 0;
+  if (!pv || !ccA) return null;
+
+  const bt       = getBiotipo(biotipo);
+  // Tasa de movilización/recuperación ligeramente mayor que adulta (aún crecen)
+  const tR = Math.max(0.007, 0.013 * bt.recCC * 0.95);
+  const tP = 0.008; // pierden CC más rápido que adulta en lactación
+
+  // Umbral anestro: entre 1°parto y adulta
+  const umbralAnestro = bt.umbralAnestro + 0.15;
+
+  // Días hasta próximo parto (desde cadena reproductiva principal)
+  const diasHastaParto = cadena ? Math.max(0, cadena.diasPartoTemp || 90) : 90;
+
+  // CC al 2° parto
+  const ccParto2 = parseFloat(Math.min(8, Math.max(1.5,
+    ccA + tR * Math.min(diasHastaParto, 90) - tP * Math.max(0, diasHastaParto - 90)
+  )).toFixed(2));
+
+  // Lactación: 2° parto → típicamente destete anticipado o hiperprecoz en V2S
+  const mesesLact2 = conTernero ? 3.0 : 1.5; // con ternero al pie = 3 meses prom.
+  const tasaCaida  = (ccParto2 >= 5 ? 0.55 : 0.65) * bt.movCC * 1.10; // +10% vs adulta
+  const caidaLact2 = Math.min(2.5, mesesLact2 * tasaCaida);
+  const ccMin2     = Math.max(1.5, ccParto2 - caidaLact2);
+
+  // Días de anestro (más prolongado que adulta, menos que 1° parto)
+  const defCC = Math.max(0, umbralAnestro - ccParto2);
+  const defMin = Math.max(0, 2.2 - ccMin2);
+  const diasAnestro = Math.round(60 + defCC * 32 + defMin * 28); // base 60d (entre 50d adulta y 70d 1°parto)
+  const riesgoAnestro = diasAnestro > 60;
+
+  // CC al servicio
+  const ccServ2 = parseFloat(Math.min(8, Math.max(1.5,
+    ccMin2 + tR * 75
+  )).toFixed(2));
+
+  // Preñez en 2° servicio
+  const prenez2 = interpCC(ccServ2).pr;
+
+  // Requerimiento energético propio (NRC 2000: vaca 2° parto lactando = f*1.10 vs adulta)
+  const reqV2s = reqEM(pv, "Vaca 1° parto lactando", biotipo); // usa factor 2.10 — el más alto
+
+  // Déficit estimado con pasto actual
+  return {
+    ccActual: ccA,
+    ccParto:  ccParto2,
+    ccMin:    ccMin2,
+    ccServ:   ccServ2,
+    prenez:   prenez2,
+    diasAnestro,
+    riesgoAnestro,
+    mesesLact: mesesLact2.toFixed(1),
+    caidaLact: caidaLact2.toFixed(2),
+    reqMcal:  reqV2s,
+    conTernero,
+    critico: ccParto2 < 4.5 || diasAnestro > 70 || prenez2 < 35,
+  };
+}
+
 // ─── CADENA REPRODUCTIVA ──────────────────────────────────────────
 function calcCadena(iniServ, finServ) {
   if (!iniServ || !finServ) return null;
@@ -1326,6 +1392,7 @@ function GraficoBalance({ form, sat, cadena, tray }) {
   const nToros       = Math.max(0, parseInt(form.torosN)  || 0);
   const nVaq1        = Math.round(nVacas * (parseFloat(form.pctReposicion)||20) / 100);
   const nVaq2        = parseInt(form.vaq2N) || 0;
+  const nV2s         = parseInt(form.v2sN)  || 0;
   const ndviN        = parseFloat(sat?.ndvi || 0.45);
   const mcalSuplDia  = mcalSuplemento(form.supl2, parseFloat(form.dosis2) || 0);
 
@@ -1356,8 +1423,11 @@ function GraficoBalance({ form, sat, cadena, tray }) {
     // Demanda total rodeo (Mcal/día)
     const nLact  = enLact ? nVacas : 0;
     const nGest  = enLact ? 0 : nVacas;
+    // V2S: requerimiento = "Vaca 1° parto lactando" (f=2.10) — triple estrés crecimiento+lactación+gestación
+    const pvV2sN  = parseFloat(form.v2sPV || pvVaca * 0.88);
+    const demV2s  = reqEM(pvV2sN, "Vaca 1° parto lactando", form.biotipo) || Math.round(Math.pow(pvV2sN, 0.75) * 0.077 * 2.10);
     const demTotalRodeo = nLact * demVacaLact + nGest * demVacaGest +
-      nVaq1 * demVaq1 + nVaq2 * demVaq2 + nToros * reqToro;
+      nVaq1 * demVaq1 + nVaq2 * demVaq2 + nToros * reqToro + nV2s * demV2s;
 
     const ccMcal   = enLact && tray ? Math.min(5, parseFloat(tray.caidaLact||0) * 5.6 / mesesLactGraf) : 0;
     const suplMcal = enLact ? mcalSuplDia : 0;
@@ -1376,6 +1446,7 @@ function GraficoBalance({ form, sat, cadena, tray }) {
       vacasGest: +(enLact  ? 0 : (i === ((mesP-1+12)%12) ? nVacas * demVacaPre : nVacas * demVacaGest)).toFixed(0),
       vaq1:      +(nVaq1 * demVaq1).toFixed(0),
       vaq2:      +(nVaq2 * demVaq2).toFixed(0),
+      v2s:       +(nV2s  * demV2s).toFixed(0),
       toros:     +(nToros * reqToro).toFixed(0),
       ofertaTotal: +ofTotalMcal.toFixed(0),
     };
@@ -1457,6 +1528,7 @@ function GraficoBalance({ form, sat, cadena, tray }) {
               <Bar dataKey="vacasGest" name="Vacas gestación"   stackId="dem" fill="rgba(232,160,48,.80)"  radius={[0,0,0,0]} />
               <Bar dataKey="vaq1"      name="Vaq 1° invierno"   stackId="dem" fill="rgba(126,200,80,.75)"  radius={[0,0,0,0]} />
               <Bar dataKey="vaq2"      name="Vaq 2° invierno"   stackId="dem" fill="rgba(74,159,212,.75)"  radius={[0,0,0,0]} />
+              <Bar dataKey="v2s"       name="V2S (2° servicio)"  stackId="dem" fill="rgba(232,160,48,.90)"  radius={[0,0,0,0]} />
               <Bar dataKey="toros"     name="Toros"              stackId="dem" fill="rgba(180,120,220,.75)" radius={[2,2,0,0]} />
               {/* Oferta forrajera total como línea */}
               <Line type="monotone" dataKey="ofertaTotal" name="Oferta forrajera" stroke={T.green} strokeWidth={2.5} dot={false} strokeDasharray="5 2" />
@@ -1469,6 +1541,7 @@ function GraficoBalance({ form, sat, cadena, tray }) {
               ["Vacas gest.","rgba(232,160,48,.80)"],
               ["Vaq 1°","rgba(126,200,80,.75)"],
               ["Vaq 2°","rgba(74,159,212,.75)"],
+              ["V2S","rgba(232,160,48,.90)"],
               ["Toros","rgba(180,120,220,.75)"],
               ["Oferta","#7ec850"],
             ].map(([l,c]) => (
@@ -2194,7 +2267,9 @@ export default function AgroMindPro() {
     const hoy = new Date().toLocaleDateString("es-AR", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
     let t = `ANÁLISIS — ${hoy}\n`;
 
-    if (coords) t += `UBICACIÓN: ${coords.lat?.toFixed(4)}°S ${coords.lon?.toFixed(4)}°W · ${form.zona} · ${form.provincia}${form.localidad ? ' · ' + form.localidad : ''}\n`;
+    const locStr = [form.localidad, form.provincia, form.zona].filter(Boolean).join(" · ");
+    if (coords) t += `UBICACIÓN: ${coords.lat?.toFixed(4)}°S ${coords.lon?.toFixed(4)}°W · ${locStr}\n`;
+    else if (locStr) t += `UBICACIÓN: ${locStr} (sin GPS)\n`;
     if (sat?.temp) t += `MET REAL: T${sat.temp}°C (Mx${sat.tMax}/Mn${sat.tMin}) · P7d:${sat.p7}mm P30d:${sat.p30}mm · Bal:${sat.deficit>0?"+":""}${sat.deficit}mm · NDVI:${sat.ndvi}(${sat.condForr})\n`;
 
     t += `ENSO: ${form.enso==="nino"?"El Niño +25%":form.enso==="nina"?"La Niña −25%":"Neutro"} · BIOTIPO: ${form.biotipo||"Brangus 3/8"}\n`;
@@ -2264,7 +2339,28 @@ export default function AgroMindPro() {
       t += "\n";
     }
 
-    if (form.v2sN) t += `V2S: ${form.v2sN} cab · PV${form.v2sPV||"—"}kg · ${form.v2sTernero==="si"?"con ternero":"sin ternero"}\n`;
+    if (form.v2sN) {
+      const ccV2sPond = (form.cc2sDist || []).reduce((s,g) => s + (parseFloat(g.cc)||0)*(parseFloat(g.pct)||0), 0) /
+        Math.max(1, (form.cc2sDist||[]).reduce((s,g) => s + (parseFloat(g.pct)||0), 0));
+      const conTern = form.v2sTernero === "si";
+      const resV2s  = calcV2S(form.v2sPV, form.pvVacaAdulta, ccV2sPond || "4.2", conTern, form.biotipo, cadena);
+      t += `V2S: ${form.v2sN} cab · PV${form.v2sPV||"—"}kg (${Math.round((parseFloat(form.v2sPV)||0)/(parseFloat(form.pvVacaAdulta)||320)*100)}% PV adulta) · CC pond ${ccV2sPond.toFixed(1)}\n`;
+      t += `  Estado: ${conTern?"⚠️ Con ternero al pie — bloqueo LH activo":"Sin ternero"} · Biotipo: ${form.biotipo||"—"}\n`;
+      if (resV2s) {
+        t += `  Proyección V2S: CC parto ${resV2s.ccParto} → CC serv ${resV2s.ccServ} · Preñez ${resV2s.prenez}% · Anestro ${resV2s.diasAnestro}d\n`;
+        t += `  Requerimiento triple estrés: ${resV2s.reqMcal||"—"} Mcal/vaca/día (NRC 2000)\n`;
+        if (resV2s.critico) t += `  ⛔ GRUPO CRÍTICO: suplementación urgente + evaluar destete hiperprecoz\n`;
+      }
+      if (form.cc2sDist?.length > 1) {
+        t += `  Distribución CC V2S:\n`;
+        form.cc2sDist.forEach((g, i) => {
+          if (parseFloat(g.pct) > 0) {
+            const rG = calcV2S(form.v2sPV, form.pvVacaAdulta, g.cc, conTern, form.biotipo, cadena);
+            t += `    Grupo ${i+1}: CC${g.cc} (${g.pct}%) → preñez ${rG?.prenez||"—"}% · anestro ${rG?.diasAnestro||"—"}d\n`;
+          }
+        });
+      }
+    }
     if (form.consultaEspecifica) t += `\nCONSULTA: ${form.consultaEspecifica}\n`;
 
     return t;
@@ -2536,7 +2632,17 @@ export default function AgroMindPro() {
       <button onClick={gpsClick} style={{ width:"100%", background:C.green, color:"#0b1a0c", padding:14, borderRadius:12, border:"none", fontFamily:C.sans, fontSize:14, fontWeight:700, cursor:"pointer", marginBottom:12 }}>
         📍 Usar mi ubicación GPS
       </button>
-      {coords && <Alerta tipo="ok">{form.zona} · {form.provincia} ({coords.lat.toFixed(3)}°, {coords.lon.toFixed(3)}°)</Alerta>}
+      {coords && (
+        <Alerta tipo="ok">
+          {form.zona} · {form.provincia} {form.localidad ? `· ${form.localidad}` : ""}
+          <span style={{ opacity:0.6, fontSize:10 }}> ({coords.lat.toFixed(3)}°, {coords.lon.toFixed(3)}°)</span>
+        </Alerta>
+      )}
+      {form.localidad && !coords && (
+        <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, marginBottom:8, padding:"6px 10px", background:`${C.green}08`, border:`1px solid ${C.green}20`, borderRadius:8 }}>
+          📍 {form.localidad} · {form.provincia}
+        </div>
+      )}
       {sat && !sat.error && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, margin:"10px 0" }}>
           <MetricCard label="TEMPERATURA" value={sat.temp+"°C"}  color={C.amber} />
@@ -2757,94 +2863,149 @@ export default function AgroMindPro() {
             🔄 VACAS 2° SERVICIO · {form.v2sN ? `${form.v2sN} cab.` : "Ingresar cantidad"}
           </span>
           {form.v2sN && (
-            <span style={{ marginLeft:"auto", fontFamily:C.font, fontSize:9, color:C.textDim }}>
-              {form.v2sTernero === "si" ? "Con ternero al pie" : "Sin ternero"}
+            <span style={{ marginLeft:"auto", fontFamily:C.font, fontSize:9,
+              color: (() => {
+                const r = calcV2S(form.v2sPV, form.pvVacaAdulta, form.cc2sDist?.[0]?.cc || "4.2", form.v2sTernero === "si", form.biotipo, cadena);
+                return r?.critico ? C.red : C.amber;
+              })()
+            }}>
+              {form.v2sTernero === "si" ? "⚠ Con ternero al pie" : "Sin ternero"}
             </span>
           )}
         </summary>
         <div style={{ background:C.card2, borderRadius:"0 0 12px 12px", padding:14, border:`1px solid ${C.border}`, borderTop:"none" }}>
 
-          {/* Explicación */}
-          <div style={{ background:"rgba(232,160,48,.06)", border:"1px solid rgba(232,160,48,.18)", borderRadius:10, padding:"10px 12px", marginBottom:14 }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, letterSpacing:1, marginBottom:4 }}>¿QUÉ SON LAS V2S?</div>
+          {/* Banner categoría crítica */}
+          <div style={{ background:"rgba(232,160,48,.06)", border:"1px solid rgba(232,160,48,.25)", borderRadius:10, padding:"10px 12px", marginBottom:14 }}>
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, letterSpacing:1, marginBottom:4 }}>⚠ CATEGORÍA DE MAYOR RIESGO DEL RODEO</div>
             <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, lineHeight:1.5 }}>
-              Vacas que no quedaron preñadas en el 1° servicio y van a un 2° intento. Su estado nutricional es crítico: 
-              si tuvieron ternero al pie durante el período de servicio, el anestro se prolonga. 
-              Son la categoría con mayor riesgo de repetir el fallo si la CC no está en 4.5+.
+              Las V2S tienen el triple estrés fisiológico más exigente: <strong style={{color:C.text}}>están creciendo</strong> (2°–3° año, aún no llegaron al PV adulto), 
+              <strong style={{color:C.text}}> amamantando</strong> (bloqueo LH activo si tienen ternero) 
+              y deben <strong style={{color:C.text}}>quedar preñadas</strong> nuevamente. 
+              Sus requerimientos energéticos superan a las vacas adultas en un 10–15% (NRC 2000).
             </div>
           </div>
 
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
             <Input label="CANTIDAD (cab)" value={form.v2sN}  onChange={v=>set("v2sN",v)}  placeholder="20"  type="number" />
-            <Input label="PV PROMEDIO (kg)" value={form.v2sPV} onChange={v=>set("v2sPV",v)} placeholder="310" type="number" />
+            <Input label="PV ACTUAL (kg)" value={form.v2sPV} onChange={v=>set("v2sPV",v)} placeholder="310" type="number"
+              sub={form.pvVacaAdulta ? `PV adulta: ${form.pvVacaAdulta}kg · V2S típicamente 85-92% del adulto` : ""} />
           </div>
+
+          {/* Distribución CC de las V2S — 2 grupos */}
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
+            DISTRIBUCIÓN CC VACAS 2° SERVICIO (por grupo)
+          </div>
+          {(form.cc2sDist || [{ cc:"5.0", pct:"50" }, { cc:"4.5", pct:"50" }]).map((g, i) => (
+            <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 1fr auto", gap:8, marginBottom:8, alignItems:"end" }}>
+              <Input label={`CC GRUPO ${i+1}`} value={g.cc}
+                onChange={v => { const d=[...(form.cc2sDist||[{cc:"5.0",pct:"50"},{cc:"4.5",pct:"50"}])]; d[i]={...d[i],cc:v}; set("cc2sDist",d); }}
+                placeholder="4.5" type="number" />
+              <Input label="% del grupo" value={g.pct}
+                onChange={v => { const d=[...(form.cc2sDist||[{cc:"5.0",pct:"50"},{cc:"4.5",pct:"50"}])]; d[i]={...d[i],pct:v}; set("cc2sDist",d); }}
+                placeholder="50" type="number" />
+              <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, paddingBottom:10 }}>%</div>
+            </div>
+          ))}
+          {(() => {
+            const d = form.cc2sDist || [];
+            const total = d.reduce((s,g) => s + (parseFloat(g.pct)||0), 0);
+            if (total !== 100 && d.length > 0) return <Alerta tipo="warn">Suma: {total}% (debe ser 100%)</Alerta>;
+            return null;
+          })()}
 
           <Toggle
             label="¿Tienen ternero al pie durante el 2° servicio?"
             value={form.v2sTernero === "si"}
             onChange={v => set("v2sTernero", v ? "si" : "no")}
           />
+          {form.v2sTernero === "si" && (
+            <Alerta tipo="warn">Ternero al pie: bloqueo LH activo · Anestro +10–20 días extra · Evaluar destete anticipado o hiperprecoz urgente</Alerta>
+          )}
 
+          {/* Diagnóstico real por grupo usando calcV2S */}
           {form.v2sN && form.v2sPV && (
             <div style={{ marginTop:12 }}>
-              {/* Diagnóstico automático V2S */}
-              {(() => {
-                const pvV2s   = parseFloat(form.v2sPV) || 0;
-                const nV2s    = parseInt(form.v2sN) || 0;
-                const conTern = form.v2sTernero === "si";
-                const bt      = getBiotipo(form.biotipo);
-                const umbralCC = bt.umbralAnestro || 3.5;
-
-                // CC estimada V2S: si tiene ternero → probable CC baja
-                const ccV2sEst = conTern ? 3.8 : 4.2;
-                const prenezV2s = interpCC(ccV2sEst).pr;
-                const anestroExtra = conTern ? 35 : 15;
-
-                // Requerimiento energético
-                const eRepV2s = conTern ? "Lactación con ternero al pie" : "Gestación media (5–7 meses)";
-                const reqV2s  = reqEM(pvV2s, eRepV2s, form.biotipo) || 13;
-                const fenolMs = form.fenologia || "menor_10";
-                const cons    = calcConsumoPasto(pvV2s, fenolMs, sat?.temp || 25);
-                const ofV2s   = cons?.emTotal || 0;
-                const defV2s  = Math.max(0, reqV2s - ofV2s);
-
+              {(form.cc2sDist || [{cc:"4.5",pct:"100"}]).filter(g => parseFloat(g.cc) && parseFloat(g.pct) > 0).map((g, i) => {
+                const r = calcV2S(form.v2sPV, form.pvVacaAdulta, g.cc, form.v2sTernero === "si", form.biotipo, cadena);
+                if (!r) return null;
+                const nG = Math.round((parseInt(form.v2sN)||0) * (parseFloat(g.pct)||0) / 100);
+                // Calcular déficit con pasto actual
+                const cons   = calcConsumoPasto(form.v2sPV, form.fenologia || "menor_10", sat?.temp || 25);
+                const oferta = cons?.emTotal || 0;
+                const deficit = Math.max(0, (r.reqMcal || 0) - oferta);
                 return (
-                  <div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:10 }}>
-                      <MetricCard label="CC EST." value={ccV2sEst.toFixed(1)}
-                        color={ccV2sEst >= 4.5 ? C.green : ccV2sEst >= 4.0 ? C.amber : C.red}
-                        sub={ccV2sEst < 4.5 ? "⚠ Por debajo" : "OK"} />
-                      <MetricCard label="PREÑEZ EST." value={prenezV2s+"%"}
-                        color={prenezV2s >= 55 ? C.green : prenezV2s >= 35 ? C.amber : C.red} />
-                      <MetricCard label="ANESTRO +" value={anestroExtra+"d"}
-                        color={conTern ? C.red : C.amber}
-                        sub={conTern ? "Ternero bloquea LH" : "Sin ternero"} />
+                  <div key={i} style={{ background:r.critico ? "rgba(224,85,48,.06)" : "rgba(232,160,48,.06)",
+                    border:`1px solid ${r.critico ? "rgba(224,85,48,.25)" : "rgba(232,160,48,.20)"}`,
+                    borderRadius:10, padding:12, marginBottom:10 }}>
+                    <div style={{ fontFamily:C.font, fontSize:10, color:r.critico ? C.red : C.amber, marginBottom:8, display:"flex", justifyContent:"space-between" }}>
+                      <span>GRUPO {i+1} · CC {g.cc} · {nG} vac. ({g.pct}%)</span>
+                      {r.critico && <span style={{ background:"rgba(224,85,48,.15)", padding:"2px 8px", borderRadius:6, fontSize:9 }}>🔴 CRÍTICO</span>}
                     </div>
-
-                    {defV2s > 0 && (
-                      <Alerta tipo="warn">
-                        Déficit energético estimado: −{defV2s.toFixed(1)} Mcal/día · Requerimiento {reqV2s.toFixed(1)} Mcal vs oferta {ofV2s.toFixed(1)} Mcal pasto
-                      </Alerta>
-                    )}
-
-                    {conTern && ccV2sEst < 4.5 && (
-                      <div style={{ background:"rgba(224,85,48,.06)", border:"1px solid rgba(224,85,48,.20)", borderRadius:10, padding:"10px 12px", marginTop:8 }}>
-                        <div style={{ fontFamily:C.font, fontSize:9, color:C.red, letterSpacing:1, marginBottom:4 }}>
-                          ⚠ ACCIÓN RECOMENDADA — ANTES DEL 2° SERVICIO
-                        </div>
-                        <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, lineHeight:1.5 }}>
-                          <strong style={{ color:C.text }}>Destete anticipado o hiperprecoz</strong> en vacas V2S con ternero al pie.
-                          Elimina el bloqueo LH en 7–14 días y puede recuperar +0.3–0.5 CC antes del 2° servicio.
-                          Sin destete, la preñez en 2° servicio con ternero al pie y CC {"<"}4.5 cae por debajo del 30%.
-                        </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:10 }}>
+                      <MetricCard label="CC PARTO"
+                        value={r.ccParto}
+                        color={r.ccParto >= 4.5 ? C.green : r.ccParto >= 4.0 ? C.amber : C.red}
+                        sub={r.ccParto < 4.5 ? "⚠ Riesgo" : "OK"} />
+                      <MetricCard label="CC SERVICIO"
+                        value={r.ccServ}
+                        color={r.ccServ >= 5.0 ? C.green : r.ccServ >= 4.5 ? C.amber : C.red} />
+                      <MetricCard label="PREÑEZ"
+                        value={r.prenez + "%"}
+                        color={r.prenez >= 55 ? C.green : r.prenez >= 35 ? C.amber : C.red} />
+                      <MetricCard label="ANESTRO"
+                        value={r.diasAnestro + "d"}
+                        color={r.diasAnestro <= 55 ? C.green : r.diasAnestro <= 75 ? C.amber : C.red} />
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:8 }}>
+                      <MetricCard label="REQ. ENERGÉTICO"
+                        value={(r.reqMcal || "—") + " Mcal/d"}
+                        color={C.amber}
+                        sub="NRC 2000 — triple estrés" />
+                      <MetricCard label={deficit > 0 ? "DÉFICIT ACTUAL" : "BALANCE"}
+                        value={deficit > 0 ? "−"+deficit.toFixed(1)+" Mcal" : "✓ OK"}
+                        color={deficit > 0 ? C.red : C.green}
+                        sub={deficit > 0 ? `Oferta pasto: ${oferta.toFixed(1)} Mcal` : "Sin déficit"} />
+                    </div>
+                    {/* Recomendaciones específicas por grupo */}
+                    {r.critico && (
+                      <div style={{ marginTop:6 }}>
+                        {r.ccParto < 4.5 && (
+                          <Alerta tipo="error">CC parto {r.ccParto} — preñez proyectada {r.prenez}%. Suplementar en preparto: 0.5–0.8 kg expeller soja/día + destete inmediato si tiene ternero.</Alerta>
+                        )}
+                        {r.diasAnestro > 70 && form.v2sTernero === "si" && (
+                          <Alerta tipo="error">Anestro proyectado {r.diasAnestro}d con ternero al pie — NO va a llegar al servicio. Destete hiperprecoz urgente: recupera ciclos en 7–14 días (Wiltbank 1990).</Alerta>
+                        )}
+                        {deficit > 3 && (
+                          <Alerta tipo="error">Déficit de {deficit.toFixed(1)} Mcal/día — para cubrirlo: {(deficit/2.6).toFixed(1)} kg expeller girasol o {(deficit/3.3).toFixed(1)} kg maíz/vaca/día.</Alerta>
+                        )}
                       </div>
                     )}
-
-                    {!conTern && (
-                      <Alerta tipo="ok">
-                        Sin ternero al pie — el bloqueo LH no está activo. La preñez depende principalmente de la CC al 2° servicio.
-                      </Alerta>
+                    {!r.critico && (
+                      <Alerta tipo="ok">CC y anestro en rango aceptable para este grupo. Monitorear suplementación y destete según momento del servicio.</Alerta>
                     )}
+                  </div>
+                );
+              })}
+
+              {/* Resumen total V2S */}
+              {(() => {
+                const grupos = (form.cc2sDist || []).filter(g => parseFloat(g.cc) && parseFloat(g.pct) > 0);
+                if (grupos.length === 0) return null;
+                const prenezPond = grupos.reduce((s, g) => {
+                  const r = calcV2S(form.v2sPV, form.pvVacaAdulta, g.cc, form.v2sTernero === "si", form.biotipo, cadena);
+                  return s + (r?.prenez || 0) * (parseFloat(g.pct) / 100);
+                }, 0);
+                const color = prenezPond >= 55 ? C.green : prenezPond >= 35 ? C.amber : C.red;
+                return (
+                  <div style={{ background:`${color}10`, border:`1px solid ${color}30`, borderRadius:10, padding:"10px 14px" }}>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginBottom:4 }}>PREÑEZ PONDERADA V2S</div>
+                    <div style={{ fontFamily:C.font, fontSize:24, fontWeight:700, color }}>
+                      {Math.round(prenezPond)}%
+                      <span style={{ fontSize:11, color:C.textDim, marginLeft:8, fontWeight:400 }}>
+                        {parseInt(form.v2sN)||0} vacas · {Math.round((parseInt(form.v2sN)||0) * prenezPond / 100)} preñadas esperadas
+                      </span>
+                    </div>
                   </div>
                 );
               })()}
@@ -2852,8 +3013,8 @@ export default function AgroMindPro() {
           )}
 
           {!form.v2sN && (
-            <div style={{ textAlign:"center", padding:"12px 0", fontFamily:C.fontSans, fontSize:11, color:C.textFaint }}>
-              Ingresá la cantidad de vacas de 2° servicio para ver el diagnóstico
+            <div style={{ textAlign:"center", padding:"16px 0", fontFamily:C.fontSans, fontSize:11, color:C.textFaint }}>
+              Ingresá la cantidad de V2S para ver el diagnóstico completo
             </div>
           )}
         </div>
