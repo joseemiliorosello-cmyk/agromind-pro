@@ -5,14 +5,41 @@
 
 // ─── BIOTIPOS ─────────────────────────────────────────────────────
 const BIOTIPOS = {
-  "Brahman":           { movCC:0.70, recCC:0.85, umbralAnestro:2.8, factReq:0.90, nombre:"Brahman puro" },
-  "Nelore":            { movCC:0.72, recCC:0.83, umbralAnestro:2.9, factReq:0.89, nombre:"Nelore" },
-  "Brangus 3/8":       { movCC:0.82, recCC:0.92, umbralAnestro:3.2, factReq:0.95, nombre:"Brangus 3/8 Cebú" },
-  "Brangus 5/8":       { movCC:0.88, recCC:0.96, umbralAnestro:3.4, factReq:0.98, nombre:"Brangus 5/8 Cebú" },
-  "Aberdeen Angus":    { movCC:1.00, recCC:1.00, umbralAnestro:3.8, factReq:1.00, nombre:"Aberdeen Angus" },
-  "Hereford":          { movCC:0.98, recCC:0.98, umbralAnestro:3.7, factReq:1.00, nombre:"Hereford" },
-  "Cruza comercial":   { movCC:0.88, recCC:0.93, umbralAnestro:3.3, factReq:0.96, nombre:"Cruza comercial" },
-  "Bonsmara/Simbrah":  { movCC:0.80, recCC:0.90, umbralAnestro:3.1, factReq:0.93, nombre:"Bonsmara/Simbrah" },
+  // ── Cebú puro ──────────────────────────────────────────────────
+  "Brahman":              { movCC:0.70, recCC:0.85, umbralAnestro:2.8, factReq:0.90, nombre:"Brahman puro" },
+  "Nelore":               { movCC:0.72, recCC:0.83, umbralAnestro:2.9, factReq:0.89, nombre:"Nelore" },
+  "Indobrasil":           { movCC:0.71, recCC:0.84, umbralAnestro:2.8, factReq:0.90, nombre:"Indobrasil" },
+
+  // ── Aberdeen Angus y cruces ─────────────────────────────────────
+  "Aberdeen Angus":       { movCC:1.00, recCC:1.00, umbralAnestro:3.8, factReq:1.00, nombre:"Aberdeen Angus" },
+  "Brangus 3/8":          { movCC:0.82, recCC:0.92, umbralAnestro:3.2, factReq:0.95, nombre:"Brangus 3/8 Cebú (Angus×Brahman)" },
+  "Brangus 5/8":          { movCC:0.88, recCC:0.96, umbralAnestro:3.4, factReq:0.98, nombre:"Brangus 5/8 Cebú (Angus×Brahman)" },
+
+  // ── Hereford y cruces ──────────────────────────────────────────
+  "Hereford":             { movCC:0.98, recCC:0.98, umbralAnestro:3.7, factReq:1.00, nombre:"Hereford" },
+  // Bradford = Hereford × Brahman
+  // 3/8 Cebú: heterosis máxima — mejor adaptación al calor que Hereford puro,
+  // menor sensibilidad a fotoperíodo, umbral anestro intermedio.
+  // Fuente: Short et al. 1990; Neel et al. 2007; Peruchena INTA 2003
+  "Bradford 3/8":         { movCC:0.83, recCC:0.91, umbralAnestro:3.1, factReq:0.94, nombre:"Bradford 3/8 Cebú (Hereford×Brahman)" },
+  "Bradford 5/8":         { movCC:0.87, recCC:0.95, umbralAnestro:3.3, factReq:0.97, nombre:"Bradford 5/8 Cebú (Hereford×Brahman)" },
+  // Braford (mismo fenotipo pero denominación uruguaya/brasileña — parámetros idénticos)
+  "Braford 3/8":          { movCC:0.83, recCC:0.91, umbralAnestro:3.1, factReq:0.94, nombre:"Braford 3/8 Cebú (Hereford×Cebú)" },
+  "Braford 5/8":          { movCC:0.87, recCC:0.95, umbralAnestro:3.3, factReq:0.97, nombre:"Braford 5/8 Cebú (Hereford×Cebú)" },
+
+  // ── Otras razas europeas ────────────────────────────────────────
+  "Limousin":             { movCC:1.02, recCC:1.01, umbralAnestro:3.9, factReq:1.02, nombre:"Limousin" },
+  "Charolais":            { movCC:1.01, recCC:1.00, umbralAnestro:3.8, factReq:1.02, nombre:"Charolais" },
+  "Simmental":            { movCC:0.99, recCC:0.99, umbralAnestro:3.7, factReq:1.01, nombre:"Simmental" },
+
+  // ── Razas adaptadas tropicales ──────────────────────────────────
+  "Bonsmara":             { movCC:0.80, recCC:0.90, umbralAnestro:3.1, factReq:0.93, nombre:"Bonsmara (5/8 Afrikaner × Hereford/Shorthorn)" },
+  "Simbrah":              { movCC:0.81, recCC:0.90, umbralAnestro:3.0, factReq:0.93, nombre:"Simbrah (Simmental×Brahman)" },
+  "Senepol":              { movCC:0.84, recCC:0.92, umbralAnestro:3.2, factReq:0.94, nombre:"Senepol" },
+  "Beefmaster":           { movCC:0.80, recCC:0.89, umbralAnestro:3.0, factReq:0.92, nombre:"Beefmaster" },
+
+  // ── Cruza comercial ─────────────────────────────────────────────
+  "Cruza comercial":      { movCC:0.88, recCC:0.93, umbralAnestro:3.3, factReq:0.96, nombre:"Cruza comercial (promedio)" },
 };
 const BIOTIPO_DEF = BIOTIPOS["Brangus 3/8"];
 const getBiotipo = (k) => BIOTIPOS[k] || BIOTIPO_DEF;
@@ -317,7 +344,14 @@ function calcDistCCv2(params) {
 const calcDistCC = calcDistCCv2;
 
 // ─── TERNEROS ─────────────────────────────────────────────────────
-// Calcula cantidad destetada y PV ponderado al 1° mayo
+// PV al parto: 35 kg (promedio NEA/NOA, biotipo intermedio)
+// GDP al pie de la madre: 700 g/d (Hereford/Angus cruzado · NEA)
+//   Bos indicus puro puede ser 600 g/d, taurino puro 750–800 g/d
+//   700 g/d es el estándar de campo para cruza comercial NEA
+// GDP post-destete en pastizal hasta mayo: 400 g/d mínimo
+//   (pastizal natural seco, sin suplementación)
+//   Con mejora forrajera o suplementación puede llegar a 500–550 g/d
+// Fuente: INTA EEA Mercedes · Peruchena 2003 · Bavera 2005
 function calcTerneros(vacasN, prenez, pctDestete, destTrad, destAntic, destHiper, cadena) {
   const vN = parseInt(vacasN)        || 0;
   const pr = parseFloat(prenez)      || 0;
@@ -329,24 +363,28 @@ function calcTerneros(vacasN, prenez, pctDestete, destTrad, destAntic, destHiper
   const pA  = parseFloat(destAntic) || 0;
   const pH  = parseFloat(destHiper) || 0;
   const tot = pT + pA + pH || 100;
-  const GDP = { trad:0.400, antic:0.350, hiper:0.250 };
+
+  // GDP AL PIE DE LA MADRE (g/d) — los días que van con la vaca
+  const GDP_MADRE = { trad:0.700, antic:0.700, hiper:0.700 };
+  // GDP POST-DESTETE en pastizal (g/d) — desde destete hasta mayo
+  const GDP_POST  = { trad:0.400, antic:0.400, hiper:0.400 };
 
   const partoRef = cadena?.partoTemp || new Date(new Date().getFullYear(), 9, 1);
 
-  const calcMayo = (diasLact, gdp) => {
+  const calcMayo = (diasLact, gdpMadre, gdpPost) => {
     const dest = new Date(partoRef);
     dest.setDate(dest.getDate() + diasLact);
     const anoRef  = dest.getFullYear();
     let mayo1     = new Date(anoRef, 4, 1);
     if (mayo1 <= dest) mayo1 = new Date(anoRef + 1, 4, 1);
     const diasPost = Math.max(0, Math.round((mayo1 - dest) / (1000*60*60*24)));
-    const pvDest   = Math.round(35 + gdp * diasLact);
-    return { pvDest, pvMayo: Math.round(pvDest + gdp * diasPost) };
+    const pvDest   = Math.round(35 + gdpMadre * diasLact);
+    return { pvDest, pvMayo: Math.round(pvDest + gdpPost * diasPost) };
   };
 
-  const resTrad  = calcMayo(180, GDP.trad);
-  const resAntic = calcMayo(90,  GDP.antic);
-  const resHiper = calcMayo(50,  GDP.hiper);
+  const resTrad  = calcMayo(180, GDP_MADRE.trad,  GDP_POST.trad);
+  const resAntic = calcMayo(90,  GDP_MADRE.antic, GDP_POST.antic);
+  const resHiper = calcMayo(50,  GDP_MADRE.hiper, GDP_POST.hiper);
 
   const pvMayoPond = Math.round(
     (pT/tot)*resTrad.pvMayo + (pA/tot)*resAntic.pvMayo + (pH/tot)*resHiper.pvMayo
@@ -1055,7 +1093,9 @@ function Input({ label, value, onChange, placeholder, type = "text", sub, warn }
 }
 
 // ─── SELECT F ────────────────────────────────────────────────────
-function SelectF({ label, value, onChange, options }) {
+function SelectF({ label, value, onChange, options, groups, sub }) {
+  // options = [[val, label], ...] plana
+  // groups  = [{ label:"Grupo", opts:[[val,label],...] }, ...]
   return (
     <div style={{ marginBottom:14 }}>
       {label && <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:5 }}>{label}</div>}
@@ -1063,8 +1103,16 @@ function SelectF({ label, value, onChange, options }) {
         value={value} onChange={e => onChange(e.target.value)}
         style={{ width:"100%", background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, color:C.text, padding:"12px 14px", fontFamily:C.sans, fontSize:14 }}
       >
-        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        {groups
+          ? groups.map(g => (
+              <optgroup key={g.label} label={g.label}>
+                {g.opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </optgroup>
+            ))
+          : options.map(([v, l]) => <option key={v} value={v}>{l}</option>)
+        }
       </select>
+      {sub && <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:3 }}>{sub}</div>}
     </div>
   );
 }
@@ -2677,7 +2725,46 @@ export default function AgroMindPro() {
   // ── PASO 1: RODEO ─────────────────────────────────────────────
   const renderRodeo = () => (
     <div>
-      <SelectF label="BIOTIPO" value={form.biotipo} onChange={v=>set("biotipo",v)} options={Object.keys(BIOTIPOS).map(k=>[k,BIOTIPOS[k].nombre])} />
+      <SelectF label="BIOTIPO" value={form.biotipo} onChange={v=>set("biotipo",v)}
+        groups={[
+          { label:"── Cebú puro ──────────────────", opts:[
+            ["Brahman",          "Brahman puro"],
+            ["Nelore",           "Nelore"],
+            ["Indobrasil",       "Indobrasil"],
+          ]},
+          { label:"── Brangus (Angus × Brahman) ──", opts:[
+            ["Brangus 3/8",      "Brangus 3/8 Cebú  ← más común NEA"],
+            ["Brangus 5/8",      "Brangus 5/8 Cebú"],
+          ]},
+          { label:"── Bradford / Braford (Hereford × Brahman) ──", opts:[
+            ["Bradford 3/8",     "Bradford 3/8 Cebú  ← Hereford×Brahman"],
+            ["Bradford 5/8",     "Bradford 5/8 Cebú"],
+            ["Braford 3/8",      "Braford 3/8 Cebú  (UY/BR)"],
+            ["Braford 5/8",      "Braford 5/8 Cebú  (UY/BR)"],
+          ]},
+          { label:"── Hereford puro ───────────────", opts:[
+            ["Hereford",         "Hereford"],
+          ]},
+          { label:"── Aberdeen Angus puro ─────────", opts:[
+            ["Aberdeen Angus",   "Aberdeen Angus"],
+          ]},
+          { label:"── Otras europeas ─────────────", opts:[
+            ["Limousin",         "Limousin"],
+            ["Charolais",        "Charolais"],
+            ["Simmental",        "Simmental"],
+          ]},
+          { label:"── Razas tropicales adaptadas ──", opts:[
+            ["Bonsmara",         "Bonsmara"],
+            ["Simbrah",          "Simbrah (Simmental×Brahman)"],
+            ["Senepol",          "Senepol"],
+            ["Beefmaster",       "Beefmaster"],
+          ]},
+          { label:"── General ──────────────────────", opts:[
+            ["Cruza comercial",  "Cruza comercial (promedio)"],
+          ]},
+        ]}
+        sub="Bradford/Braford = Hereford × Brahman · Brangus = Angus × Brahman"
+      />
       {form.biotipo && (
         <div style={{ background:C.card2, borderRadius:10, padding:10, marginBottom:12, border:`1px solid ${C.border}` }}>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
@@ -2734,19 +2821,96 @@ export default function AgroMindPro() {
     <div>
       <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:12 }}>DISTRIBUCIÓN CC DEL RODEO</div>
       <DistCC dist={form.distribucionCC} onChange={v=>setDist("distribucionCC",v)} label="" />
-      {ccPondVal > 0 && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:12 }}>
-          <MetricCard label="CC POND." value={ccPondVal.toFixed(2)} color={smf(ccPondVal,4.5,5.5)} />
-          <MetricCard label="CC SERV." value={tray?.ccServ||"—"}   color={tray?smf(parseFloat(tray.ccServ),4.5,5.5):C.textDim} />
-          <MetricCard label="PREÑEZ"   value={(tray?.pr||"—")+"%"}  color={tray?smf(tray.pr,35,55):C.textDim} />
+
+      {ccPondVal > 0 && tray && (
+        <div style={{ marginTop:14 }}>
+          {/* Trayectoria completa CC */}
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
+            TRAYECTORIA CC PROYECTADA
+          </div>
+
+          {/* Flecha visual de trayectoria */}
+          <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 10px", marginBottom:10 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", justifyContent:"space-between" }}>
+              {[
+                { label:"HOY",    val:ccPondVal.toFixed(1), color:smf(ccPondVal,4.5,5.5) },
+                { label:"PARTO",  val:tray.ccParto,         color:smf(parseFloat(tray.ccParto),4.5,5.0) },
+                { label:"MÍN.",   val:tray.ccMinLact,       color:smf(parseFloat(tray.ccMinLact),3.5,4.5) },
+                { label:"DESTETE",val:tray.ccDestete,       color:smf(parseFloat(tray.ccDestete),3.5,4.5) },
+                { label:"SERV.",  val:tray.ccServ,          color:smf(parseFloat(tray.ccServ),4.5,5.0) },
+              ].map((item, i, arr) => (
+                <React.Fragment key={item.label}>
+                  <div style={{ textAlign:"center", minWidth:42 }}>
+                    <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:item.color, lineHeight:1 }}>{item.val}</div>
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>{item.label}</div>
+                  </div>
+                  {i < arr.length - 1 && (
+                    <div style={{ color:C.textFaint, fontSize:14, flexShrink:0 }}>→</div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+            <div style={{ marginTop:10, paddingTop:8, borderTop:`1px solid ${C.border}`, display:"flex", gap:6, flexWrap:"wrap" }}>
+              <Pill color={smf(tray.pr,35,55)}>🐄 Preñez {tray.pr}%</Pill>
+              <Pill color={tray.anestro?.riesgo ? C.red : C.green}>⏱ Anestro {tray.anestro?.dias}d</Pill>
+              <Pill color={C.textDim}>📉 Caída lact. −{tray.caidaLact} CC</Pill>
+              <Pill color={C.blue}>🍼 {tray.mesesLact}m lactación</Pill>
+            </div>
+          </div>
+
+          {/* Cards individuales con contexto */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+            <MetricCard label="CC AL PARTO"
+              value={tray.ccParto}
+              color={smf(parseFloat(tray.ccParto),4.5,5.0)}
+              sub={parseFloat(tray.ccParto)<4.5?"⚠ Riesgo anestro prolongado":parseFloat(tray.ccParto)>=5.0?"✓ Óptimo":"Aceptable"} />
+            <MetricCard label="CC MÍN. LACTACIÓN"
+              value={tray.ccMinLact}
+              color={smf(parseFloat(tray.ccMinLact),3.5,4.0)}
+              sub={`Caída: −${tray.caidaLact} unidades CC`} />
+            <MetricCard label="CC AL SERVICIO"
+              value={tray.ccServ}
+              color={smf(parseFloat(tray.ccServ),4.5,5.0)}
+              sub={parseFloat(tray.ccServ)<4.5?"→ Preñez <35%":parseFloat(tray.ccServ)>=5.0?"→ Preñez ~55%":"→ Preñez 35–55%"} />
+            <MetricCard label="PREÑEZ ESTIMADA"
+              value={tray.pr+"%"}
+              color={smf(tray.pr,35,55)}
+              sub={`Anestro posparto: ${tray.anestro?.dias}d`} />
+          </div>
+
+          {/* Alerta anestro */}
+          <Alerta tipo={tray.anestro?.riesgo?"error":"ok"}>
+            Anestro posparto: <strong>{tray.anestro?.dias} días</strong> — {tray.anestro?.riesgo
+              ? "⚠️ RIESGO: puede no ciclar durante el servicio → revisar CC al parto y destete"
+              : "✅ OK — debería ciclar dentro del período de servicio"}
+          </Alerta>
+
+          {/* Por grupos si hay distribución */}
+          {dist?.grupos?.length > 1 && (
+            <div style={{ marginTop:10 }}>
+              <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:6 }}>POR GRUPO DE CC</div>
+              {dist.grupos.map((g, i) => (
+                <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", borderRadius:8, marginBottom:5,
+                  background:g.pr<35?"rgba(224,85,48,.06)":g.pr<55?"rgba(232,160,48,.06)":"rgba(126,200,80,.06)",
+                  border:`1px solid ${g.pr<35?"rgba(224,85,48,.20)":g.pr<55?"rgba(232,160,48,.20)":"rgba(126,200,80,.20)"}` }}>
+                  <span style={{ fontFamily:C.font, fontSize:10, color:C.textDim }}>
+                    CC{g.ccHoy} ({g.pct}%) → parto {g.ccParto} → serv {g.ccServ}
+                  </span>
+                  <span style={{ display:"flex", gap:6 }}>
+                    <Pill color={smf(g.pr,35,55)}>{g.pr}%</Pill>
+                    <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{g.recDestete}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
-      {tray?.anestro && (
-        <div style={{ marginTop:10 }}>
-          <Alerta tipo={tray.anestro.riesgo?"error":"ok"}>
-            Anestro posparto: <strong>{tray.anestro.dias} días</strong> — {tray.anestro.riesgo ? "⚠️ RIESGO: puede no ovular durante el servicio" : "✅ OK dentro del período de servicio"}
-          </Alerta>
-        </div>
+
+      {ccPondVal > 0 && !tray && (
+        <Alerta tipo="info" style={{ marginTop:10 }}>
+          Ingresá fechas de servicio (Paso Rodeo) para ver la proyección completa de CC.
+        </Alerta>
       )}
     </div>
   );
@@ -2769,14 +2933,23 @@ export default function AgroMindPro() {
             <MetricCard label="PV POND. MAYO (kg)"  value={tcSave.pvMayoPond} color={C.amber} sub="Entrada 1°inv" />
           </div>
           {tcSave.alertaHiper && <Alerta tipo="warn" style={{ marginTop:10 }}>Hiperprecoz {">"} 30% — suplementación proteica inmediata post-destete.</Alerta>}
+          {/* Info GDP */}
+          <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}18` }}>
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:2 }}>BASE DE CÁLCULO</div>
+            <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim }}>
+              Nacimiento 35 kg · Al pie: 700 g/d · Post-destete pastizal: 400 g/d hasta mayo
+            </div>
+          </div>
           {tcSave.detalle?.map((d, i) => d.pct > 0 ? (
-            <div key={i} style={{ marginTop:6, display:"flex", justifyContent:"space-between", fontFamily:C.font, fontSize:11, borderTop:`1px solid ${C.border}`, paddingTop:6 }}>
-              <span style={{ color:C.textDim }}>{d.label} ({Math.round(d.pct*100)}%)</span>
-              <span>
-                <span style={{ color:C.amber }}>{d.pvDest}kg</span>
-                <span style={{ color:C.textFaint }}> → mayo </span>
-                <span style={{ color:C.green }}>{d.pvMayo}kg</span>
-              </span>
+            <div key={i} style={{ marginTop:6, borderTop:`1px solid ${C.border}`, paddingTop:6 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontFamily:C.font, fontSize:11 }}>
+                <span style={{ color:C.textDim }}>{d.label} ({Math.round(d.pct*100)}%)</span>
+                <span style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <span style={{ color:C.amber, fontSize:10 }}>dest: {d.pvDest}kg</span>
+                  <span style={{ color:C.textFaint, fontSize:9 }}>→</span>
+                  <span style={{ color:C.green, fontWeight:700 }}>mayo: {d.pvMayo}kg</span>
+                </span>
+              </div>
             </div>
           ) : null)}
         </div>
