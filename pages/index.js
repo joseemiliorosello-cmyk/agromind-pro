@@ -2512,11 +2512,9 @@ export default function AgroMindPro() {
     const csvContent = filas.map(fila =>
       fila.map(cel => {
         const s = String(cel ?? "").replace(/"/g,'""');
-        return s.includes(",") || s.includes('"') || s.includes("
-") ? `"${s}"` : s;
+        return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
       }).join(",")
-    ).join("
-");
+    ).join("\n");
 
     // BOM para Excel en español
     const blob = new Blob(["﻿" + csvContent], { type:"text/csv;charset=utf-8;" });
