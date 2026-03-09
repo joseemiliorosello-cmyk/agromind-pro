@@ -389,7 +389,7 @@ function calcVaq1(pvEntrada, pvAdulta, ndvi, edadMayo, tipoDestete) {
   const gdpReal = Math.round(gdpBase + (protKg/0.3)*70 + (energKg/0.5)*60);
   const pvSal   = Math.round(pv + gdpReal * diasInv / 1000);
   const pvAbr2Inv = Math.round(pvSal + gdpReal * 60 / 1000); // entrada 2°inv
-  const freq    = ndviN < 0.35 ? "Diario" : "3×/semana";
+  const freq    = "Diario"; // Suplementación proteica: siempre diaria para máxima eficiencia ruminal
   const esc     = gdpFaltante > 200 ? "C" : gdpFaltante > 100 ? "B" : "A";
   const deficit = pvSal < objetivo;
   const nota    = tipoDestete === "hiper"
@@ -402,33 +402,50 @@ function calcVaq1(pvEntrada, pvAdulta, ndvi, edadMayo, tipoDestete) {
 }
 
 // ─── VAQUILLONA 2° INVIERNO ───────────────────────────────────────
-// Objetivo: 75% PV adulta al entore (noviembre, ~180d desde mayo)
-function calcVaq2(pvEntrada, pvAdulta, ndvi) {
-  const pv  = parseFloat(pvEntrada) || 0;
-  const pva = parseFloat(pvAdulta)  || 320;
-  if (!pv) return { _aviso:"Ingresá el PV de entrada (se calcula automáticamente desde Vaq1)." };
+// PV entrada 2°inv = PV salida Vaq1 (agosto) + GDP primavera-verano
+// agosto → mayo siguiente = ~270d con GDP promedio 300g/d (campo)
+// Objetivo: 75% PV adulta al entore (noviembre, ~180d desde mayo 2°inv)
+// NRC 2000; INTA Rafaela
+function calcPvEntradaVaq2(pvSalidaVaq1) {
+  // agosto → mayo próximo = ~270 días
+  const GDP_PRIMVERA = 300; // g/d promedio campo libre (gramíneas C4)
+  const diasPrimVer  = 270;
+  return Math.round((parseFloat(pvSalidaVaq1) || 0) + GDP_PRIMVERA * diasPrimVer / 1000);
+}
+
+function calcVaq2(pvEntradaVaq1Sal, pvAdulta, ndvi) {
+  // pvEntradaVaq1Sal = PV de salida del 1° invierno (agosto)
+  // Si se pasa directo el PV de mayo del 2°inv, se usa ese
+  const pvSal1 = parseFloat(pvEntradaVaq1Sal) || 0;
+  const pva    = parseFloat(pvAdulta)  || 320;
+  if (!pvSal1) return { _aviso:"PV se calcula automáticamente desde la salida del 1° invierno." };
+
+  // Calcular PV entrada al 2° invierno (mayo siguiente)
+  const pvMayo2Inv = calcPvEntradaVaq2(pvSal1);
 
   const pvMinEntore     = Math.round(pva * 0.75);
-  const diasHastaEntore = 180;
+  const diasHastaEntore = 180; // mayo → noviembre
   const ndviN     = parseFloat(ndvi) || 0.45;
-  const gdpPasto  = ndviN > 0.50 ? 450 : ndviN > 0.35 ? 350 : 250;
-  const pvEntore  = Math.round(pv + gdpPasto * diasHastaEntore / 1000);
+  // GDP invierno sobre pasturas: menor que primavera-verano
+  const gdpPasto  = ndviN > 0.50 ? 400 : ndviN > 0.35 ? 300 : 200;
+  const pvEntore  = Math.round(pvMayo2Inv + gdpPasto * diasHastaEntore / 1000);
   const llegas    = pvEntore >= pvMinEntore;
 
-  if (llegas) return { esc:"—", pvEntore, pvMinEntore, gdpReal:gdpPasto, llegas };
+  if (llegas) return { esc:"—", pvMayo2Inv, pvEntore, pvMinEntore, gdpReal:gdpPasto, llegas };
 
-  const gdpNec  = (pvMinEntore - pv) / diasHastaEntore * 1000;
+  const gdpNec  = (pvMinEntore - pvMayo2Inv) / diasHastaEntore * 1000;
   const gdpFalt = gdpNec - gdpPasto;
   const protKg  = gdpFalt <= 80 ? 0.3 : gdpFalt <= 150 ? 0.5 : 0.8;
   const gdpReal = Math.round(gdpPasto + (protKg/0.3)*70);
-  const pvEntoreConSupl = Math.round(pv + gdpReal * diasHastaEntore / 1000);
+  const pvEntoreConSupl = Math.round(pvMayo2Inv + gdpReal * diasHastaEntore / 1000);
 
   return {
-    esc:    gdpFalt > 150 ? "C" : gdpFalt > 80 ? "B" : "A",
-    pvEntore: pvEntoreConSupl,
+    esc:       gdpFalt > 150 ? "C" : gdpFalt > 80 ? "B" : "A",
+    pvMayo2Inv,
+    pvEntore:  pvEntoreConSupl,
     pvMinEntore,
     gdpReal,
-    llegas: pvEntoreConSupl >= pvMinEntore,
+    llegas:    pvEntoreConSupl >= pvMinEntore,
     protKg,
   };
 }
@@ -507,10 +524,15 @@ const TIPOS_SAL = {
 };
 
 function calcConsumoAgua(pvVaca, tempC, lactando) {
+  // Winchester & Morris 1956 / NRC 2000 / Beede 1992
+  // Base: ~0.066 L/kg PV/día a 25°C; ajuste exponencial por temperatura
+  // Ajuste por categoría: lactando +50–60%, gestación tardía +20%
   const pv   = parseFloat(pvVaca) || 320;
   const t    = parseFloat(tempC)  || 25;
-  const base = 0.038 * pv * Math.pow(t / 20, 0.8);
-  return Math.round(base * (lactando ? 1.4 : 1.0));
+  // Consumo base a temperatura dada: aumenta marcadamente >25°C
+  const base = pv * 0.066 * Math.pow(Math.max(10, t) / 20, 1.1);
+  const mult = lactando ? 1.55 : 1.0; // lactación eleva consumo 50–60% (NRC 2000)
+  return Math.round(base * mult);
 }
 
 function evaluarAgua(tds, tipoSal, pvVaca, tempC, lactando, enso) {
@@ -521,11 +543,16 @@ function evaluarAgua(tds, tipoSal, pvVaca, tempC, lactando, enso) {
   const tdsEfectivo = tdsN * ts.factor;
   const catEfect    = AGUA_CATEGORIAS.find(c => tdsEfectivo >= c.min && tdsEfectivo < c.max) || AGUA_CATEGORIAS[AGUA_CATEGORIAS.length-1];
 
+  // Reducción DMI (consumo de MS total: pasto + suplemento) y consumo de agua
+  // López et al. 2021, JAS 99(8):skab215; Beede 1992
   let pctReducDMI = 0, pctReducWI = 0;
   if (tdsN > 3000) {
-    pctReducDMI = Math.min(25, ((tdsN-3000)/1000) * 2.5 * ts.factor);
-    pctReducWI  = Math.min(30, ((tdsN-3000)/1000) * 3.0 * ts.factor);
+    pctReducDMI = Math.min(30, ((tdsN-3000)/1000) * 2.5 * ts.factor);
+    pctReducWI  = Math.min(40, ((tdsN-3000)/1000) * 3.5 * ts.factor);
   }
+  // La reducción de DMI se refleja directamente en consumo de pasto:
+  // cuando el animal toma menos agua, reduce ingesta voluntaria de MS
+  const pctReducPasto = pctReducDMI; // equivalente — 1:1 (López et al. 2021)
   const consumoEsperado = calcConsumoAgua(pvVaca, tempC, lactando);
   const alertaEnso = enso === "nina"
     ? "⚠️ La Niña: mayor concentración de sales esperada en aguadas superficiales. Revisar TDS periódicamente."
@@ -533,9 +560,9 @@ function evaluarAgua(tds, tipoSal, pvVaca, tempC, lactando, enso) {
 
   const warnings = [];
   if (cat.riesgo >= 3) {
-    warnings.push({ nivel:"rojo",  msg:`TDS ${tdsN} mg/L (${cat.label}): reducción estimada DMI ${pctReducDMI.toFixed(0)}%, consumo agua −${pctReducWI.toFixed(0)}%. (López et al. 2021)` });
+    warnings.push({ nivel:"rojo",  msg:`TDS ${tdsN} mg/L (${cat.label}): ↓DMI −${pctReducDMI.toFixed(0)}% · ↓Pasto consumido −${pctReducPasto.toFixed(0)}% · ↓Agua −${pctReducWI.toFixed(0)}%. (López et al. 2021)` });
   } else if (cat.riesgo === 2) {
-    warnings.push({ nivel:"ambar", msg:`TDS ${tdsN} mg/L (${cat.label}): monitoreo recomendado en lactación y preparto. Impacto DMI ≤5%.` });
+    warnings.push({ nivel:"ambar", msg:`TDS ${tdsN} mg/L (${cat.label}): reducción DMI y pasto consumido ≤5%. Monitorear en lactación y preparto.` });
   } else {
     warnings.push({ nivel:"verde", msg:`TDS ${tdsN} mg/L (${cat.label}): calidad adecuada para todas las categorías.` });
   }
@@ -544,28 +571,33 @@ function evaluarAgua(tds, tipoSal, pvVaca, tempC, lactando, enso) {
   if (parseFloat(tempC) > 32) {
     warnings.push({ nivel:"ambar", msg:`Temperatura ${tempC}°C: consumo estimado ${consumoEsperado}L/vaca/día. Asegurar caudal y acceso (mín. 5 cm lineal/vaca).` });
   }
-  return { cat, catEfect, tdsN, tdsEfectivo, pctReducDMI, pctReducWI, consumoEsperado, warnings, tipoSal, ts };
+  return { cat, catEfect, tdsN, tdsEfectivo, pctReducDMI, pctReducWI, pctReducPasto, consumoEsperado, warnings, tipoSal, ts };
 }
 
 // ═══════════════════════════════════════════════════════
 // MÓDULO SANIDAD
 // ═══════════════════════════════════════════════════════
 const ENFERMEDADES_REPROD = [
-  { nombre:"IBR/DVB",                          impacto:"Abortos 5–30%, anovulación, repetición de celos. Reducción preñez hasta −15 pp.", alerta:"alta"  },
-  { nombre:"Leptospirosis",                    impacto:"Abortos tardíos, mortalidad neonatal, agalaxia. Frecuente en inundaciones NEA.",   alerta:"alta"  },
-  { nombre:"Brucelosis",                       impacto:"Aborto masivo al 7° mes. Zoonosis. Control oficial obligatorio (Argentina).",      alerta:"alta"  },
-  { nombre:"Tricomoniasis/Campylobacteriosis", impacto:"Repetición de celos, abortos tempranos, infertilidad. Toro = vector principal.",   alerta:"media" },
-  { nombre:"Neospora caninum",                 impacto:"Abortos 5–20%, mortalidad neonatal. Perros como huéspedes definitivos.",           alerta:"media" },
+  { nombre:"Aftosa (FMD)",                     impacto:"Caída producción láctea, cojeras, anorexia, reducción condición corporal. Erradicación obligatoria (SENASA). Puede causar abortos por fiebre.",           alerta:"alta"  },
+  { nombre:"Brucelosis",                        impacto:"Aborto masivo al 7° mes. Zoonosis. Control oficial obligatorio — vacunación obligatoria en terneras 3–8 meses (Argentina).",                             alerta:"alta"  },
+  { nombre:"IBR/DVB",                           impacto:"Abortos 5–30%, anovulación, repetición de celos. Reducción preñez hasta −15 pp. Vacunación recomendada pre-servicio.",                                   alerta:"alta"  },
+  { nombre:"Leptospirosis",                     impacto:"Abortos tardíos, mortalidad neonatal, agalaxia. Frecuente en inundaciones NEA/Pantanal. Zoonosis.",                                                       alerta:"alta"  },
+  { nombre:"Tricomoniasis/Campylobacteriosis",  impacto:"Repetición de celos, abortos tempranos, infertilidad persistente. El toro es el vector principal — ESAN obligatorio.",                                    alerta:"media" },
+  { nombre:"Neospora caninum",                  impacto:"Abortos 5–20%, mortalidad neonatal. Perros como huéspedes definitivos. Sin vacuna disponible — control canino.",                                           alerta:"media" },
 ];
 
-function evaluarSanidad(vacunas, toros, historiaAbortos, programaSanit) {
+function evaluarSanidad(vacunas, brucelosis, aftosa, toros, historiaAbortos, programaSanit) {
   const alerts = [];
   if (!vacunas || vacunas === "no")
-    alerts.push({ nivel:"rojo",  msg:"⚠️ Sin vacunación IBR/DVB declarada: riesgo de reducción de preñez hasta −15 pp. Consultar médico veterinario." });
+    alerts.push({ nivel:"rojo",  msg:"⚠️ Sin vacunación IBR/DVB: riesgo de reducción de preñez hasta −15 pp. Consultar médico veterinario." });
+  if (brucelosis === "no")
+    alerts.push({ nivel:"rojo",  msg:"⚠️ Sin vacunación Brucelosis: obligatoria en terneras 3–8 meses (SENASA RES.114/21). Riesgo de aborto masivo al 7° mes. Zoonosis." });
+  if (aftosa === "no")
+    alerts.push({ nivel:"rojo",  msg:"⚠️ Sin vacunación Aftosa: obligatoria en Argentina — Plan Nacional SENASA. Dos dosis anuales mínimo. Riesgo de brote y restricción de mercado." });
   if (toros === "sin_control")
-    alerts.push({ nivel:"rojo",  msg:"Toros sin evaluación reproductiva (ESAN): tricomoniasis/campylobacteriosis no detectadas. El toro en CC 4.0 es tan crítico como vaca en CC 3.5." });
+    alerts.push({ nivel:"rojo",  msg:"Toros sin evaluación ESAN: tricomoniasis/campylobacteriosis no detectadas. El toro en CC 4.0 es tan crítico como la vaca en CC 3.5." });
   if (historiaAbortos === "si")
-    alerts.push({ nivel:"ambar", msg:"Historia de abortos: diagnóstico diferencial IBR/DVB/Leptospira/Neospora prioritario antes del próximo servicio." });
+    alerts.push({ nivel:"ambar", msg:"Historia de abortos: diagnóstico diferencial IBR/DVB/Leptospira/Neospora/Brucelosis prioritario antes del próximo servicio." });
   if (programaSanit === "no" || !programaSanit)
     alerts.push({ nivel:"ambar", msg:"Sin programa sanitario estructurado. La sanidad es el techo del sistema." });
   return { alerts };
@@ -1066,7 +1098,8 @@ function PanelAgua({ form, set, sat }) {
             {evalAgua.pctReducDMI > 0 && (
               <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:"wrap" }}>
                 <Pill color={C.red}>DMI −{evalAgua.pctReducDMI.toFixed(0)}%</Pill>
-                <Pill color={C.amber}>Consumo agua −{evalAgua.pctReducWI.toFixed(0)}%</Pill>
+                <Pill color={C.red}>Pasto consumido −{evalAgua.pctReducPasto.toFixed(0)}%</Pill>
+                <Pill color={C.amber}>Agua ingerida −{evalAgua.pctReducWI.toFixed(0)}%</Pill>
                 {evalAgua.ts.factor > 1.1 && <Pill color={C.red}>SO4: ×{evalAgua.ts.factor}</Pill>}
               </div>
             )}
@@ -1085,16 +1118,22 @@ function PanelAgua({ form, set, sat }) {
           La sanidad es el techo del sistema. Sin ella, cualquier mejora nutricional tiene rendimiento marginal.
         </div>
 
-        <Toggle label="¿Vacunación IBR/DVB al día?"       value={form.sanVacunas  === "si"}           onChange={v => set("sanVacunas",   v ? "si" : "no")} />
+        <Toggle label="💉 ¿Vacunación Aftosa al día?"        value={form.sanAftosa     === "si"}           onChange={v => set("sanAftosa",     v ? "si" : "no")} />
+        {form.sanAftosa === "no" && <Alerta tipo="error">Aftosa sin vacunar — obligatoria (SENASA). Dos dosis anuales mínimo. Riesgo de brote y clausura comercial.</Alerta>}
+
+        <Toggle label="💉 ¿Vacunación Brucelosis al día?"    value={form.sanBrucelosis === "si"}           onChange={v => set("sanBrucelosis", v ? "si" : "no")} />
+        {form.sanBrucelosis === "no" && <Alerta tipo="error">Brucelosis sin vacunar — obligatoria en terneras 3–8 meses (SENASA RES.114/21). Zoonosis. Riesgo de aborto masivo al 7° mes.</Alerta>}
+
+        <Toggle label="💉 ¿Vacunación IBR/DVB al día?"       value={form.sanVacunas  === "si"}           onChange={v => set("sanVacunas",   v ? "si" : "no")} />
         {form.sanVacunas === "no" && <Alerta tipo="error">IBR/DVB sin vacunar: riesgo de reducción de preñez hasta −15 pp.</Alerta>}
 
-        <Toggle label="¿Toros con evaluación ESAN?"       value={form.sanToros    === "con_control"}   onChange={v => set("sanToros",     v ? "con_control" : "sin_control")} />
+        <Toggle label="🐂 ¿Toros con evaluación ESAN?"       value={form.sanToros    === "con_control"}   onChange={v => set("sanToros",     v ? "con_control" : "sin_control")} />
         {form.sanToros === "sin_control" && <Alerta tipo="error">Toros sin ESAN: tricomoniasis/campylobacteriosis no detectadas.</Alerta>}
 
-        <Toggle label="¿Historia de abortos en el rodeo?" value={form.sanAbortos  === "si"}            onChange={v => set("sanAbortos",   v ? "si" : "no")} />
-        {form.sanAbortos === "si" && <Alerta tipo="warn">Historia de abortos: diagnóstico diferencial prioritario antes del próximo servicio.</Alerta>}
+        <Toggle label="📋 ¿Historia de abortos en el rodeo?" value={form.sanAbortos  === "si"}            onChange={v => set("sanAbortos",   v ? "si" : "no")} />
+        {form.sanAbortos === "si" && <Alerta tipo="warn">Historia de abortos: diagnóstico diferencial IBR/DVB/Leptospira/Brucelosis/Neospora prioritario.</Alerta>}
 
-        <Toggle label="¿Programa sanitario estructurado?" value={form.sanPrograma === "si"}            onChange={v => set("sanPrograma",  v ? "si" : "no")} />
+        <Toggle label="📋 ¿Programa sanitario estructurado?" value={form.sanPrograma === "si"}            onChange={v => set("sanPrograma",  v ? "si" : "no")} />
 
         {/* Tabla de enfermedades */}
         <div style={{ background:C.card2, borderRadius:12, padding:12, border:`1px solid ${C.border}`, marginTop:12 }}>
@@ -1112,10 +1151,11 @@ function PanelAgua({ form, set, sat }) {
 }
 
 // ─── GRÁFICO CC ESCENARIOS ────────────────────────────────────────
-function GraficoCCEscenarios({ escenarios, cadena, mesesLact }) {
+function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
   const mesP    = cadena?.partoTemp ? cadena.partoTemp.getMonth() : 10;
   const mesServ = (mesP - 9 + 12) % 12;
 
+  // ── Panel 1: Trayectoria CC ──
   const dataMeses = MESES_C.map((mes, mi) => {
     const obj = { mes };
     escenarios.forEach((esc, ei) => {
@@ -1128,8 +1168,6 @@ function GraficoCCEscenarios({ escenarios, cadena, mesesLact }) {
       else                    cc = ccMinLact + (ccServ   - ccMinLact) * ((mi - mesDestN) / Math.max(1, 12 - mesDestN));
       obj[ESC_NAMES[ei]] = +Math.max(1, Math.min(9, cc)).toFixed(2);
     });
-    obj.refCC5  = 5.0;
-    obj.refCC45 = 4.5;
     return obj;
   });
 
@@ -1143,29 +1181,108 @@ function GraficoCCEscenarios({ escenarios, cadena, mesesLact }) {
     return null;
   };
 
+  // ── Panel 2: Requerimientos vs Aportes (Mcal/vaca/día) ──
+  // Usa escenario base (escenarios[0]) o el primero activo
+  const escBase = escenarios[0];
+  const hist        = form ? getClima(form.provincia || "Corrientes") : [];
+  const mc          = new Date().getMonth();
+  const enso        = form?.enso || "neutro";
+  const pT          = parseFloat(form?.destTrad)  || 0;
+  const pA          = parseFloat(form?.destAntic) || 0;
+  const pH          = parseFloat(form?.destHiper) || 0;
+  const totD        = pT + pA + pH || 100;
+  const mesesLactGraf = Math.max(1.5, (pT*(180/30) + pA*(90/30) + pH*(50/30)) / totD);
+  const pvVaca      = parseFloat(form?.pvVacaAdulta) || 320;
+  const nTotal      = Math.max(1, parseInt(form?.vacasN) || 0);
+  const ndviN       = parseFloat(sat?.ndvi || 0.45);
+  const mcalSuplDia = mcalSuplemento(escBase?.supl2, parseFloat(escBase?.dosis2) || 0);
+  const tray        = escBase?.tray;
+
+  const dataBal = hist.length > 0 ? MESES_C.map((mes, i) => {
+    const h      = i === mc && sat ? { t:parseFloat(sat.temp)||hist[i].t, p:parseFloat(sat.p30)||hist[i].p } : hist[i];
+    const ndviI  = i === mc ? ndviN : 0.45;
+    const fenolMs = i === mc ? (form?.fenologia || "menor_10")
+      : h.t < 15 ? "mayor_50" : h.t < 20 ? "25_50" : h.t < 25 ? "10_25" : "menor_10";
+    const sup    = parseFloat(form?.supHa)    || 100;
+    const pctM   = parseFloat(form?.pctMonte) || 0;
+    const pctN   = parseFloat(form?.pctNGan)  || 0;
+    const ofTotal = calcOfPasto(form?.vegetacion || "Pastizal natural NEA/Chaco", ndviI, h.t, h.p, enso, fenolMs) * sup * Math.max(0, 100-pctM-pctN) / 100;
+    const ofVaca  = nTotal > 0 ? ofTotal / nTotal : calcOfPasto(form?.vegetacion || "Pastizal natural NEA/Chaco", ndviI, h.t, h.p, enso, fenolMs) * 0.024 * pvVaca;
+    const enLact  = i >= mesP && i < mesP + Math.ceil(mesesLactGraf);
+    const eRep    = enLact ? "Lactación con ternero al pie" : i === ((mesP-1+12)%12) ? "Preparto (último mes)" : "Gestación media (5–7 meses)";
+    const demVaca = reqEM(pvVaca, eRep, form?.biotipo) || 13;
+    const ccMcal  = enLact && tray ? Math.min(5, parseFloat(tray.caidaLact||0) * 5.6 / mesesLactGraf) : 0;
+    const suplMcal = enLact ? mcalSuplDia : 0;
+    const deficit  = Math.max(0, demVaca - (ofVaca + ccMcal + suplMcal));
+    return {
+      mes,
+      pasto:   +Math.min(ofVaca, demVaca).toFixed(1),   // aporte pasto (capped)
+      ccComp:  +ccMcal.toFixed(1),
+      supl:    +suplMcal.toFixed(1),
+      demanda: +demVaca.toFixed(1),
+      deficit: +deficit.toFixed(1),
+    };
+  }) : [];
+
+  const hasBal = dataBal.length > 0;
+
   return (
     <div>
-      <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:6, letterSpacing:1 }}>
-        TRAYECTORIA CC — punto ● = inicio servicio
+      {/* ── Trayectoria CC ── */}
+      <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:4, letterSpacing:1 }}>
+        TRAYECTORIA CC ANUAL — ● = inicio servicio
       </div>
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={170}>
         <LineChart data={dataMeses} margin={{ top:4, right:4, left:-28, bottom:0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(126,200,80,.06)" />
           <XAxis dataKey="mes" tick={{ fill:T.textDim, fontSize:9, fontFamily:T.font }} />
-          <YAxis domain={[1,8]} ticks={[2,3,4,5,6,7]} tick={{ fill:T.textDim, fontSize:9, fontFamily:T.font }} />
-          <Tooltip contentStyle={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, fontFamily:T.font, fontSize:11 }} formatter={(v, n) => [`CC ${v}`, n]} />
-          <ReferenceLine y={5.0} stroke="rgba(126,200,80,.25)" strokeDasharray="4 2" />
-          <ReferenceLine y={4.5} stroke="rgba(224,85,48,.25)"  strokeDasharray="4 2" />
+          <YAxis domain={[2,8]} ticks={[2,3,4,5,6,7]} tick={{ fill:T.textDim, fontSize:9, fontFamily:T.font }} />
+          <Tooltip contentStyle={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, fontFamily:T.font, fontSize:11 }}
+            formatter={(v, n) => [`CC ${parseFloat(v).toFixed(1)}`, n]} />
+          <ReferenceLine y={5.0} stroke="rgba(126,200,80,.30)" strokeDasharray="4 2"
+            label={{ value:"CC 5.0 → 55% preñez", fill:"rgba(126,200,80,.55)", fontSize:8, fontFamily:T.font, position:"insideTopRight" }} />
+          <ReferenceLine y={4.5} stroke="rgba(224,85,48,.30)"  strokeDasharray="4 2"
+            label={{ value:"CC 4.5 → 35%",        fill:"rgba(224,85,48,.55)",  fontSize:8, fontFamily:T.font, position:"insideBottomRight" }} />
           {escenarios.map((esc, ei) => esc.tray && (
             <Line key={ei} type="monotone" dataKey={ESC_NAMES[ei]} stroke={ESC_COLORS[ei]}
-              strokeWidth={2.5} dot={<CustomDot />} activeDot={{ r:4, fill:ESC_COLORS[ei] }} />
+              strokeWidth={2.5} dot={<CustomDot />} activeDot={{ r:4, fill:ESC_COLORS[ei] }}
+              name={ESC_NAMES[ei]} />
           ))}
         </LineChart>
       </ResponsiveContainer>
-      <div style={{ display:"flex", gap:6, justifyContent:"center", marginTop:6, flexWrap:"wrap" }}>
-        <span style={{ fontFamily:T.font, fontSize:8, color:"rgba(126,200,80,.4)" }}>── CC 5.0 (55% preñez)</span>
-        <span style={{ fontFamily:T.font, fontSize:8, color:"rgba(224,85,48,.4)"  }}>── CC 4.5 (35% preñez)</span>
-      </div>
+
+      {/* ── Requerimientos vs Aportes ── */}
+      {hasBal && (
+        <div style={{ marginTop:14 }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:4, letterSpacing:1 }}>
+            REQUERIMIENTOS vs APORTES — Mcal/vaca/día (escenario base)
+          </div>
+          <ResponsiveContainer width="100%" height={170}>
+            <AreaChart data={dataBal} margin={{ top:4, right:4, left:-28, bottom:0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(126,200,80,.06)" />
+              <XAxis dataKey="mes" tick={{ fill:T.textDim, fontSize:9, fontFamily:T.font }} />
+              <YAxis tick={{ fill:T.textDim, fontSize:9, fontFamily:T.font }} domain={[0,"auto"]} />
+              <Tooltip
+                contentStyle={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, fontFamily:T.font, fontSize:11 }}
+                formatter={(v, n) => [v.toFixed(1)+" Mcal", n]}
+              />
+              {/* Aportes apilados */}
+              <Area type="monotone" dataKey="pasto"   name="Pasto (oferta)"   stackId="of" fill="rgba(126,200,80,.22)" stroke={T.green} strokeWidth={1.5} dot={false} />
+              <Area type="monotone" dataKey="ccComp"  name="CC movilizada"    stackId="of" fill="rgba(232,160,48,.22)" stroke={T.amber} strokeWidth={1}   dot={false} strokeDasharray="4 2" />
+              <Area type="monotone" dataKey="supl"    name="Suplemento"       stackId="of" fill="rgba(74,159,212,.22)" stroke={T.blue}  strokeWidth={1.5} dot={false} />
+              {/* Requerimiento como línea roja */}
+              <Line  type="monotone" dataKey="demanda" name="Requerimiento"   stroke={T.red}   strokeWidth={2} strokeDasharray="6 3" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+          {/* Leyenda compacta */}
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:6, justifyContent:"center" }}>
+            <span style={{ fontFamily:T.font, fontSize:8, color:T.green }}>▓ Pasto</span>
+            <span style={{ fontFamily:T.font, fontSize:8, color:T.amber }}>▓ CC movilizada</span>
+            <span style={{ fontFamily:T.font, fontSize:8, color:T.blue  }}>▓ Suplemento</span>
+            <span style={{ fontFamily:T.font, fontSize:8, color:T.red   }}>── Requerimiento</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1283,7 +1400,7 @@ function TarjetaEscenario({ idx, esc, color, activo, onToggle }) {
 }
 
 // ─── SIMULADOR ESCENARIOS ─────────────────────────────────────────
-function SimuladorEscenarios({ form, cadena, baseParams }) {
+function SimuladorEscenarios({ form, cadena, baseParams, sat }) {
   const [escActivo, setEscActivo] = useState([true, true, false]);
   const fenol = form.fenologia || "menor_10";
 
@@ -1327,6 +1444,7 @@ function SimuladorEscenarios({ form, cadena, baseParams }) {
         <GraficoCCEscenarios
           escenarios={escenarios.filter((_, i) => escActivo[i])}
           cadena={cadena} mesesLact={mesesLact}
+          form={form} sat={sat}
         />
       </div>
 
@@ -1479,7 +1597,7 @@ const PASOS = [
 // ─── FORM DEFAULT ────────────────────────────────────────────────
 const FORM_DEF = {
   // Ubicación
-  nombreProductor: "", zona:"NEA", provincia:"Corrientes",
+  nombreProductor: "", zona:"NEA", provincia:"Corrientes", localidad:"",
   // Rodeo
   biotipo:"Brangus 3/8", primerParto:false,
   vacasN:"", torosN:"", pvVacaAdulta:"320",
@@ -1505,7 +1623,7 @@ const FORM_DEF = {
   // Agua
   aguaTDS:"", aguaTipoSal:"Mixta/Desconocida", aguaFuente:"",
   // Sanidad
-  sanVacunas:"si", sanToros:"con_control", sanAbortos:"no", sanPrograma:"si",
+  sanVacunas:"si", sanBrucelosis:"si", sanAftosa:"si", sanToros:"con_control", sanAbortos:"no", sanPrograma:"si",
   // Consulta
   consultaEspecifica:"",
 };
@@ -1520,7 +1638,7 @@ MODELO TÉCNICO v13 — INTEGRACIÓN COMPLETA:
 - BIOTIPO: modifica movilización CC, recuperación y umbral anestro (Short et al. 1990; Neel et al. 2007)
 - ANESTRO: modelado explícito — f(CC parto, CC mínima, biotipo, primípara)
 - SINCRONÍA RUMINAL: Urea + pasto >50% floración = riesgo real. Siempre advertir
-- SANIDAD: techo del sistema. Sin vacunación IBR/DVB y toros sin ESAN → −15 pp preñez.
+- SANIDAD: techo del sistema. Aftosa (obligatoria, 2 dosis/año SENASA) + Brucelosis (obligatoria terneras 3–8m) + IBR/DVB → sin estas vacunas: −15 pp preñez y riesgo aborto masivo. Toros sin ESAN → tricomoniasis silenciosa.
 - VAQUILLONA: GDP según destete origen (hiperprecoz = mayor compensatorio), edad mayo, umbral entore
 
 5 SECCIONES OBLIGATORIAS — emojis exactos:
@@ -1564,7 +1682,9 @@ export default function AgroMindPro() {
     [form.vacasN, form.prenez, form.pctDestete, form.destTrad, form.destAntic, form.destHiper, cadena]
   );
 
-  const pvEntradaVaq2 = form.vaq2PV || (tcSave?.pvMayoPond ? String(tcSave.pvMayoPond) : "") || "";
+  // Vaq2 recibe el PV de SALIDA del 1° invierno (agosto) para proyectar primavera-verano
+  const pvSalidaVaq1  = vaq1E?.pvSal ? String(vaq1E.pvSal) : "";
+  const pvEntradaVaq2 = form.vaq2PV || pvSalidaVaq1 || "";
 
   const vaq1E = useMemo(() =>
     calcVaq1(tcSave?.pvMayoPond || form.vaq1PV, form.pvVacaAdulta, ndviN, form.edadVaqMayo, form.tipoDesteteVaq),
@@ -1573,7 +1693,7 @@ export default function AgroMindPro() {
 
   const vaq2E = useMemo(() =>
     calcVaq2(pvEntradaVaq2 || form.vaq2PV, form.pvVacaAdulta, ndviN),
-    [pvEntradaVaq2, form.vaq2PV, form.pvVacaAdulta, ndviN]
+    [pvEntradaVaq2, form.vaq2PV, form.pvVacaAdulta, ndviN, vaq1E]
   );
 
   const evalAgua = useMemo(() =>
@@ -1582,8 +1702,8 @@ export default function AgroMindPro() {
   );
 
   const sanidad = useMemo(() =>
-    evaluarSanidad(form.sanVacunas, form.sanToros, form.sanAbortos, form.sanPrograma),
-    [form.sanVacunas, form.sanToros, form.sanAbortos, form.sanPrograma]
+    evaluarSanidad(form.sanVacunas, form.sanBrucelosis, form.sanAftosa, form.sanToros, form.sanAbortos, form.sanPrograma),
+    [form.sanVacunas, form.sanBrucelosis, form.sanAftosa, form.sanToros, form.sanAbortos, form.sanPrograma]
   );
 
   const baseParams = useMemo(() => ({
@@ -1633,7 +1753,7 @@ export default function AgroMindPro() {
     const hoy = new Date().toLocaleDateString("es-AR", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
     let t = `ANÁLISIS — ${hoy}\n`;
 
-    if (coords) t += `UBICACIÓN: ${coords.lat?.toFixed(4)}°S ${coords.lon?.toFixed(4)}°W · ${form.zona} · ${form.provincia}\n`;
+    if (coords) t += `UBICACIÓN: ${coords.lat?.toFixed(4)}°S ${coords.lon?.toFixed(4)}°W · ${form.zona} · ${form.provincia}${form.localidad ? ' · ' + form.localidad : ''}\n`;
     if (sat?.temp) t += `MET REAL: T${sat.temp}°C (Mx${sat.tMax}/Mn${sat.tMin}) · P7d:${sat.p7}mm P30d:${sat.p30}mm · Bal:${sat.deficit>0?"+":""}${sat.deficit}mm · NDVI:${sat.ndvi}(${sat.condForr})\n`;
 
     t += `ENSO: ${form.enso==="nino"?"El Niño +25%":form.enso==="nina"?"La Niña −25%":"Neutro"} · BIOTIPO: ${form.biotipo||"Brangus 3/8"}\n`;
@@ -1671,8 +1791,8 @@ export default function AgroMindPro() {
     }
 
     t += `\nSANIDAD:\n`;
-    t += `  IBR/DVB: ${form.sanVacunas==="si"?"✅":"⚠️ Sin vacunar"} · Toros ESAN: ${form.sanToros==="con_control"?"✅":"⚠️ Sin evaluación"}\n`;
-    t += `  Abortos: ${form.sanAbortos==="si"?"⚠️ Sí":"No"} · Programa sanitario: ${form.sanPrograma==="si"?"✅":"⚠️ No"}\n`;
+    t += `  Aftosa: ${form.sanAftosa==="si"?"✅":"⚠️ Sin vacunar"} · Brucelosis: ${form.sanBrucelosis==="si"?"✅":"⚠️ Sin vacunar"} · IBR/DVB: ${form.sanVacunas==="si"?"✅":"⚠️ Sin vacunar"}\n`;
+    t += `  Toros ESAN: ${form.sanToros==="con_control"?"✅":"⚠️ Sin evaluación"} · Abortos: ${form.sanAbortos==="si"?"⚠️ Sí":"No"} · Programa: ${form.sanPrograma==="si"?"✅":"⚠️ No"}\n`;
 
     if (tray) {
       t += `\nTRAYECTORIA CC:\n`;
@@ -1882,6 +2002,7 @@ export default function AgroMindPro() {
         ["neutro","Neutro"],["nino","El Niño (+25% oferta)"],["nina","La Niña (−25% oferta)"],
       ]} />
       <Input label="PRODUCTOR / ESTABLECIMIENTO" value={form.nombreProductor} onChange={v=>set("nombreProductor",v)} placeholder="Nombre del establecimiento" />
+      <Input label="LOCALIDAD / PARAJE" value={form.localidad} onChange={v=>set("localidad",v)} placeholder="Ej: Charata, Clorinda, Concepción…" sub="Para contexto geográfico en el informe" />
     </div>
   );
 
@@ -2039,19 +2160,30 @@ export default function AgroMindPro() {
             <Input label="CANTIDAD"    value={form.vaq2N}  onChange={v=>set("vaq2N",v)}  placeholder="30"  type="number" />
             <MetricCard label="PV ENTRADA (kg)" value={pvEntradaVaq2||"—"} color={C.green} sub="Auto desde Vaq1" />
           </div>
-          {vaq2E && !vaq2E._aviso && (vaq2E.esc === "—"
-            ? <Alerta tipo="ok">Sin suplementación — ya supera el peso mínimo de entore ({vaq2E.pvMinEntore}kg)</Alerta>
-            : (
-              <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:10, padding:12 }}>
-                <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:8 }}>ESC {vaq2E.esc} — HACIA ENTORE</div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-                  <MetricCard label="GDP"      value={vaq2E.gdpReal+"g/d"}    color={C.green} />
-                  <MetricCard label="PV ENTORE" value={vaq2E.pvEntore+"kg"}   color={vaq2E.llegas?C.green:C.red} />
-                  <MetricCard label="PV MÍN."  value={vaq2E.pvMinEntore+"kg"} color={C.textDim} />
+          {vaq2E && !vaq2E._aviso && (
+            <div>
+              {vaq2E.pvMayo2Inv > 0 && (
+                <div style={{ background:`${C.blue}08`, border:`1px solid ${C.blue}25`, borderRadius:10, padding:10, marginBottom:10 }}>
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, letterSpacing:1, marginBottom:3 }}>PV MAYO 2° INVIERNO (agosto + 270d × 300g/d)</div>
+                  <div style={{ fontFamily:C.font, fontSize:20, color:C.blue, fontWeight:700 }}>{vaq2E.pvMayo2Inv} kg</div>
+                  <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:2 }}>Entrada real al 2° invierno</div>
                 </div>
-                {!vaq2E.llegas && <Alerta tipo="error" style={{ marginTop:8 }}>⚠️ No alcanza el peso mínimo de entore — revisar suplementación urgente</Alerta>}
-              </div>
-            )
+              )}
+              {vaq2E.esc === "—"
+                ? <Alerta tipo="ok">Sin suplementación — llega al peso mínimo de entore ({vaq2E.pvMinEntore}kg)</Alerta>
+                : (
+                  <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:10, padding:12 }}>
+                    <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:8 }}>ESC {vaq2E.esc} — HACIA ENTORE · Supl. DIARIA</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+                      <MetricCard label="GDP"       value={vaq2E.gdpReal+"g/d"}    color={C.green} />
+                      <MetricCard label="PV ENTORE" value={vaq2E.pvEntore+"kg"}    color={vaq2E.llegas?C.green:C.red} />
+                      <MetricCard label="PV MÍN."   value={vaq2E.pvMinEntore+"kg"} color={C.textDim} />
+                    </div>
+                    {!vaq2E.llegas && <Alerta tipo="error" style={{ marginTop:8 }}>⚠️ No alcanza peso mínimo de entore — revisar suplementación urgente</Alerta>}
+                  </div>
+                )
+              }
+            </div>
           )}
         </div>
       </details>
@@ -2231,7 +2363,7 @@ export default function AgroMindPro() {
 
           {/* Tab: Simulador */}
           {tab === "simulador" && (
-            <SimuladorEscenarios form={form} cadena={cadena} baseParams={baseParams} />
+            <SimuladorEscenarios form={form} cadena={cadena} baseParams={baseParams} sat={sat} />
           )}
 
           {/* Tab: Balance */}
