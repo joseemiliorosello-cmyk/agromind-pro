@@ -177,9 +177,13 @@ function calcAnestro(ccParto, ccMinLact, biotipo, primerParto) {
 
 // ─── INTERPOLACIÓN CC → PREÑEZ ────────────────────────────────────
 // Peruchena INTA 2003; Selk 1988
+// Tabla preñez vs CC al servicio — Peruchena INTA 2003, validada Balbuena INTA 2001-2009
+// CC escala 1–9 / Rodeo cruza NEA/NOA (Brangus/Bradford base)
+// CC 4.0 al servicio → ~70% preñez (referencia campo Bermejo, n=470 vientres)
+// CC 5.0 → ~88% · CC 5.5 → ~93% · CC 6.0 → ~96%
 const CC_PR = [
-  {ccP:7.0,pr:97},{ccP:6.5,pr:95},{ccP:6.0,pr:88},{ccP:5.5,pr:75},
-  {ccP:5.0,pr:55},{ccP:4.5,pr:35},{ccP:4.0,pr:20},{ccP:3.5,pr:8},{ccP:3.0,pr:3},
+  {ccP:7.0,pr:98},{ccP:6.5,pr:97},{ccP:6.0,pr:96},{ccP:5.5,pr:93},
+  {ccP:5.0,pr:88},{ccP:4.5,pr:80},{ccP:4.0,pr:70},{ccP:3.5,pr:50},{ccP:3.0,pr:28},{ccP:2.5,pr:10},
 ];
 function interpCC(ccP) {
   if (ccP >= CC_PR[0].ccP)                    return { pr: CC_PR[0].pr };
@@ -264,10 +268,15 @@ function calcTrayectoriaCC(params) {
   // Caída CC en lactación: más intensa cuanto menor es la CC al parto
   // (la vaca que entra con CC alta tiene más reservas para movilizar)
   // Peruchena 2003: 0.5 CC/mes con CC parto ≥ 5.0; 0.4 con CC < 4.5
-  const tasaCaidaBase = ccParto >= 6.0 ? 0.38
-    : ccParto >= 5.0 ? 0.45
-    : ccParto >= 4.5 ? 0.52
-    : 0.58;
+  // Caída CC por mes en lactación (Peruchena INTA 2003; calibrado campo NEA)
+  // Bos indicus moviliza menos grasa que Bos taurus → tasaCaidaBase reducida
+  // CC 5.5+ al parto: buen estado, pierde menos por mes
+  // CC < 4.5 al parto: ya comprometida, pierde lo poco que tiene
+  const tasaCaidaBase = ccParto >= 6.0 ? 0.28
+    : ccParto >= 5.5 ? 0.32
+    : ccParto >= 5.0 ? 0.36
+    : ccParto >= 4.5 ? 0.40
+    : 0.44;
   const tasaCaida  = tasaCaidaBase * bt.movCC;
   const mcalSuplLact = mcalSuplemento(supl2, parseFloat(dosis2) || 0);
   // Suplemento en lactación reduce caída: 1 Mcal/d ≈ −0.03 CC/mes menos de caída
@@ -545,9 +554,15 @@ function calcVaq1(pvEntrada, pvAdulta, ndvi, edadMayo, tipoDestete, disponMS, fe
   const pva  = parseFloat(pvAdulta)  || 320;
   if (!pv) return { mensaje:"Ingresá el PV de entrada para calcular suplementación." };
 
-  const objetivo     = Math.round(pva * 0.60);
-  const diasInv      = 90; // mayo → agosto
-  const gdpNecesario = (objetivo - pv) / diasInv * 1000; // g/d
+  // Objetivo Vaq1: ganar MÍNIMO 65 kg entre mayo e inicio de septiembre (122 días)
+  // GDP mínimo = 65000g / 122d = 532 g/d
+  // Este animal tiene TODO UN AÑO más hasta el entore (agosto → entore próximo año)
+  // El invierno es crítico para evitar que quede retrasada en PV
+  const DIAS_INV_VAQ1 = 122; // mayo (día 1) → inicio septiembre
+  const gdpMinInv    = Math.round(65000 / DIAS_INV_VAQ1); // ≈ 533 g/d
+  const objetivo     = Math.round(pv + 65); // PV objetivo al salir del invierno
+  const diasInv      = DIAS_INV_VAQ1;
+  const gdpNecesario = gdpMinInv;
 
   // Disponibilidad: cantidad (kgMS/ha) y calidad (fenología)
   const nivelMS    = disponMS?.nivel || "media";      // alta | media | baja
@@ -565,10 +580,13 @@ function calcVaq1(pvEntrada, pvAdulta, ndvi, edadMayo, tipoDestete, disponMS, fe
   const boostComp = tipoDestete === "hiper" ? 50 : tipoDestete === "antic" ? 25 : 0;
   const gdpBase   = gdpPasto + boostComp;
 
-  if (gdpBase >= gdpNecesario) {
+  // Vaq1 SIEMPRE necesita al menos proteína en invierno NEA
+  // (pastizal natural <8% PB en invierno — por debajo del mínimo ruminal)
+  // Solo si GDP pasto ya supera 722 g/d (raro) se puede omitir suplementación
+  if (gdpBase >= gdpNecesario && nivelMS !== "baja" && !calidadBaja) {
     return {
       esc:"—",
-      mensaje:`Sin suplementación necesaria — pasto suficiente (GDP base ${gdpBase}g/d ≥ ${Math.round(gdpNecesario)}g/d requerido).`,
+      mensaje:`GDP pasto (${gdpBase}g/d) ≥ mínimo requerido (${gdpMinInv}g/d). Monitorear CC y PV mensualmente.`,
       nivelMS, msHa, gdpPasto,
     };
   }
@@ -645,40 +663,77 @@ function calcPvEntradaVaq2(pvSalidaVaq1) {
   return Math.round((parseFloat(pvSalidaVaq1) || 0) + GDP_PRIMVERA * diasPrimVer / 1000);
 }
 
-function calcVaq2(pvEntradaVaq1Sal, pvAdulta, ndvi) {
-  // pvEntradaVaq1Sal = PV de salida del 1° invierno (agosto)
-  // Si se pasa directo el PV de mayo del 2°inv, se usa ese
+// ─── VAQUILLONA 2° INVIERNO — GDP mínimo 300 g/d obligatorio ────
+// Regla: Vaq2 SIEMPRE necesita suplementación en invierno NEA
+// GDP mínimo invierno: 300 g/d (pastizal solo da 200-250 g/d sin suplemento)
+// Objetivo entore (noviembre): 75% PV adulto
+// Suplementación estratégica: semilla algodón ad libitum viable (>280 kg PV)
+// Fuente: Balbuena INTA 2003; Rosello Brajovich 2025
+// Vaq2° invierno: mínimo 330 g/d → garantiza 40 kg en 122 días
+// SIEMPRE requiere suplementación — pasto solo da <200 g/d en invierno NEA
+const GDP_MIN_VAQ2 = 330; // g/d — mínimo invierno, nunca sin suplementar
+
+function calcVaq2(pvEntradaVaq1Sal, pvAdulta, ndvi, disponMS, fenologia) {
   const pvSal1 = parseFloat(pvEntradaVaq1Sal) || 0;
-  const pva    = parseFloat(pvAdulta)  || 320;
+  const pva    = parseFloat(pvAdulta) || 320;
   if (!pvSal1) return { _aviso:"PV se calcula automáticamente desde la salida del 1° invierno." };
+  // Vaq2 SIEMPRE necesita suplementación — pasto solo da 120-250 g/d en invierno NEA
+  // Sin suplemento llega a destino con déficit de PV irrecuperable antes del entore
 
-  // Calcular PV entrada al 2° invierno (mayo siguiente)
-  const pvMayo2Inv = calcPvEntradaVaq2(pvSal1);
-
+  const pvMayo2Inv      = calcPvEntradaVaq2(pvSal1);
   const pvMinEntore     = Math.round(pva * 0.75);
+  const diasInv         = 90;  // mayo → agosto (período suplementación invernal)
   const diasHastaEntore = 180; // mayo → noviembre
-  const ndviN     = parseFloat(ndvi) || 0.45;
-  // GDP invierno sobre pasturas: menor que primavera-verano
-  const gdpPasto  = ndviN > 0.50 ? 400 : ndviN > 0.35 ? 300 : 200;
-  const pvEntore  = Math.round(pvMayo2Inv + gdpPasto * diasHastaEntore / 1000);
-  const llegas    = pvEntore >= pvMinEntore;
+  const ndviN    = parseFloat(ndvi) || 0.45;
+  const nivelMS  = disponMS?.nivel || "media";
+  const calidadBaja = ["25_50","mayor_50"].includes(fenologia||"");
 
-  if (llegas) return { esc:"—", pvMayo2Inv, pvEntore, pvMinEntore, gdpReal:gdpPasto, llegas };
+  // GDP del pasto en invierno (base sin suplemento)
+  const gdpPastoInv = nivelMS === "baja" ? 120 : nivelMS === "media" ? (ndviN > 0.45 ? 200 : 160) : 250;
 
-  const gdpNec  = (pvMinEntore - pvMayo2Inv) / diasHastaEntore * 1000;
-  const gdpFalt = gdpNec - gdpPasto;
-  const protKg  = gdpFalt <= 80 ? 0.3 : gdpFalt <= 150 ? 0.5 : 0.8;
-  const gdpReal = Math.round(gdpPasto + (protKg/0.3)*70);
-  const pvEntoreConSupl = Math.round(pvMayo2Inv + gdpReal * diasHastaEntore / 1000);
+  // Vaq2 SIEMPRE necesita suplementar — NO existe escenario "sin suplemento" en Vaq2
+  // El faltante mínimo es GDP_MIN_VAQ2 independientemente del pasto
+  const gdpFaltante   = Math.max(50, GDP_MIN_VAQ2 - gdpPastoInv);
+  const pvV2Agosto    = Math.round(pvMayo2Inv + GDP_MIN_VAQ2 * diasInv / 1000);
+  const gdpPrimavera  = 450; // g/d post-agosto con pasto disponible
+  const pvEntore      = Math.round(pvV2Agosto + gdpPrimavera * (diasHastaEntore - diasInv) / 1000);
+  const llegas        = pvEntore >= pvMinEntore;
+
+  // Suplementación necesaria para lograr GDP_MIN_VAQ2
+  // Si hay poca cantidad → proteína + energía (no semilla algodón en Vaq1, SÍ en Vaq2)
+  let protKg, energKg, fuenteEnerg, freq, freqDetalle, alertaAlgodon;
+  if (gdpFaltante > 0) {
+    protKg  = Math.round(pvMayo2Inv * 0.005 * 10) / 10; // 0.5% PV como base
+    // Semilla de algodón es viable ad libitum en Vaq2 (>280 kg PV)
+    const usaSemAlg = pvMayo2Inv >= 280;
+    if (usaSemAlg) {
+      energKg      = Math.round(pvMayo2Inv * 0.004 * 10) / 10; // hasta consumo voluntario
+      fuenteEnerg  = "Semilla de algodón (ad libitum — apta Vaq2° invierno >280 kg)";
+      freq         = calidadBaja ? "Diario" : "2–3 veces/semana";
+      freqDetalle  = calidadBaja ? "Calidad pasto baja → diario" : "Solo proteína/grasa → 2–3×/semana";
+      alertaAlgodon = null; // ad libitum permitido en Vaq2
+    } else {
+      energKg     = nivelMS === "baja" ? Math.round(pvMayo2Inv * 0.003 * 10) / 10 : 0;
+      fuenteEnerg = energKg > 0 ? "Sorgo molido o maíz molido (DIARIO — no intermitente)" : null;
+      freq        = energKg > 0 ? "Diario" : "2–3 veces/semana";
+      freqDetalle = energKg > 0 ? "Incluye almidón → diario obligatorio" : "Solo proteína → 2–3×/semana";
+      alertaAlgodon = `Semilla algodón disponible a partir de ${280}kg PV — este animal tiene ${Math.round(pvMayo2Inv)}kg`;
+    }
+  } else {
+    protKg = 0.3; energKg = 0;
+    freq = "2–3 veces/semana"; freqDetalle = "Proteína mínima de mantenimiento";
+    fuenteEnerg = null; alertaAlgodon = null;
+  }
+
+  const gdpConSupl = GDP_MIN_VAQ2;
+  const esc = gdpFaltante > 150 ? "C" : gdpFaltante > 80 ? "B" : "A";
 
   return {
-    esc:       gdpFalt > 150 ? "C" : gdpFalt > 80 ? "B" : "A",
-    pvMayo2Inv,
-    pvEntore:  pvEntoreConSupl,
-    pvMinEntore,
-    gdpReal,
-    llegas:    pvEntoreConSupl >= pvMinEntore,
-    protKg,
+    esc, pvMayo2Inv, pvV2Agosto, pvEntore, pvMinEntore,
+    gdpInv: gdpConSupl, gdpPrimavera, llegas,
+    protKg, energKg, fuenteEnerg, freq, freqDetalle, alertaAlgodon,
+    nivelMS, gdpPastoInv, gdpFaltante,
+    mensajeBase: `Vaq2° requiere mínimo ${GDP_MIN_VAQ2}g/d en invierno — sin suplemento solo logra ${gdpPastoInv}g/d`,
   };
 }
 
@@ -1737,16 +1792,26 @@ function GraficoBalance({ form, sat, cadena, tray }) {
       supl:    +suplMcal.toFixed(1),
       demanda: +demVaca.toFixed(1),
       deficit: +deficit.toFixed(1),
-      // Demanda apilada por categoría
-      vacasLact: +(enLact ? nLact * demVacaLact : 0).toFixed(0),
-      vacasGest: +(enLact ? 0 : (i === ((mesP-1+12)%12) ? nVacas * demVacaPre : nVacas * demVacaGest)).toFixed(0),
-      vaq1:  +(nVaq1 * demVaq1).toFixed(0),
-      vaq2:  +(nVaq2 * demVaq2).toFixed(0),
-      v2s:   +(nV2s  * demV2s).toFixed(0),
-      toros: +(nToros * reqToro).toFixed(0),
+      // Demanda apilada por categoría (orden prioridad)
+      vaq1Dem:  +(nVaq1 * demVaq1).toFixed(0),
+      vaq2Dem:  +(nVaq2 * demVaq2).toFixed(0),
+      v2sDem:   +(nV2s  * demV2s).toFixed(0),
+      vacasDem: +((enLact ? nLact * demVacaLact : (i===((mesP-1+12)%12)?nVacas*demVacaPre:nVacas*demVacaGest))).toFixed(0),
+      torosDem: +(nToros * reqToro).toFixed(0),
       ofertaTotal: +ofTotalMcal.toFixed(0),
       ofertaVaca:  +ofVaca.toFixed(1),
-      // CC grupos
+      // CC movilizada total del rodeo (Mcal/día) — ponderada por grupos
+      ccAporteTotal: enLact && gruposCC.length > 0
+        ? +gruposCC.reduce((sum, g) => {
+            const ccG    = parseFloat(g.cc) || 0;
+            const pctG   = parseFloat(g.pct) || 0;
+            const caidaG = ccG >= 6.0 ? 2.0 : ccG >= 5.5 ? 1.7 : ccG >= 5.0 ? 1.4 : ccG >= 4.5 ? 1.0 : 0.6;
+            const mcalDia = (caidaG * MCAL_POR_CC) / Math.max(1, mesesLactGraf * 30);
+            return sum + mcalDia * (pctG/100) * nVacas;
+          }, 0).toFixed(0)
+        : 0,
+      suplAporteTotal: enLact ? +(mcalSuplDia * nVacas).toFixed(0) : 0,
+      // Legacy para gráfico CC grupos
       ...gruposCCData,
     };
   });
@@ -1847,20 +1912,23 @@ function GraficoBalance({ form, sat, cadena, tray }) {
                 formatter={(v,n) => [Math.round(v)+" Mcal/día", n]}
               />
               <Legend wrapperStyle={{ fontFamily:T.font, fontSize:8, paddingTop:4 }} />
-              {/* Orden prioridad: Vaq1 abajo → Vaq2 → V2S → Vacas → Toros arriba */}
-              <Bar dataKey="vaq1"      name="Vaq 1° inv."        stackId="dem" fill="rgba(126,200,80,.80)"  radius={[0,0,2,2]} />
-              <Bar dataKey="vaq2"      name="Vaq 2° inv."        stackId="dem" fill="rgba(74,159,212,.80)"  radius={[0,0,0,0]} />
-              <Bar dataKey="v2s"       name="V2S 2° servicio"    stackId="dem" fill="rgba(255,100,60,.85)"  radius={[0,0,0,0]} />
-              <Bar dataKey="vacasLact" name="Vacas lactación"    stackId="dem" fill="rgba(224,85,48,.70)"   radius={[0,0,0,0]} />
-              <Bar dataKey="vacasGest" name="Vacas gestación"    stackId="dem" fill="rgba(200,140,40,.70)"  radius={[0,0,0,0]} />
-              <Bar dataKey="toros"     name="Toros"              stackId="dem" fill="rgba(180,120,220,.70)" radius={[2,2,0,0]} />
-              <Line type="monotone" dataKey="ofertaTotal" name="Oferta total campo" stroke={T.green} strokeWidth={2.5} dot={false} strokeDasharray="5 2" />
+              {/* Barras DEMANDA apiladas por categoría: Vaq1 abajo → Vaq2 → V2S → Vacas → Toros */}
+              <Bar dataKey="vaq1Dem"  name="Vaq 1° invierno"   stackId="dem" fill="rgba(126,200,80,.85)"  radius={[0,0,2,2]} />
+              <Bar dataKey="vaq2Dem"  name="Vaq 2° invierno"   stackId="dem" fill="rgba(74,159,212,.85)"  radius={[0,0,0,0]} />
+              <Bar dataKey="v2sDem"   name="V2S 2° servicio"   stackId="dem" fill="rgba(255,100,60,.90)"  radius={[0,0,0,0]} />
+              <Bar dataKey="vacasDem" name="Vacas rodeo gral"  stackId="dem" fill="rgba(224,85,48,.70)"   radius={[0,0,0,0]} />
+              <Bar dataKey="torosDem" name="Toros"             stackId="dem" fill="rgba(180,120,220,.70)" radius={[2,2,0,0]} />
+              {/* OFERTA: pasto + CC movilizada (parto→serv) + suplemento */}
+              <Line type="monotone" dataKey="ofertaTotal"     name="Oferta pasto total"    stroke={T.green}  strokeWidth={2.5} dot={false} strokeDasharray="6 3" />
+              <Line type="monotone" dataKey="ccAporteTotal"   name="CC movilizada (rodeo)" stroke={T.amber}  strokeWidth={1.5} dot={false} strokeDasharray="3 2" />
+              <Line type="monotone" dataKey="suplAporteTotal" name="Suplemento (total)"    stroke={T.blue}   strokeWidth={1.5} dot={false} strokeDasharray="2 2" />
+              <Legend wrapperStyle={{ fontFamily:T.font, fontSize:8, paddingTop:2 }} iconSize={8} />
             </BarChart>
           </ResponsiveContainer>
 
           {/* Resumen déficit por mes — incluye V2S en el total */}
           {(() => {
-            const criticos = datos.filter(d => d.ofertaTotal < d.vacasLact + d.vacasGest + d.vaq1 + d.vaq2 + d.v2s + d.toros);
+            const criticos = datos.filter(d => d.ofertaTotal < d.vaq1Dem + d.vaq2Dem + d.v2sDem + d.vacasDem + d.torosDem);
             return criticos.length > 0 ? (
               <div style={{ marginTop:10, background:"rgba(224,85,48,.05)", border:"1px solid rgba(224,85,48,.18)", borderRadius:10, padding:10 }}>
                 <div style={{ fontFamily:T.font, fontSize:10, color:T.red, marginBottom:8 }}>
@@ -1868,17 +1936,17 @@ function GraficoBalance({ form, sat, cadena, tray }) {
                 </div>
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                   {criticos.map((d, i) => {
-                    const dem = d.vacasLact + d.vacasGest + d.vaq1 + d.vaq2 + d.v2s + d.toros;
+                    const dem = d.vaq1Dem + d.vaq2Dem + d.v2sDem + d.vacasDem + d.torosDem;
                     const def = Math.round(dem - d.ofertaTotal);
-                    // Qué categorías se quedan sin cubrir primero (de baja prioridad hacia alta)
+                    // Qué categorías se quedan sin cubrir — prioridad: Vaq1 primero, Toros último
                     let restante = d.ofertaTotal;
-                    const cubVaq1 = Math.min(d.vaq1, restante); restante -= cubVaq1;
-                    const cubVaq2 = Math.min(d.vaq2, restante); restante -= cubVaq2;
-                    const cubV2s  = Math.min(d.v2s,  restante); restante -= cubV2s;
+                    const cubVaq1 = Math.min(d.vaq1Dem, restante); restante -= cubVaq1;
+                    const cubVaq2 = Math.min(d.vaq2Dem, restante); restante -= cubVaq2;
+                    const cubV2s  = Math.min(d.v2sDem,  restante); restante -= cubV2s;
                     const sinCubrir = [];
-                    if (d.v2s  > cubV2s)  sinCubrir.push(`V2S −${Math.round(d.v2s-cubV2s)}`);
-                    if (d.vaq2 > cubVaq2) sinCubrir.push(`Vaq2° −${Math.round(d.vaq2-cubVaq2)}`);
-                    if (d.vaq1 > cubVaq1) sinCubrir.push(`Vaq1° −${Math.round(d.vaq1-cubVaq1)}`);
+                    if (d.v2sDem  > cubV2s)  sinCubrir.push(`V2S −${Math.round(d.v2sDem-cubV2s)} Mcal`);
+                    if (d.vaq2Dem > cubVaq2) sinCubrir.push(`Vaq2° −${Math.round(d.vaq2Dem-cubVaq2)} Mcal`);
+                    if (d.vaq1Dem > cubVaq1) sinCubrir.push(`Vaq1° −${Math.round(d.vaq1Dem-cubVaq1)} Mcal`);
                     return (
                       <div key={i} style={{ background:"rgba(224,85,48,.08)", borderRadius:8, padding:"6px 10px", fontFamily:T.font, fontSize:9 }}>
                         <div style={{ color:T.red, fontWeight:700, marginBottom:2 }}>{d.mes} −{def} Mcal/d</div>
@@ -1952,6 +2020,7 @@ function GraficoBalance({ form, sat, cadena, tray }) {
                     );
                   })}
                   <Line type="monotone" dataKey="ofertaVaca" name="Oferta pasto (Mcal/v/d)" stroke={T.green} strokeWidth={2} dot={false} strokeDasharray="5 2" />
+                  <Legend wrapperStyle={{ fontFamily:T.font, fontSize:8 }} iconSize={8} />
                 </BarChart>
               </ResponsiveContainer>
 
@@ -1965,13 +2034,18 @@ function GraficoBalance({ form, sat, cadena, tray }) {
                   const pctG   = parseFloat(g.pct) || 0;
                   const caidaEsp = ccG >= 6.0 ? 2.0 : ccG >= 5.5 ? 1.7 : ccG >= 5.0 ? 1.4 : ccG >= 4.5 ? 1.0 : 0.6;
                   const mcalTot  = Math.round(caidaEsp * MCAL_POR_CC);
-                  const mesesRec = Math.round(mcalTot / Math.max(1, (reqEM(pvVaca,"Lactación con ternero al pie",form.biotipo)||18) * 30 * 0.3));
-                  // CC al servicio estimada (con caída durante lactación)
-                  const ccServ = Math.max(2.0, ccG - caidaEsp).toFixed(1);
-                  const prenezEst = ccServ >= 5.0 ? ">85%" : ccServ >= 4.5 ? "70–85%" : ccServ >= 4.0 ? "55–70%" : "<55%";
-                  // Recomendación de destete
-                  const recDest = ccServ >= 4.5 ? "✅ Tradicional (180d)" : ccServ >= 4.0 ? "🔶 Anticipado (90d)" : "⚡ Hiperprecoz (50d) urgente";
-                  const col = parseFloat(ccServ) >= 4.5 ? T.green : parseFloat(ccServ) >= 4.0 ? T.amber : T.red;
+                  // CC al parto: la vaca llega con esta CC al parto (no es la CC hoy)
+                  // Usamos el ccParto del grupo si está disponible (desde calcTrayectoriaCC)
+                  const ccPartoG = form.distribucionCC?.[gi] ? null : null; // simplificado
+                  const ccServNum = Math.max(2.0, ccG - caidaEsp);
+                  const ccServ   = ccServNum.toFixed(1);
+                  // Preñez con tabla corregida (CC 4.0 = 70%)
+                  const prenezNum = ccServNum >= 5.0 ? 88 : ccServNum >= 4.5 ? 80 : ccServNum >= 4.0 ? 70 : ccServNum >= 3.5 ? 50 : 28;
+                  const prenezEst = prenezNum+"%";
+                  // Recomendación destete: objetivo CC serv ≥ 4.0 mínimo
+                  // Si llega con >4.5 → tradicional; 4.0–4.5 → anticipado; <4.0 → hiperprecoz
+                  const recDest = ccServNum >= 4.5 ? "✅ Tradicional (180d)" : ccServNum >= 4.0 ? "🔶 Anticipado (90d)" : "⚡ Hiperprecoz (50d) urgente";
+                  const col = ccServNum >= 4.5 ? T.green : ccServNum >= 4.0 ? T.amber : T.red;
                   return (
                     <div key={gi} style={{ borderRadius:10, marginBottom:8, border:`1px solid ${col}30`, overflow:"hidden" }}>
                       <div style={{ padding:"8px 12px", background:`${col}08`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -1981,22 +2055,28 @@ function GraficoBalance({ form, sat, cadena, tray }) {
                             CC {ccG} — {pctG}% del rodeo
                           </span>
                         </div>
-                        <span style={{ fontFamily:T.font, fontSize:10, color:col }}>{prenezEst} preñez</span>
+                        <span style={{ fontFamily:T.font, fontSize:10, color:col, fontWeight:700 }}>{prenezEst} preñez estimada</span>
                       </div>
                       <div style={{ padding:"8px 12px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
                         <div>
-                          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:2 }}>RESERVAS CC</div>
-                          <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.amber }}>{mcalTot} Mcal</div>
-                          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>caída {caidaEsp} CC</div>
+                          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:2 }}>CC AL PARTO</div>
+                          <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.amber }}>{ccG}</div>
+                          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>entrada lactación</div>
                         </div>
                         <div>
                           <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:2 }}>CC AL SERV.</div>
-                          <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:col }}>{ccServ}</div>
-                          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>desde {ccG} al parto</div>
+                          <div style={{ fontFamily:T.font, fontSize:15, fontWeight:700, color:col }}>{ccServ}</div>
+                          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>caída −{caidaEsp} CC ({mcalTot} Mcal)</div>
                         </div>
                         <div>
-                          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:2 }}>DESTETE REC.</div>
-                          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:600, color:col }}>{recDest}</div>
+                          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:2 }}>PREÑEZ EST.</div>
+                          <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:col }}>{prenezEst}</div>
+                          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>objetivo ≥70% (CC≥4)</div>
+                        </div>
+                        <div style={{ gridColumn:"1/-1" }}>
+                          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:2 }}>DESTETE RECOMENDADO</div>
+                          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:600, color:col }}>{recDest}</div>
+                          {ccServNum < 4.0 && <div style={{ fontFamily:T.font, fontSize:9, color:T.red, marginTop:2 }}>CC serv {ccServ} &lt; 4.0 mínimo — sin corrección cae preñez {Math.round(70-(4.0-ccServNum)*25)}%</div>}
                         </div>
                       </div>
                     </div>
@@ -2526,8 +2606,17 @@ const FORM_DEF = {
   // Forraje
   vegetacion:"Pastizal natural NEA/Chaco", fenologia:"menor_10",
   supHa:"", pctMonte:"10", pctNGan:"5",
-  // Suplementación
+  // Suplementación por categoría (nuevo diseño)
   supl1:"", dosis1:"0", supl2:"", dosis2:"0", supl3:"", dosis3:"0",
+  supl_vacas:"", dosis_vacas:"0",
+  supl_v2s:"", dosis_v2s:"0",   supl2_v2s:"",     dosis2_v2s:"0",
+  supl_toros:"", dosis_toros:"0", supl2_toros:"",   dosis2_toros:"0",
+  supl_vaq2:"", dosis_vaq2:"0",  supl2_vaq2:"",    dosis2_vaq2:"0",
+  supl_vaq1:"", dosis_vaq1:"0",
+  supl_vaq1:"", dosis_vaq1:"0",   supl2_vaq1:"",    dosis2_vaq1:"0",
+  supl_vacas:"", dosis_vacas:"0", supl2_vacas:"",   dosis2_vacas:"0",
+  supl_ternero:"", dosis_ternero:"0", supl2_ternero:"", dosis2_ternero:"0",
+  sanParasitoExt:"", sanParasitoInt:"",
   // ENSO
   enso:"neutro",
   // Agua
@@ -2641,8 +2730,8 @@ export default function AgroMindPro() {
   const pvEntradaVaq2 = form.vaq2PV || pvSalidaVaq1 || "";
 
   const vaq2E = useMemo(() =>
-    calcVaq2(pvEntradaVaq2 || form.vaq2PV, form.pvVacaAdulta, ndviN),
-    [pvEntradaVaq2, form.vaq2PV, form.pvVacaAdulta, ndviN, vaq1E]
+    calcVaq2(pvEntradaVaq2 || form.vaq2PV, form.pvVacaAdulta, ndviN, disponMS, form.fenologia),
+    [pvEntradaVaq2, form.vaq2PV, form.pvVacaAdulta, ndviN, disponMS, form.fenologia, vaq1E]
   );
 
   const evalAgua = useMemo(() =>
@@ -2680,6 +2769,7 @@ export default function AgroMindPro() {
     if (!coords) return;
     setSat(null);
     fetchSat(coords.lat, coords.lon, form.zona, form.provincia, form.enso, setSat);
+    // Asegurar que si el fetch demora, se muestra el spinner
   }, [coords, form.enso, form.zona, form.provincia]);
 
   // ── GPS ───────────────────────────────────────────────────────
@@ -2737,11 +2827,25 @@ export default function AgroMindPro() {
     t += `Estado reprod: ${form.eReprod||"—"}${form.primerParto?" · ⚠️ Incluye vacas 1° parto":""}\n`;
     t += `Superficie: ${form.supHa||"—"} ha · Carga: ${form.vacasN&&form.supHa?(parseFloat(form.vacasN)/parseFloat(form.supHa)).toFixed(2):"—"} EV/ha\n`;
 
+    const totalEV_p = (parseInt(form.vacasN)||0) + (parseInt(form.torosN)||0)*1.4 +
+      (parseInt(form.vaq2N)||0)*0.7 + (parseInt(form.v2sN)||0)*0.9 +
+      Math.round((parseInt(form.vacasN)||0)*(parseFloat(form.pctReposicion)||20)/100)*0.4;
+    const haGan_p = parseFloat(form.supHa)||0;
+    const cargaT  = haGan_p > 0 ? (totalEV_p/haGan_p).toFixed(2) : "—";
+    t += `Carga ganadera real: ${cargaT} EV/ha (${Math.round(totalEV_p)} EV totales en ${haGan_p||"—"} ha)\n`;
+    if (parseFloat(cargaT) > 1.0) t += `  ⚠️ Carga elevada — mayor presión sobre oferta forrajera invernal\n`;
     if (usaPotreros && potreros?.length) {
-      t += `POTREROS: ${potreros.length}\n`;
-      potreros.forEach((p, i) => t += `  P${i+1}: ${p.ha||"—"}ha · ${p.veg} · ${p.fenol||"—"}\n`);
+      const haTotal_p = potreros.reduce((s,p) => s+(parseFloat(p.ha)||0), 0);
+      t += `POTREROS (${potreros.length}, total ${haTotal_p}ha):\n`;
+      potreros.forEach((p, i) => {
+        const disp_p = calcDisponibilidadMS(form.altPasto||"20", form.tipoPasto||"alto_denso");
+        t += `  P${i+1}: ${p.ha||"—"}ha · ${p.veg} · ${p.fenol||"—"} · ~${disp_p.msHa||"—"}kgMS/ha\n`;
+      });
     } else {
-      t += `Vegetación: ${form.vegetacion||"—"} · Fenología: ${form.fenologia||"—"}\n`;
+      const disp_p = calcDisponibilidadMS(form.altPasto, form.tipoPasto);
+      t += `Vegetación: ${form.vegetacion||"—"} · Fenología: ${form.fenologia||"—"}`;
+      if (disp_p.msHa) t += ` · Disponibilidad: ${disp_p.msHa}kgMS/ha (${disp_p.nivel})`;
+      t += "\n";
     }
 
     if (evalAgua) {
@@ -2756,16 +2860,62 @@ export default function AgroMindPro() {
     t += `  Toros ESAN: ${form.sanToros==="con_control"?"✅":"⚠️ Sin evaluación"} · Abortos: ${form.sanAbortos==="si"?"⚠️ Sí":"No"} · Programa: ${form.sanPrograma==="si"?"✅":"⚠️ No"}\n`;
 
     if (tray) {
-      t += `\nTRAYECTORIA CC:\n`;
-      t += `  ${tray.ccHoy}→${tray.ccParto}→${tray.ccMinLact}→${tray.ccDestete}→${tray.ccServ}`;
-      t += ` · ${tray.pr}% preñez · Anestro: ${tray.anestro?.dias}d ${tray.anestro?.riesgo?"⚠️":"✅"}\n`;
-      t += `  Caída: −${tray.caidaLact} CC en ${tray.mesesLact}m\n`;
+      t += `\nTRAYECTORIA CC (rodeo promedio):\n`;
+      t += `  HOY:${tray.ccHoy} → PARTO:${tray.ccParto} → SERV.:${tray.ccServ} (mín lactación: ${tray.ccMinLact})\n`;
+      t += `  Preñez est.: ${tray.pr}% · Anestro: ${tray.anestro?.dias}d (${tray.anestro?.riesgo?"⚠️ riesgo":"✅ ok"}) · Caída lactación: −${tray.caidaLact} CC en ${tray.mesesLact} meses\n`;
     }
 
-    if (form.supl1) t += `SUPL.Gestación: ${form.supl1} ${form.dosis1}kg/d (${mcalSuplemento(form.supl1, parseFloat(form.dosis1)).toFixed(1)} Mcal)\n`;
-    if (form.supl2) t += `SUPL.Lactancia: ${form.supl2} ${form.dosis2}kg/d (${mcalSuplemento(form.supl2, parseFloat(form.dosis2)).toFixed(1)} Mcal)\n`;
-    if (form.supl3) t += `SUPL.Preparto:  ${form.supl3} ${form.dosis3}kg/d (${mcalSuplemento(form.supl3, parseFloat(form.dosis3)).toFixed(1)} Mcal)\n`;
-
+    // Suplementación por categoría
+    const SUPL_CATS_PROMPT = [
+      ["Vacas rodeo gral",  "supl_vacas",  "dosis_vacas"],
+      ["Vaca 2° servicio",  "supl_v2s",    "dosis_v2s"],
+      ["Toros",             "supl_toros",  "dosis_toros"],
+      ["Vaq 2° inv.",       "supl_vaq2",   "dosis_vaq2"],
+      ["Vaq 1° inv.",       "supl_vaq1",   "dosis_vaq1"],
+      ["Ternero (destete)", "supl_ternero","dosis_ternero"],
+    ];
+    const suplLines = SUPL_CATS_PROMPT.filter(([,sk]) => form[sk])
+      .map(([cat, sk, dk]) => {
+        const d     = parseFloat(form[dk]) || 0;
+        const m     = mcalSuplemento(form[sk], d).toFixed(1);
+        const sInfo = SUPLEMENTOS[form[sk]];
+        const pvMap = {
+          supl_vacas:    parseFloat(form.pvVacaAdulta)||320,
+          supl_v2s:      parseFloat(form.v2sPV)||(parseFloat(form.pvVacaAdulta)||320)*0.88,
+          supl_toros:    (parseFloat(form.pvVacaAdulta)||320)*1.3,
+          supl_vaq2:     parseFloat(pvEntradaVaq2)||Math.round((parseFloat(form.pvVacaAdulta)||320)*0.65),
+          supl_vaq1:     parseFloat(form.vaq1PV)||Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40),
+          supl_ternero:  tcSave?.pvMayoPond||80,
+        };
+        const pv       = pvMap[sk] || 1;
+        const pctPV    = ((d/pv)*100).toFixed(2);
+        const pbDia    = sInfo ? Math.round((sInfo.pb/100)*d*1000) : 0;
+        const tipo     = sInfo ? (sInfo.em >= 3.0 ? "Energético" : sInfo.pb >= 30 ? "Proteico" : "Energ-Prot.") : "—";
+        const freq     = sInfo?.em >= 3.0 ? "Diario (almidón)" : "2–3×/semana";
+        return `  ${cat}: ${form[sk]} (${tipo}) · ${d}kg/d · ${m}Mcal/d · PB:${pbDia}g/d · ${pctPV}%PV · ${freq}`;
+      });
+    if (suplLines.length > 0) t += `\nSUPLEMENTACIÓN POR CATEGORÍA:\n${suplLines.join("\n")}\n`;
+    if (form.sanParasitoExt || form.sanParasitoInt) {
+      t += `Parásitos externos: ${form.sanParasitoExt||"no controlados"} · Internos: ${form.sanParasitoInt||"no controlados"}\n`;
+    }
+    // Suplementación detallada por categoría (nuevo sistema doble alimento)
+    const suplCats = [
+      ["Vacas rodeo", "supl_vacas","dosis_vacas","supl2_vacas","dosis2_vacas"],
+      ["V2S",         "supl_v2s",  "dosis_v2s",  "supl2_v2s",  "dosis2_v2s"],
+      ["Toros",       "supl_toros","dosis_toros","supl2_toros","dosis2_toros"],
+      ["Vaq2°",       "supl_vaq2", "dosis_vaq2", "supl2_vaq2", "dosis2_vaq2"],
+      ["Vaq1°",       "supl_vaq1", "dosis_vaq1", "supl2_vaq1", "dosis2_vaq1"],
+      ["Ternero",     "supl_ternero","dosis_ternero","supl2_ternero","dosis2_ternero"],
+    ];
+    const suplLines = suplCats.map(([cat, s1k, d1k, s2k, d2k]) => {
+      const s1 = form[s1k], d1 = parseFloat(form[d1k])||0;
+      const s2 = form[s2k], d2 = parseFloat(form[d2k])||0;
+      if (!s1 && !s2) return null;
+      const p1 = s1&&d1 ? `${s1} ${d1}kg/d` : null;
+      const p2 = s2&&d2 ? `${s2} ${d2}kg/d` : null;
+      return `  ${cat}: ${[p1,p2].filter(Boolean).join(" + ")}`;
+    }).filter(Boolean);
+    if (suplLines.length) t += `SUPLEMENTACIÓN POR CATEGORÍA:\n${suplLines.join("\n")}\n`;
     if (dist?.grupos?.length) {
       t += `\nCC POR GRUPO (supervivencia Rosello Brajovich 2025):\n`;
       dist.grupos.forEach(g => {
@@ -2789,7 +2939,12 @@ export default function AgroMindPro() {
 
     if (form.vaq2N) {
       t += `VAQ2: ${form.vaq2N} cab`;
-      if (vaq2E && vaq2E.esc !== "—") t += ` · GDP${vaq2E.gdpReal}g/d → ${vaq2E.pvEntore}kg (mín ${vaq2E.pvMinEntore}kg) ${vaq2E.llegas ? "✅" : "⚠️ NO LLEGA"}`;
+      if (vaq2E) {
+        t += ` · PV entrada 2°inv: ${vaq2E.pvMayo2Inv||"—"}kg · GDP inv: ${vaq2E.gdpInv||300}g/d (pasto solo: ${vaq2E.gdpPastoInv||"—"}g/d)`;
+        t += `\n  PV agosto: ${vaq2E.pvV2Agosto||"—"}kg · PV entore: ${vaq2E.pvEntore||"—"}kg (obj ${vaq2E.pvMinEntore||"—"}kg = 75% PV adulto) ${vaq2E.llegas ? "✅" : "⚠️ NO LLEGA AL OBJETIVO"}`;
+        if (vaq2E.protKg) t += `\n  Supl. invernal mín.: ${vaq2E.protKg}kg/d proteína + ${vaq2E.energKg>0?vaq2E.energKg+"kg/d energía":vaq2E.fuenteEnerg||"S.Algodón ad lib"} · ${vaq2E.freq||"—"}`;
+        if (!vaq2E.llegas) t += `\n  ⚠️ No llega al objetivo — aumentar suplementación o evaluar entore tardío`;
+      }
       t += "\n";
     }
 
@@ -3028,7 +3183,6 @@ export default function AgroMindPro() {
       ["CC_ponderada_hoy",          ccPondVal?.toFixed(2) || ""],
       ["CC_parto_proyectada",       tray?.ccParto || ""],
       ["CC_min_lactacion",          tray?.ccMinLact || ""],
-      ["CC_destete",                tray?.ccDestete || ""],
       ["CC_servicio",               tray?.ccServ || ""],
       ["Prenez_estimada_pct",       tray?.pr || ""],
       ["Dias_anestro",              tray?.anestro?.dias || ""],
@@ -3069,6 +3223,32 @@ export default function AgroMindPro() {
       ["Tipo_sal_agua",             form.aguaTipoSal || ""],
       ["Fuente_agua",               form.aguaFuente || ""],
       ["Reduccion_DMI_pct",         evalAgua?.pctReducDMI?.toFixed(1) || "0"],
+      // ─ Suplementación por categoría ─
+      ["Supl_vacas",              form.supl_vacas   || ""],
+      ["Dosis_vacas_kgd",         form.dosis_vacas  || "0"],
+      ["Supl_vacas",             form.supl_vacas   || ""],
+      ["Dosis_vacas_kgd",         form.dosis_vacas  || "0"],
+      ["Supl2_vacas",             form.supl2_vacas  || ""],
+      ["Dosis2_vacas_kgd",        form.dosis2_vacas || "0"],
+      ["Supl_v2s",               form.supl_v2s     || ""],
+      ["Dosis_v2s_kgd",           form.dosis_v2s    || "0"],
+      ["Supl2_v2s",               form.supl2_v2s    || ""],
+      ["Dosis2_v2s_kgd",          form.dosis2_v2s   || "0"],
+      ["Supl2_v2s",               form.supl2_v2s    || ""],
+      ["Dosis2_v2s_kgd",          form.dosis2_v2s   || "0"],
+      ["Supl_vacas",              form.supl_vacas   || ""],
+      ["Dosis_vacas_kgd",         form.dosis_vacas  || "0"],
+      ["Supl2_vacas",             form.supl2_vacas  || ""],
+      ["Dosis2_vacas_kgd",        form.dosis2_vacas || "0"],
+      ["Dosis_v2s_kgd",           form.dosis_v2s    || "0"],
+      ["Supl_toros",              form.supl_toros   || ""],
+      ["Dosis_toros_kgd",         form.dosis_toros  || "0"],
+      ["Supl_vaq2",               form.supl_vaq2    || ""],
+      ["Dosis_vaq2_kgd",          form.dosis_vaq2   || "0"],
+      ["Supl_vaq1",               form.supl_vaq1    || ""],
+      ["Dosis_vaq1_kgd",          form.dosis_vaq1   || "0"],
+      ["Supl_ternero",            form.supl_ternero || ""],
+      ["Dosis_ternero_kgd",       form.dosis_ternero|| "0"],
       // ─ Sanidad ─
       ["San_aftosa",                form.sanAftosa    === "si" ? "Al_dia" : "Sin_vacunar"],
       ["San_brucelosis",            form.sanBrucelosis=== "si" ? "Al_dia" : "Sin_vacunar"],
@@ -3076,6 +3256,20 @@ export default function AgroMindPro() {
       ["Toros_ESAN",                form.sanToros     === "con_control" ? "Con_evaluacion" : "Sin_evaluacion"],
       ["Historia_abortos",          form.sanAbortos   === "si" ? "Si" : "No"],
       ["Programa_sanitario",        form.sanPrograma  === "si" ? "Si" : "No"],
+      ["San_parasito_externo",      form.sanParasitoExt || ""],
+      ["San_parasito_interno",      form.sanParasitoInt || ""],
+      ["Supl_vaq1",                form.supl_vaq1    || ""],
+      ["Dosis_vaq1_kgd",           form.dosis_vaq1   || "0"],
+      ["Supl2_vaq1",               form.supl2_vaq1   || ""],
+      ["Dosis2_vaq1_kgd",          form.dosis2_vaq1  || "0"],
+      ["Supl_vaq2",                form.supl_vaq2    || ""],
+      ["Dosis_vaq2_kgd",           form.dosis_vaq2   || "0"],
+      ["Supl2_vaq2",               form.supl2_vaq2   || ""],
+      ["Dosis2_vaq2_kgd",          form.dosis2_vaq2  || "0"],
+      ["Supl_toros",               form.supl_toros   || ""],
+      ["Dosis_toros_kgd",          form.dosis_toros  || "0"],
+      ["Supl2_toros",              form.supl2_toros  || ""],
+      ["Dosis2_toros_kgd",         form.dosis2_toros || "0"],
       // ─ Vaquillona 1° ─
       ["Vaq1_cab",                  Math.round((parseInt(form.vacasN)||0)*(parseFloat(form.pctReposicion)||20)/100)],
       ["Pct_reposicion",            form.pctReposicion || "20"],
@@ -3321,7 +3515,7 @@ export default function AgroMindPro() {
                 { label:"HOY",    val:ccPondVal.toFixed(1), color:smf(ccPondVal,4.5,5.5) },
                 { label:"PARTO",  val:tray.ccParto,         color:smf(parseFloat(tray.ccParto),4.5,5.0) },
                 { label:"MÍN.",   val:tray.ccMinLact,       color:smf(parseFloat(tray.ccMinLact),3.5,4.5) },
-                { label:"DESTETE",val:tray.ccDestete,       color:smf(parseFloat(tray.ccDestete),3.5,4.5) },
+                { label:"MÍN.LACT", val:tray.ccMinLact,    color:smf(parseFloat(tray.ccMinLact),3.5,4.5) },
                 { label:"SERV.",  val:tray.ccServ,          color:smf(parseFloat(tray.ccServ),4.5,5.0) },
               ].map((item, i, arr) => (
                 <React.Fragment key={item.label}>
@@ -3356,7 +3550,7 @@ export default function AgroMindPro() {
             <MetricCard label="CC AL SERVICIO"
               value={tray.ccServ}
               color={smf(parseFloat(tray.ccServ),4.5,5.0)}
-              sub={parseFloat(tray.ccServ)<4.5?"→ Preñez <35%":parseFloat(tray.ccServ)>=5.0?"→ Preñez ~55%":"→ Preñez 35–55%"} />
+              sub={parseFloat(tray.ccServ)>=5.0?"→ Preñez ≥88%":parseFloat(tray.ccServ)>=4.5?"→ Preñez 80–87%":parseFloat(tray.ccServ)>=4.0?"→ Preñez ~70%":parseFloat(tray.ccServ)>=3.5?"→ Preñez ~50% ⚠":""+"→ Preñez <30% 🔴"} />
             <MetricCard label="PREÑEZ ESTIMADA"
               value={tray.pr+"%"}
               color={smf(tray.pr,35,55)}
@@ -3378,8 +3572,7 @@ export default function AgroMindPro() {
                 <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>Supervivencia: Rosello Brajovich et al. 2025</div>
               </div>
               {dist.grupos.map((g, i) => {
-                const sv = calcSupervivencia(g.ccHoy, form.eReprod);
-                const svColor = sv.riesgo==="critico"?C.red : sv.riesgo==="alto"?C.amber : sv.riesgo==="medio"?"#d4c030":C.green;
+                // Sin supervivencia en este panel — solo CC y preñez
                 return (
                   <div key={i} style={{ borderRadius:10, marginBottom:8, overflow:"hidden",
                     border:`1px solid ${g.pr<35?"rgba(224,85,48,.25)":g.pr<55?"rgba(232,160,48,.25)":"rgba(126,200,80,.20)"}` }}>
@@ -3390,8 +3583,8 @@ export default function AgroMindPro() {
                         CC {g.ccHoy} · {g.pct}% del rodeo
                       </span>
                       <div style={{ display:"flex", gap:6 }}>
-                        <Pill color={smf(g.pr,35,55)}>🐄 {g.pr}% preñez</Pill>
-                        <Pill color={svColor}>🫀 {sv.pct}% superv.</Pill>
+                        <Pill color={smf(parseFloat(g.pr),60,80)}>🐄 {g.pr}% preñez</Pill>
+                        <Pill color={smf(parseFloat(g.ccServ),4.0,5.0)}>CC serv. {g.ccServ}</Pill>
                       </div>
                     </div>
                     {/* Trayectoria */}
@@ -3457,9 +3650,9 @@ export default function AgroMindPro() {
           {tcSave.alertaHiper && <Alerta tipo="warn" style={{ marginTop:10 }}>Hiperprecoz {">"} 30% — suplementación proteica inmediata post-destete.</Alerta>}
           {/* Info GDP */}
           <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}18` }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:2 }}>BASE DE CÁLCULO</div>
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:2 }}>BASE DE CÁLCULO · NRC 2000 + INTA Colonia Benítez</div>
             <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim }}>
-              Nacimiento 35 kg · Al pie: 700 g/d · Post-destete pastizal: 400 g/d hasta mayo
+              Nacimiento: 35 kg · Al pie: 700 g/d · Post-destete campo: 400 g/d hasta mayo
             </div>
           </div>
           {tcSave.detalle?.map((d, i) => d.pct > 0 ? (
@@ -3509,15 +3702,45 @@ export default function AgroMindPro() {
                     </Pill>
                   </div>
                 )}
+                {/* Tarjetas suplementación Vaq1 — formato claro */}
+                <div style={{ background:`${C.card}`, borderRadius:10, padding:10, marginBottom:8, border:`1px solid ${C.amber}20` }}>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>PLAN DE SUPLEMENTACIÓN</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    <div style={{ borderRadius:8, background:`${C.amber}10`, padding:"8px 10px" }}>
+                      <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>SUPLEMENTO PROTEICO</div>
+                      <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:C.amber }}>{vaq1E.protKg} kg/día</div>
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>Expeller girasol/algodón/soja</div>
+                      {vaq1E.alertaAlgodon && <div style={{ fontFamily:C.font, fontSize:8, color:C.red, marginTop:3 }}>⚠ Máx {Math.round((parseFloat(form.vaq1PV||tcSave?.pvMayoPond||100))*0.004*10)/10}kg si semilla algodón</div>}
+                    </div>
+                    <div style={{ borderRadius:8, background:`${vaq1E.energKg>0?C.blue:C.card}10`, padding:"8px 10px" }}>
+                      <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>SUPLEMENTO ENERGÉTICO</div>
+                      {vaq1E.energKg > 0
+                        ? <><div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:C.blue }}>{vaq1E.energKg} kg/día</div>
+                            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{vaq1E.fuenteEnerg||"Sorgo/maíz molido"}</div></>
+                        : <><div style={{ fontFamily:C.font, fontSize:12, fontWeight:600, color:C.textDim }}>No requerido</div>
+                            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>Con pasto de buena calidad</div></>
+                      }
+                    </div>
+                    <div style={{ borderRadius:8, background:`${vaq1E.freq==="Diario"?C.red:C.green}10`, padding:"8px 10px", gridColumn:"1/-1" }}>
+                      <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>FRECUENCIA DE SUMINISTRO</div>
+                      <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:vaq1E.freq==="Diario"?C.red:C.green }}>{vaq1E.freq}</div>
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{vaq1E.freqDetalle}</div>
+                    </div>
+                  </div>
+                </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                  <MetricCard label="PROTEÍNA"   value={vaq1E.protKg+"kg/d"}  color={C.amber}
-                    sub={vaq1E.alertaAlgodon?"⚠ Ver límite algodón":""} />
-                  <MetricCard label="ENERGÍA"    value={vaq1E.energKg>0?vaq1E.energKg+"kg/d":"No necesaria"} color={vaq1E.energKg>0?C.blue:C.textDim}
-                    sub={vaq1E.energKg>0?vaq1E.fuenteEnerg||"Sorgo/maíz molido":""} />
-                  <MetricCard label="FRECUENCIA" value={vaq1E.freq} color={vaq1E.freq==="Diario"?C.red:C.green} style={{ gridColumn:"1/-1" }}
-                    sub={vaq1E.freqDetalle} />
-                  <MetricCard label="GDP"        value={vaq1E.gdpReal+"g/d"}  color={C.green} />
-                  <MetricCard label="PV AGOSTO"  value={vaq1E.pvSal+"kg"}     color={vaq1E.deficit?C.red:C.green} sub={vaq1E.deficit?`⚠ Falta ${vaq1E.objetivo-vaq1E.pvSal}kg para 60% PV adulto`:"✓ Alcanza objetivo entore"} />
+                  <div style={{ borderRadius:8, background:`${C.green}10`, padding:"8px 10px" }}>
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>GDP ESTIMADO</div>
+                    <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:C.green }}>{vaq1E.gdpReal} g/día</div>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>+{Math.round(vaq1E.gdpReal*122/1000)} kg en 122 días</div>
+                  </div>
+                  <div style={{ borderRadius:8, background:`${vaq1E.deficit?C.red:C.green}10`, padding:"8px 10px" }}>
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>PV AL SALIR DEL INVIERNO</div>
+                    <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:vaq1E.deficit?C.red:C.green }}>{vaq1E.pvSal} kg</div>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+                      {vaq1E.deficit ? `⚠ Gana ${vaq1E.pvSal-(parseFloat(form.vaq1PV||tcSave?.pvMayoPond)||0)}kg — falta ${vaq1E.objetivo-vaq1E.pvSal}kg vs obj. +65kg` : `✓ Gana +${Math.round(vaq1E.pvSal-(parseFloat(form.vaq1PV||tcSave?.pvMayoPond)||0))}kg — alcanza objetivo`}
+                    </div>
+                  </div>
                 </div>
                 {vaq1E.advertencia && <Alerta tipo="warn" style={{ marginTop:8 }}>{vaq1E.advertencia}</Alerta>}
                 {vaq1E.alertaAlgodon && <Alerta tipo="warn" style={{ marginTop:6 }}>{vaq1E.alertaAlgodon}</Alerta>}
@@ -3560,17 +3783,33 @@ export default function AgroMindPro() {
                   <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:2 }}>Entrada real al 2° invierno</div>
                 </div>
               )}
-              {vaq2E.esc === "—"
-                ? <Alerta tipo="ok">Sin suplementación — llega al peso mínimo de entore ({vaq2E.pvMinEntore}kg)</Alerta>
+              {/* Vaq2 SIEMPRE muestra suplementación mínima */}
+                {vaq2E.mensajeBase && <Alerta tipo="warn" style={{marginBottom:8}}>{vaq2E.mensajeBase}</Alerta>}
+                {vaq2E.esc === "—"
+                ? <Alerta tipo="ok">Pasto suficiente para GDP mínimo, pero suplementar proteína 2–3×/sem para asegurar {300}g/d</Alerta>
                 : (
                   <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:10, padding:12 }}>
-                    <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:8 }}>ESC {vaq2E.esc} — HACIA ENTORE · Supl. DIARIA</div>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-                      <MetricCard label="GDP"       value={vaq2E.gdpReal+"g/d"}    color={C.green} />
-                      <MetricCard label="PV ENTORE" value={vaq2E.pvEntore+"kg"}    color={vaq2E.llegas?C.green:C.red} />
-                      <MetricCard label="PV MÍN."   value={vaq2E.pvMinEntore+"kg"} color={C.textDim} />
+                    <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:8 }}>ESC {vaq2E.esc} — SUPLEMENTACIÓN VAQ2 INVIERNO</div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                      <MetricCard label="PROTEÍNA"   value={(vaq2E.protKg||"—")+"kg/d"} color={C.amber}
+                        sub="Expeller girasol/algodón/soja" />
+                      <MetricCard label="ENERGÍA"    value={vaq2E.energKg>0?(vaq2E.energKg+"kg/d"):"S.Algodón ad lib"} color={C.blue}
+                        sub={vaq2E.fuenteEnerg||"Sin energía adicional"} />
+                      <MetricCard label="FRECUENCIA" value={vaq2E.freq||"—"} color={vaq2E.freq==="Diario"?C.red:C.green}
+                        style={{gridColumn:"1/-1"}} sub={vaq2E.freqDetalle||""} />
+                      <MetricCard label="GDP INV."   value={(vaq2E.gdpInv||300)+"g/d"} color={C.green}
+                        sub="Mínimo 300 g/d garantizado" />
+                      <MetricCard label="PV AGOSTO"  value={(vaq2E.pvV2Agosto||"—")+"kg"} color={C.blue}
+                        sub="Salida invierno" />
                     </div>
-                    {!vaq2E.llegas && <Alerta tipo="error" style={{ marginTop:8 }}>⚠️ No alcanza peso mínimo de entore — revisar suplementación urgente</Alerta>}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                      <MetricCard label="PV ENTORE"  value={vaq2E.pvEntore+"kg"} color={vaq2E.llegas?C.green:C.red}
+                        sub="Proyección noviembre" />
+                      <MetricCard label="OBJETIVO"   value={vaq2E.pvMinEntore+"kg"} color={C.textDim}
+                        sub="75% PV adulto" />
+                    </div>
+                    {vaq2E.alertaAlgodon && <Alerta tipo="info" style={{marginTop:6}}>{vaq2E.alertaAlgodon}</Alerta>}
+                    {!vaq2E.llegas && <Alerta tipo="error" style={{ marginTop:8 }}>No alcanza peso mínimo de entore — aumentar suplementación o revisar fecha de entore</Alerta>}
                   </div>
                 )
               }
@@ -3904,106 +4143,291 @@ export default function AgroMindPro() {
   const renderAgua = () => <PanelAgua form={form} set={set} sat={sat} />;
 
   // ── PASO 6: SUPLEMENTACIÓN ────────────────────────────────────
-  const renderSuplementacion = () => (
-    <div>
-      <div style={{ fontFamily:C.sans, fontSize:12, color:C.textDim, marginBottom:14, lineHeight:1.6 }}>
-        El modelo recalcula CC y preñez en tiempo real considerando sincronía ruminal y calidad del pasto.
-      </div>
-      <SuplSelector label="GESTACIÓN / INVIERNO"           supl={form.supl1} dosis={parseFloat(form.dosis1)||0} onSuplChange={v=>set("supl1",v)} onDosisChange={v=>set("dosis1",v)} fenolPasto={form.fenologia} color={C.green} />
-      <SuplSelector label="LACTANCIA (mayor impacto CC)"   supl={form.supl2} dosis={parseFloat(form.dosis2)||0} onSuplChange={v=>set("supl2",v)} onDosisChange={v=>set("dosis2",v)} fenolPasto={form.fenologia} color={C.amber} />
-      <SuplSelector label="PREPARTO (último mes)"          supl={form.supl3} dosis={parseFloat(form.dosis3)||0} onSuplChange={v=>set("supl3",v)} onDosisChange={v=>set("dosis3",v)} fenolPasto={form.fenologia} color={C.blue}  />
-      {tray && (form.supl1||form.supl2||form.supl3) && (
-        <div style={{ background:`${C.green}10`, border:`1px solid ${C.green}30`, borderRadius:12, padding:14, marginTop:8 }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:8 }}>IMPACTO EN CC</div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <MetricCard label="CC SERV. C/SUPL." value={tray.ccServ}   color={smf(parseFloat(tray.ccServ),4.5,5.5)} />
-            <MetricCard label="PREÑEZ EST."       value={tray.pr+"%"}  color={smf(tray.pr,35,55)} />
-          </div>
+  const renderSuplementacion = () => {
+    // PV promedio por categoría (mayo-agosto)
+    const pvVacaS   = parseFloat(form.pvVacaAdulta) || 320;
+    const pvV2sS    = parseFloat(form.v2sPV) || Math.round(pvVacaS * 0.88);
+    const pvToroS   = Math.round(pvVacaS * 1.3);
+    const pvVaq2S   = parseFloat(pvEntradaVaq2) || Math.round(pvVacaS * 0.65);
+    const pvVaq1S   = parseFloat(form.vaq1PV || tcSave?.pvMayoPond) || Math.round(pvVacaS * 0.40);
+    const pvTernS   = tcSave?.pvMayoPond || 80;
+
+    // ── CATÁLOGO DE ALIMENTOS con clasificación y valores nutricionales ──
+    const ALIMS = {
+      // PROTEICOS
+      "Expeller soja":     { tipo:"Proteico",       pb:44, em:2.80, label:"Expeller soja (PB 44%)", color:"#7ec850" },
+      "Expeller girasol":  { tipo:"Proteico",       pb:36, em:2.60, label:"Expeller girasol (PB 36%)", color:"#7ec850" },
+      "Expeller algodón":  { tipo:"Proteico",       pb:36, em:2.70, label:"Expeller algodón (PB 36%)", color:"#7ec850" },
+      "Urea tamponada":    { tipo:"Proteico",       pb:280,em:0.00, label:"Urea tamponada (PB 280%)", color:"#7ec850", nota:"Máx 80g/animal/día · siempre con energía" },
+      // ENERGÉTICOS
+      "Maíz grano":        { tipo:"Energetico",     pb:9,  em:3.30, label:"Maíz grano (PB 9%)", color:"#e8a030" },
+      "Sorgo grano":       { tipo:"Energetico",     pb:10, em:3.10, label:"Sorgo grano (PB 10%)", color:"#e8a030" },
+      "Rollo silaje maíz": { tipo:"Energetico",     pb:8,  em:2.50, label:"Rollo/Silaje maíz (PB 8%)", color:"#e8a030" },
+      // ENERGÉTICO-PROTEICOS
+      "Semilla algodón":   { tipo:"EnergProteico",  pb:23, em:2.95, label:"Semilla algodón (PB 23%)", color:"#4a9fd4", nota:"Proteína bypass + grasa · ad libitum solo Vaq2°" },
+      "Pellet trigo":      { tipo:"EnergProteico",  pb:16, em:3.00, label:"Pellet de trigo (PB 16%)", color:"#4a9fd4" },
+    };
+    const gruposTipo = [
+      { id:"Proteico",      label:"Proteico",       desc:"Activan microbiota ruminal — clásicos de invierno NEA", alims:["Expeller girasol","Expeller algodón","Expeller soja","Urea tamponada"] },
+      { id:"Energetico",    label:"Energético",     desc:"Almidón — DIARIO OBLIGATORIO (evitar acidosis)", alims:["Sorgo grano","Maíz grano","Rollo silaje maíz"] },
+      { id:"EnergProteico", label:"Energético-Proteico", desc:"Combinan ambos efectos — flexibilidad de manejo", alims:["Semilla algodón","Pellet trigo"] },
+    ];
+
+    // Categorías — con dos alimentos (principal + complementario)
+    const CATS = [
+      { key:"vacas",   label:"Vacas rodeo general",  icon:"🐄", pv:pvVacaS,  color:C.green,  supl1k:"supl_vacas",   dos1k:"dosis_vacas",   supl2k:"supl2_vacas",  dos2k:"dosis2_vacas"  },
+      { key:"v2s",     label:"Vaca 2° servicio",      icon:"⚡", pv:pvV2sS,   color:C.red,    supl1k:"supl_v2s",     dos1k:"dosis_v2s",     supl2k:"supl2_v2s",    dos2k:"dosis2_v2s"    },
+      { key:"toros",   label:"Toros",                 icon:"🐂", pv:pvToroS,  color:C.blue,   supl1k:"supl_toros",   dos1k:"dosis_toros",   supl2k:"supl2_toros",  dos2k:"dosis2_toros"  },
+      { key:"vaq2",    label:"Vaquillona 2° inv.",     icon:"🟡", pv:pvVaq2S,  color:C.amber,  supl1k:"supl_vaq2",    dos1k:"dosis_vaq2",    supl2k:"supl2_vaq2",   dos2k:"dosis2_vaq2"   },
+      { key:"vaq1",    label:"Vaquillona 1° inv.",     icon:"🟢", pv:pvVaq1S,  color:"#7ec850",supl1k:"supl_vaq1",    dos1k:"dosis_vaq1",    supl2k:"supl2_vaq1",   dos2k:"dosis2_vaq1"   },
+      { key:"ternero", label:"Ternero (tipo destete)", icon:"🐮", pv:pvTernS,  color:C.textDim,supl1k:"supl_ternero", dos1k:"dosis_ternero", supl2k:"supl2_ternero",dos2k:"dosis2_ternero"},
+    ];
+
+    const getAlimInfo = (nombre) => ALIMS[nombre] || null;
+    const calcPctPV   = (dosis, pv) => pv > 0 && dosis > 0 ? (dosis / pv * 100).toFixed(2) : "—";
+    const calcFreq    = (a1, a2) => {
+      const tieneAlmidon = [a1,a2].some(a => a && ALIMS[a]?.tipo === "Energetico");
+      if (!a1 && !a2) return { txt:"—", color:C.textFaint };
+      if (tieneAlmidon) return { txt:"DIARIO obligatorio", color:C.red, nota:"Almidón → acidosis si intermitente" };
+      return { txt:"2–3 veces/semana", color:C.green, nota:"Solo proteico/energ-prot → puede ser interdiario" };
+    };
+
+    const [vistaSupl, setVistaSupl] = React.useState("cuadrantes"); // cuadrantes | resumen
+
+    return (
+      <div>
+        <div style={{ display:"flex", gap:6, marginBottom:12 }}>
+          {[["cuadrantes","📋 Plan por categoría"],["resumen","📊 Resumen rodeo"]].map(([k,l]) => (
+            <button key={k} onClick={()=>setVistaSupl(k)} style={{
+              flex:1, padding:"7px 4px", borderRadius:8, cursor:"pointer", fontFamily:C.font, fontSize:10,
+              background: vistaSupl===k ? C.green+"20" : "transparent",
+              border: `1px solid ${vistaSupl===k ? C.green : C.border}`,
+              color: vistaSupl===k ? C.green : C.textDim,
+            }}>{l}</button>
+          ))}
         </div>
-      )}
-      <div style={{ marginTop:16 }}>
-        <Input label="CONSULTA ESPECÍFICA (opcional)" value={form.consultaEspecifica} onChange={v=>set("consultaEspecifica",v)} placeholder="¿Qué querés analizar en detalle?" />
-      </div>
-    </div>
-  );
 
-  // ── PASO 7: ANÁLISIS ──────────────────────────────────────────
-  const renderAnalisis = () => (
-    <div>
-      {!result && !loading && (
-        <button onClick={runAnalysis} style={{ width:"100%", background:C.green, color:"#0b1a0c", padding:16, borderRadius:14, border:"none", fontFamily:C.font, fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:1, marginBottom:16 }}>
-          ⚡ GENERAR ANÁLISIS TÉCNICO
-        </button>
-      )}
-      {loading && <LoadingPanel msg={loadMsg} />}
-      {result && !loading && (
-        <div>
-          {/* Tabs */}
-          <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto", paddingBottom:4 }}>
-            {[["recomendaciones","💡 Recomendaciones"],["diagnostico","📋 Diagnóstico"],["simulador","🔬 Simulador"],["balance","⚡ Balance"]].map(([k,l]) => (
-              <button key={k} onClick={()=>setTab(k)} style={{
-                flexShrink:0, padding:"8px 14px", borderRadius:20, cursor:"pointer",
-                background: tab===k ? C.green : "rgba(255,255,255,.04)",
-                border:     tab===k ? `1px solid ${C.green}` : `1px solid ${C.border}`,
-                color:      tab===k ? "#0b1a0c" : C.textDim,
-                fontFamily: C.sans, fontSize:12, fontWeight: tab===k ? 700 : 400,
-              }}>{l}</button>
-            ))}
-          </div>
+        {vistaSupl === "cuadrantes" && CATS.map(cat => {
+          const s1 = form[cat.supl1k] || "";
+          const d1 = parseFloat(form[cat.dos1k]) || 0;
+          const s2 = form[cat.supl2k] || "";
+          const d2 = parseFloat(form[cat.dos2k]) || 0;
+          const a1 = getAlimInfo(s1);
+          const a2 = getAlimInfo(s2);
+          const mcal1 = a1 ? a1.em * d1 : 0;
+          const mcal2 = a2 ? a2.em * d2 : 0;
+          const pb1   = a1 ? (a1.pb / 100) * d1 * 1000 : 0;
+          const pb2   = a2 ? (a2.pb / 100) * d2 * 1000 : 0;
+          const mcalTot = mcal1 + mcal2;
+          const pbTot   = pb1 + pb2;
+          const pctPV1  = calcPctPV(d1, cat.pv);
+          const pctPV2  = calcPctPV(d2, cat.pv);
+          const freq    = calcFreq(s1, s2);
+          const tieneSupl = d1 > 0 || d2 > 0;
 
-          {/* Tab: Recomendaciones */}
-          {tab === "recomendaciones" && (
-            <PanelRecomendaciones
-              form={form} tray={tray} dist={dist}
-              evalAgua={evalAgua} sanidad={sanidad}
-              cadena={cadena} sat={sat}
-            />
-          )}
+          // Alertas específicas
+          const alertas = [];
+          if (cat.key === "vaq1" && s1 === "Semilla algodón" && d1 > cat.pv * 0.004)
+            alertas.push({ tipo:"error", msg:`Semilla algodón Vaq1: máx ${(cat.pv*0.004).toFixed(1)}kg (0.4% PV) — superar daña digestibilidad` });
+          if (cat.key === "vaq2" && !tieneSupl)
+            alertas.push({ tipo:"warn", msg:"Vaq2° SIEMPRE necesita suplementación — sin ella solo logra 120-200 g/d en invierno NEA" });
+          if (cat.key === "toros" && (s1 === "Semilla algodón" || s2 === "Semilla algodón")) {
+            const dosAlg = s1==="Semilla algodón" ? d1 : d2;
+            if (dosAlg > cat.pv * 0.003)
+              alertas.push({ tipo:"warn", msg:`Toros: semilla algodón máx 0.3% PV = ${(cat.pv*0.003).toFixed(1)}kg/d (Balbuena INTA 2003)` });
+          }
+          if ([s1,s2].includes("Urea tamponada") && ![s1,s2].some(s => ALIMS[s]?.tipo === "Energetico"))
+            alertas.push({ tipo:"warn", msg:"Urea debe suministrarse siempre junto con fuente energética (riesgo de toxicidad)" });
 
-          {/* Tab: Diagnóstico */}
-          {tab === "diagnostico" && (
-            <div>
-              <RenderInforme texto={result} />
-              <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                <button onClick={descargarPDF} style={{ flex:2, background:`${C.blue}12`, border:`1px solid ${C.blue}35`, borderRadius:10, color:C.blue, padding:13, fontFamily:C.sans, fontSize:13, cursor:"pointer" }}>
-                  ⬇ PDF
-                </button>
-                <button onClick={descargarCSV} style={{ flex:1, background:`${C.green}10`, border:`1px solid ${C.green}35`, borderRadius:10, color:C.green, padding:13, fontFamily:C.sans, fontSize:13, cursor:"pointer" }}>
-                  📊 CSV
-                </button>
+          return (
+            <div key={cat.key} style={{
+              background:C.card2, border:`1px solid ${cat.color}25`,
+              borderRadius:12, padding:14, marginBottom:10
+            }}>
+              {/* ── Encabezado categoría ── */}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                  <span style={{ fontSize:16 }}>{cat.icon}</span>
+                  <div>
+                    <div style={{ fontFamily:C.font, fontSize:12, color:C.text, fontWeight:700 }}>{cat.label}</div>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>PV prom. mayo-agosto: {cat.pv} kg</div>
+                  </div>
+                </div>
+                {tieneSupl && (
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontFamily:C.font, fontSize:11, color:cat.color, fontWeight:700 }}>{mcalTot.toFixed(1)} Mcal/d</div>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{Math.round(pbTot)} g PB/d</div>
+                  </div>
+                )}
               </div>
-              <button onClick={runAnalysis} style={{ width:"100%", background:`${C.green}06`, border:`1px solid ${C.border}`, borderRadius:10, color:C.textDim, padding:11, fontFamily:C.sans, fontSize:12, cursor:"pointer", marginTop:8 }}>
-                🔄 Regenerar análisis
-              </button>
-            </div>
-          )}
 
-          {/* Tab: Simulador */}
-          {tab === "simulador" && (
-            <SimuladorEscenarios form={form} cadena={cadena} baseParams={baseParams} sat={sat} />
-          )}
+              {/* ── CUADRANTE 1: Tipo de alimento (chips) ── */}
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>
+                  TIPO DE ALIMENTO
+                </div>
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                  {gruposTipo.map(g => {
+                    const activo = [...(s1?[s1]:[]),...(s2?[s2]:[])].some(s => ALIMS[s]?.tipo === g.id);
+                    return (
+                      <div key={g.id} style={{
+                        padding:"5px 10px", borderRadius:20, fontFamily:C.font, fontSize:9,
+                        background: activo ? `${cat.color}18` : "transparent",
+                        border: `1px solid ${activo ? cat.color : C.border}`,
+                        color: activo ? cat.color : C.textFaint,
+                      }}>
+                        <div style={{ fontWeight: activo ? 700 : 400 }}>{g.label}</div>
+                        {activo && <div style={{ fontSize:7, marginTop:1 }}>{g.desc}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-          {/* Tab: Balance */}
-          {tab === "balance" && (
-            <div>
-              <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} />
-              <div style={{ marginTop:14 }}>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>CC POR GRUPO AL SERVICIO</div>
-                {dist?.grupos?.map((g, i) => (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:10, background:C.card2, borderRadius:10, padding:"10px 14px", marginBottom:6, border:`1px solid ${C.border}` }}>
-                    <span style={{ fontFamily:C.font, fontSize:12, color:C.text, minWidth:36 }}>CC{g.ccHoy}</span>
-                    <span style={{ flex:1, fontFamily:C.font, fontSize:9, color:C.textDim }}>{g.pct}% · →parto{g.ccParto}→serv{g.ccServ}</span>
-                    <span style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:smf(g.pr,35,55) }}>{g.pr}%</span>
-                    <span style={{ fontFamily:C.sans, fontSize:10, color:g.urgencia==="urgente"?C.red:g.urgencia==="importante"?C.amber:C.green }}>{g.recDestete}</span>
+              {/* ── CUADRANTE 2+3: Alimentos con dosis ── */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+                {[
+                  { label:"ALIMENTO PRINCIPAL", suplKey:cat.supl1k, dosKey:cat.dos1k, suplVal:s1, dosVal:d1, alim:a1, pctPV:pctPV1 },
+                  { label:"COMPLEMENTO",         suplKey:cat.supl2k, dosKey:cat.dos2k, suplVal:s2, dosVal:d2, alim:a2, pctPV:pctPV2 },
+                ].map(({label, suplKey, dosKey, suplVal, dosVal, alim, pctPV}) => (
+                  <div key={label}>
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1, marginBottom:5 }}>{label}</div>
+                    <select value={suplVal} onChange={e=>set(suplKey, e.target.value)} style={{
+                      width:"100%", background:C.card, border:`1px solid ${C.border}`, borderRadius:8,
+                      color:C.text, padding:"7px 9px", fontFamily:C.sans, fontSize:10, cursor:"pointer", marginBottom:6
+                    }}>
+                      <option value="">— Sin suplemento —</option>
+                      {gruposTipo.map(g => (
+                        <optgroup key={g.id} label={g.label.toUpperCase()}>
+                          {g.alims.map(nombre => {
+                            const a = ALIMS[nombre];
+                            return <option key={nombre} value={nombre}>{a.label} | {a.em} Mcal/kg</option>;
+                          })}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                      <input type="number" step="0.1" min="0" max="8" value={dosVal||""} onChange={e=>set(dosKey, e.target.value)}
+                        style={{ flex:1, background:C.card, border:`1px solid ${C.border}`, borderRadius:8,
+                          color:C.text, padding:"7px 9px", fontFamily:C.font, fontSize:14, boxSizing:"border-box" }}
+                        placeholder="0.0 kg/d"
+                      />
+                      {alim && dosVal > 0 && (
+                        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, textAlign:"right", lineHeight:1.4, minWidth:52 }}>
+                          <div style={{ color:cat.color, fontWeight:700 }}>{pctPV}% PV</div>
+                          <div>{(alim.em * dosVal).toFixed(1)} Mcal</div>
+                          <div style={{ color:alim.tipo==="Proteico"?"#7ec850":alim.tipo==="Energetico"?C.amber:C.blue, fontSize:8 }}>{alim.tipo}</div>
+                        </div>
+                      )}
+                    </div>
+                    {alim?.nota && <div style={{ fontFamily:C.font, fontSize:8, color:C.amber, marginTop:3 }}>ℹ {alim.nota}</div>}
                   </div>
                 ))}
               </div>
+
+              {/* ── CUADRANTE 4: Resultados ── */}
+              {tieneSupl && (
+                <div style={{ borderTop:`1px solid ${cat.color}20`, paddingTop:10 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
+                    <div style={{ background:`${cat.color}08`, borderRadius:8, padding:"6px 4px", textAlign:"center" }}>
+                      <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>% PV TOTAL</div>
+                      <div style={{ fontFamily:C.font, fontSize:14, color:cat.color, fontWeight:700 }}>
+                        {cat.pv>0 ? ((d1+d2)/cat.pv*100).toFixed(2) : "—"}%
+                      </div>
+                    </div>
+                    <div style={{ background:`${cat.color}08`, borderRadius:8, padding:"6px 4px", textAlign:"center" }}>
+                      <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>TOTAL kg/d</div>
+                      <div style={{ fontFamily:C.font, fontSize:14, color:cat.color, fontWeight:700 }}>{(d1+d2).toFixed(1)}</div>
+                    </div>
+                    <div style={{ background:`${cat.color}08`, borderRadius:8, padding:"6px 4px", textAlign:"center" }}>
+                      <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>Mcal/día</div>
+                      <div style={{ fontFamily:C.font, fontSize:14, color:cat.color, fontWeight:700 }}>{mcalTot.toFixed(1)}</div>
+                    </div>
+                    <div style={{ background:`${cat.color}08`, borderRadius:8, padding:"6px 4px", textAlign:"center" }}>
+                      <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>g PB/día</div>
+                      <div style={{ fontFamily:C.font, fontSize:14, color:cat.color, fontWeight:700 }}>{Math.round(pbTot)}</div>
+                    </div>
+                  </div>
+                  {/* Frecuencia */}
+                  <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${freq.color}10`, border:`1px solid ${freq.color}25` }}>
+                    <span style={{ fontFamily:C.font, fontSize:9, color:freq.color, fontWeight:700 }}>{freq.txt}</span>
+                    {freq.nota && <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginLeft:8 }}>{freq.nota}</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Alertas */}
+              {alertas.map((al, i) => (
+                <Alerta key={i} tipo={al.tipo} style={{marginTop:6}}>{al.msg}</Alerta>
+              ))}
             </div>
+          );
+        })}
+
+        {/* ── VISTA RESUMEN RODEO ── */}
+        {vistaSupl === "resumen" && (
+          <div>
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
+              RESUMEN SUPLEMENTACIÓN — costo y Mcal total por categoría
+            </div>
+            {CATS.map(cat => {
+              const d1 = parseFloat(form[cat.dos1k]) || 0;
+              const d2 = parseFloat(form[cat.dos2k]) || 0;
+              const a1 = getAlimInfo(form[cat.supl1k]);
+              const a2 = getAlimInfo(form[cat.supl2k]);
+              const mcal = (a1?a1.em*d1:0) + (a2?a2.em*d2:0);
+              const pb   = (a1?(a1.pb/100)*d1*1000:0) + (a2?(a2.pb/100)*d2*1000:0);
+              const pct  = cat.pv > 0 && (d1+d2)>0 ? ((d1+d2)/cat.pv*100).toFixed(2) : null;
+              if (!pct) return null;
+              return (
+                <div key={cat.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+                  padding:"8px 12px", borderRadius:10, marginBottom:6, background:C.card2, border:`1px solid ${cat.color}20` }}>
+                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    <span>{cat.icon}</span>
+                    <div>
+                      <div style={{ fontFamily:C.font, fontSize:10, color:C.text, fontWeight:600 }}>{cat.label}</div>
+                      <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+                        {[form[cat.supl1k], form[cat.supl2k]].filter(Boolean).join(" + ")}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontFamily:C.font, fontSize:11, color:cat.color, fontWeight:700 }}>{pct}% PV · {(d1+d2).toFixed(1)} kg/d</div>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{mcal.toFixed(1)} Mcal · {Math.round(pb)}g PB</div>
+                  </div>
+                </div>
+              );
+            }).filter(Boolean)}
+          </div>
+        )}
+
+        {/* ── SANIDAD PARASITARIA ── */}
+        <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:14, marginTop:4 }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, letterSpacing:1, marginBottom:10 }}>🩺 SANIDAD PARASITARIA</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <SelectF label="PARÁSITOS EXTERNOS (garrapatas)" value={form.sanParasitoExt||""} onChange={v=>set("sanParasitoExt",v)} options={[
+              ["no","No realiza control"],
+              ["si_1","1 tratamiento/año"],
+              ["si_2","2–3 tratamientos/año"],
+              ["si_completo","Control completo (baño + pour-on)"],
+            ]} />
+            <SelectF label="PARÁSITOS INTERNOS" value={form.sanParasitoInt||""} onChange={v=>set("sanParasitoInt",v)} options={[
+              ["no","No realiza control"],
+              ["si_1","1 tratamiento/año (destete)"],
+              ["si_2","2 tratamientos/año"],
+              ["si_rotacion","Rotación de principios activos"],
+            ]} />
+          </div>
+          {(form.sanParasitoExt==="no" || form.sanParasitoInt==="no") && (
+            <Alerta tipo="warn" style={{marginTop:8}}>
+              Sin control parasitario: reducción GDP 15-25% · mayor susceptibilidad invierno (INTA EEA Colonia Benítez 2025)
+            </Alerta>
           )}
         </div>
-      )}
-    </div>
-  );
+
+      </div>
+    );
+  };
 
   const RENDERS = [renderUbicacion, renderRodeo, renderCC, renderCategorias, renderForraje, renderAgua, renderSuplementacion, renderAnalisis];
 
