@@ -4412,6 +4412,71 @@ export default function AgroMindPro() {
     );
   };
 
+  // ── PASO 7: ANÁLISIS ──────────────────────────────────────────
+  const renderAnalisis = () => (
+    <div>
+      {!result && !loading && (
+        <button onClick={runAnalysis} style={{ width:"100%", background:C.green, color:"#0b1a0c", padding:16, borderRadius:14, border:"none", fontFamily:C.font, fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:1, marginBottom:16 }}>
+          ⚡ GENERAR ANÁLISIS TÉCNICO
+        </button>
+      )}
+      {loading && <LoadingPanel msg={loadMsg} />}
+      {result && !loading && (
+        <div>
+          <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto", paddingBottom:4 }}>
+            {[["recomendaciones","💡 Recomendaciones"],["diagnostico","📋 Diagnóstico"],["simulador","🔬 Simulador"],["balance","⚡ Balance"]].map(([k,l]) => (
+              <button key={k} onClick={()=>setTab(k)} style={{
+                flexShrink:0, padding:"8px 14px", borderRadius:20, cursor:"pointer",
+                background: tab===k ? C.green : "rgba(255,255,255,.04)",
+                border:     tab===k ? `1px solid ${C.green}` : `1px solid ${C.border}`,
+                color:      tab===k ? "#0b1a0c" : C.textDim,
+                fontFamily: C.sans, fontSize:12, fontWeight: tab===k ? 700 : 400,
+              }}>{l}</button>
+            ))}
+          </div>
+          {tab === "recomendaciones" && (
+            <PanelRecomendaciones form={form} tray={tray} dist={dist} evalAgua={evalAgua} sanidad={sanidad} cadena={cadena} sat={sat} />
+          )}
+          {tab === "diagnostico" && (
+            <div>
+              <RenderInforme texto={result} />
+              <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                <button onClick={descargarPDF} style={{ flex:2, background:`${C.blue}12`, border:`1px solid ${C.blue}35`, borderRadius:10, color:C.blue, padding:13, fontFamily:C.sans, fontSize:13, cursor:"pointer" }}>
+                  ⬇ PDF
+                </button>
+                <button onClick={descargarCSV} style={{ flex:1, background:`${C.green}10`, border:`1px solid ${C.green}35`, borderRadius:10, color:C.green, padding:13, fontFamily:C.sans, fontSize:13, cursor:"pointer" }}>
+                  📊 CSV
+                </button>
+              </div>
+              <button onClick={runAnalysis} style={{ width:"100%", background:`${C.green}06`, border:`1px solid ${C.border}`, borderRadius:10, color:C.textDim, padding:11, fontFamily:C.sans, fontSize:12, cursor:"pointer", marginTop:8 }}>
+                🔄 Regenerar análisis
+              </button>
+            </div>
+          )}
+          {tab === "simulador" && (
+            <SimuladorEscenarios form={form} cadena={cadena} baseParams={baseParams} sat={sat} />
+          )}
+          {tab === "balance" && (
+            <div>
+              <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} />
+              <div style={{ marginTop:14 }}>
+                <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>CC POR GRUPO AL SERVICIO</div>
+                {dist?.grupos?.map((g, i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:10, background:C.card2, borderRadius:10, padding:"10px 14px", marginBottom:6, border:`1px solid ${C.border}` }}>
+                    <span style={{ fontFamily:C.font, fontSize:12, color:C.text, minWidth:36 }}>CC{g.ccHoy}</span>
+                    <span style={{ flex:1, fontFamily:C.font, fontSize:9, color:C.textDim }}>{g.pct}% · →parto {g.ccParto} →serv {g.ccServ}</span>
+                    <span style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:smf(parseFloat(g.pr),60,80) }}>{g.pr}%</span>
+                    <span style={{ fontFamily:C.sans, fontSize:10, color:g.urgencia==="urgente"?C.red:g.urgencia==="importante"?C.amber:C.green }}>{g.recDestete}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   const RENDERS = [renderUbicacion, renderRodeo, renderCC, renderCategorias, renderForraje, renderAgua, renderSuplementacion, renderAnalisis];
 
   // ══════════════════════════════════════════════════════════════
