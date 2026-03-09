@@ -2898,24 +2898,7 @@ export default function AgroMindPro() {
     if (form.sanParasitoExt || form.sanParasitoInt) {
       t += `Parásitos externos: ${form.sanParasitoExt||"no controlados"} · Internos: ${form.sanParasitoInt||"no controlados"}\n`;
     }
-    // Suplementación detallada por categoría (nuevo sistema doble alimento)
-    const suplCats = [
-      ["Vacas rodeo", "supl_vacas","dosis_vacas","supl2_vacas","dosis2_vacas"],
-      ["V2S",         "supl_v2s",  "dosis_v2s",  "supl2_v2s",  "dosis2_v2s"],
-      ["Toros",       "supl_toros","dosis_toros","supl2_toros","dosis2_toros"],
-      ["Vaq2°",       "supl_vaq2", "dosis_vaq2", "supl2_vaq2", "dosis2_vaq2"],
-      ["Vaq1°",       "supl_vaq1", "dosis_vaq1", "supl2_vaq1", "dosis2_vaq1"],
-      ["Ternero",     "supl_ternero","dosis_ternero","supl2_ternero","dosis2_ternero"],
-    ];
-    const suplLines = suplCats.map(([cat, s1k, d1k, s2k, d2k]) => {
-      const s1 = form[s1k], d1 = parseFloat(form[d1k])||0;
-      const s2 = form[s2k], d2 = parseFloat(form[d2k])||0;
-      if (!s1 && !s2) return null;
-      const p1 = s1&&d1 ? `${s1} ${d1}kg/d` : null;
-      const p2 = s2&&d2 ? `${s2} ${d2}kg/d` : null;
-      return `  ${cat}: ${[p1,p2].filter(Boolean).join(" + ")}`;
-    }).filter(Boolean);
-    if (suplLines.length) t += `SUPLEMENTACIÓN POR CATEGORÍA:\n${suplLines.join("\n")}\n`;
+
     if (dist?.grupos?.length) {
       t += `\nCC POR GRUPO (supervivencia Rosello Brajovich 2025):\n`;
       dist.grupos.forEach(g => {
