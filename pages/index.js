@@ -955,8 +955,9 @@ function calcConsumoAgua(pvVaca, tempC, lactando) {
   const pv   = parseFloat(pvVaca) || 320;
   const t    = parseFloat(tempC)  || 25;
   // Consumo base a temperatura dada: aumenta marcadamente >25°C
-  const base = pv * 0.066 * Math.pow(Math.max(10, t) / 20, 1.1);
-  const mult = lactando ? 1.55 : 1.0; // lactación eleva consumo 50–60% (NRC 2000)
+  // Exponente 1.3 para reflejar mejor demanda en NEA/Chaco (38-42°C verano)
+  const base = pv * 0.066 * Math.pow(Math.max(10, t) / 20, 1.3);
+  const mult = lactando ? 1.60 : 1.0; // lactación eleva consumo 55–65% (NRC 2000/Beede 1992)
   return Math.round(base * mult);
 }
 
@@ -1873,12 +1874,12 @@ function LoadingPanel({ msg }) {
 }
 
 // ─── INPUT ────────────────────────────────────────────────────────
-function Input({ label, value, onChange, placeholder, type = "text", sub, warn }) {
+function Input({ label, value, onChange, placeholder, type = "text", sub, warn, id }) {
   return (
     <div style={{ marginBottom:14 }}>
       {label && <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:5 }}>{label}</div>}
       <input
-        type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        id={id} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         style={{ width:"100%", background:C.card2, border:`1px solid ${warn ? "rgba(232,160,48,.5)" : C.border}`, borderRadius:10, color:C.text, padding:"12px 14px", fontFamily:C.sans, fontSize:14, boxSizing:"border-box" }}
       />
       {sub  && <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:4 }}>{sub}</div>}
@@ -3552,6 +3553,7 @@ function AgroMindPro() {
   const [modoForraje, setModoForraje] = useState("general");
   const [usaPotreros, setUsaPotreros] = useState(false);
   const [potreros,    setPotreros]    = useState([{ ha:"", veg:"Pastizal natural NEA/Chaco", fenol:"menor_10" }]);
+  const [vistaSupl,   setVistaSupl]   = useState("cuadrantes"); // cuadrantes | resumen
 
   const set     = (k, v) => setForm(f => ({ ...f, [k]:v }));
   const setDist = (k, v) => setForm(f => ({ ...f, [k]:v }));
@@ -5220,8 +5222,6 @@ function AgroMindPro() {
       if (tieneAlmidon) return { txt:"DIARIO obligatorio", color:C.red, nota:"Almidón → acidosis si intermitente" };
       return { txt:"2–3 veces/semana", color:C.green, nota:"Solo proteico/energ-prot → puede ser interdiario" };
     };
-
-    const [vistaSupl, setVistaSupl] = React.useState("cuadrantes"); // cuadrantes | resumen
 
     // ── Motor de manejo de lactancia por CC ─────────────────────────
     // Calcula la herramienta óptima para cada grupo de CC del rodeo
