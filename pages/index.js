@@ -1,15 +1,4 @@
 "use client";
-import React, { useState, useEffect, useMemo } from "react";
-import { useSession, signOut, signIn, SessionProvider } from "next-auth/react";
-// ... resto de imports ...
-
-export default function Home() {
-  return <AgroMindPro />;
-}
-
-function AgroMindPro() {
-  // ... tu código actual ...
-}
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signOut, signIn, SessionProvider } from "next-auth/react";
@@ -20,11 +9,9 @@ import {
   ResponsiveContainer, ReferenceLine,
   RadarChart, PolarGrid, PolarAngleAxis, Radar,
 } from "recharts";
-
 // ═══════════════════════════════════════════════════════════════════
 // AGROMIND PRO v16 — PARTE 1: MOTOR DEL MODELO
-// ═══════════════════════════════════════════════════════════════════
-
+// ══════════════════════════════════════════════════════════════════
 // ─── BIOTIPOS ─────────────────────────────────────────────────────
 const BIOTIPOS = {
   // ── Cebú puro ──────────────────────────────────────────────────
