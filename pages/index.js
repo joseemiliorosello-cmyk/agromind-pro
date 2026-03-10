@@ -1931,17 +1931,15 @@ function SuplSelector({ label, supl, dosis, onSuplChange, onDosisChange, fenolPa
         ))}
       </select>
 
-      {supl && (
-        <Slider label="Dosis kg/vaca/día" value={dosis} min={0.1} max={5} step={0.1} onChange={onDosisChange} unit=" kg" color={color} />
-      )}
+      <div style={{ display: supl ? "block" : "none" }}>
+  <Slider label="Dosis kg/vaca/día" value={dosis} min={0.1} max={5} step={0.1} onChange={onDosisChange} unit=" kg" color={color} />
+</div>
 
-      {supl && dosis > 0 && (
-        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
-          <Pill color={T.blue}>+{mcal.toFixed(1)} Mcal/v/d</Pill>
-          <Pill color={color}>PB {s.pb}%</Pill>
-          {sinc && <Pill color={sinc.eficiente ? T.green : T.red}>{sinc.eficiente ? "✓ Sincronía OK" : "⚠ Riesgo sincronía"}</Pill>}
-        </div>
-      )}
+     <div style={{ display: (supl && dosis > 0) ? "flex" : "none", gap:8, flexWrap:"wrap", marginBottom:8 }}>
+  <Pill color={T.blue}>+{mcal.toFixed(1)} Mcal/v/d</Pill>
+  <Pill color={color}>PB {s.pb}%</Pill>
+  {sinc && <Pill color={sinc.eficiente ? T.green : T.red}>{sinc.eficiente ? "✓ Sincronía OK" : "⚠ Riesgo sincronía"}</Pill>}
+</div>
 
       {sinc && sinc.warnings.map((w, i) => <AlertBox key={i} nivel={w.nivel}>{w.msg}</AlertBox>)}
     </div>
