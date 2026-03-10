@@ -57,6 +57,7 @@ const getBiotipo = (k) => BIOTIPOS[k] || BIOTIPO_DEF;
 const SUPLEMENTOS = {
   "Expeller soja":      { pb:44,  em:2.80, degProt:65, degEner:75, precio:1.0, label:"Expeller soja" },
   "Expeller girasol":   { pb:36,  em:2.60, degProt:60, degEner:72, precio:0.7, label:"Expeller girasol" },
+  "Expeller algodón":   { pb:36,  em:2.70, degProt:60, degEner:72, precio:0.75, label:"Expeller algodón" },
   "Semilla algodón":    { pb:23,  em:2.95, degProt:55, degEner:78, precio:0.9,  label:"Semilla de algodón (proteína bypass + grasa)" },
   "Urea tamponada":     { pb:280, em:0.00, degProt:100,degEner:0,  precio:1.2, label:"Urea tamponada" },
   "Maíz grano":         { pb:9,   em:3.30, degProt:50, degEner:82, precio:0.6, label:"Maíz grano" },
@@ -2985,19 +2986,18 @@ function diagnosticarSistema(motor, form) {
   // ════════════════════════════════════════
 
   if (vaq1E && !vaq1E.mensaje) {
-    const pvEntore = vaq1E.pvSal ?? 0;
-    const pvMinEnt = Math.round(pvVaca * 0.60);
-    const deficit  = pvMinEnt - pvEntore;
+    const pvAgosto = vaq1E.pvSal ?? 0;
+    const pvObjAgosto = 220; // objetivo: llegar a 220kg en agosto fin del 1° invierno
+    const deficit  = pvObjAgosto - pvAgosto;
     if (deficit > 0) {
-      const kgProt  = +(deficit / (vaq1E.gdpReal||130) * vaq1E.protKg).toFixed(2);
-      const gdpConS = Math.min(350, (vaq1E.gdpReal||130) + 80);
+      const gdpConS = Math.min(400, (vaq1E.gdpReal||130) + 80);
       const pvConS  = Math.round((pvEntVaq1||0) + gdpConS * 0.122);
       addRec(
         "vaq1", "P1", "Vaquillona 1° invierno", "🐄",
-        `Suplementar ${vaq1E.protKg} kg/día proteína + ${vaq1E.energKg>0?vaq1E.energKg+' kg energía':''} — objetivo PV entore ${pvMinEnt} kg`,
-        { pvEntore, gdp:vaq1E.gdpReal, llegas:false, label:"Sin suplemento" },
-        { pvEntore:pvConS, gdp:gdpConS, llegas:pvConS>=pvMinEnt, label:"Con plan actual" },
-        `PV al entore proyectado: ${pvEntore} kg — déficit ${deficit} kg vs mínimo ${pvMinEnt} kg (60% PV adulto). Una vaquillona que entra al servicio con <60% PV adulto: mayor tasa de anestro, menor tasa de concepción, y si queda preñada → vaca problema en su 2° servicio. El costo de un invierno sin suplementar se paga 2 temporadas.`,
+        `Suplementar ${vaq1E.protKg} kg/día proteína + ${vaq1E.energKg>0?vaq1E.energKg+' kg energía':''} — objetivo PV agosto ${pvObjAgosto} kg`,
+        { "PV agosto (kg)": pvAgosto, "GDP (g/d)":vaq1E.gdpReal, label:"Sin suplemento" },
+        { "PV agosto (kg)": pvConS,   "GDP (g/d)":gdpConS, label:"Con plan actual" },
+        `PV proyectado en agosto: ${pvAgosto} kg — déficit ${deficit} kg vs objetivo ${pvObjAgosto} kg. El entore de la vaquillona 1° invierno es al año siguiente (noviembre próximo). Si llega a ${pvObjAgosto}kg en agosto ya puede evaluarse entore anticipado si superó el 65% del PV adulto.`,
         "Jun–Ago",
         { tipo:"supl", alimento:"Expeller girasol", kgDia:vaq1E.protKg,
           energetico: vaq1E.energKg > 0 ? { alimento:"Sorgo molido", kgDia:vaq1E.energKg } : null }
@@ -3015,8 +3015,8 @@ function diagnosticarSistema(motor, form) {
     addRec(
       "vaq2", "P2", "Vaquillona 2° servicio", "🔶",
       `Suplementar vaq2: ${kgExpGir} kg expeller/día — objetivo PV entore ${vaq2E.pvMinEntore} kg`,
-      { pvEntore: vaq2E.pvEntore, llegas: false, label:"Sin corrección" },
-      { pvEntore: vaq2E.pvMinEntore, llegas: true, label:"Con suplemento" },
+      { "PV entore (kg)": vaq2E.pvEntore, "Llega obj.": "No", label:"Sin corrección" },
+      { "PV entore (kg)": vaq2E.pvMinEntore, "Llega obj.": "Sí", label:"Con suplemento" },
       `Vaq2 proyectada: ${vaq2E.pvEntore} kg — necesita ${vaq2E.pvMinEntore} kg (75% PV adulto). La vaquillona de 2° servicio está en triple estrés (crecimiento + preñez + lactación anterior). Entrar al servicio liviana garantiza baja preñez y perpetúa el problema de recría.`,
       "Preparto vaq2",
       { tipo:"supl", alimento:"Expeller girasol", kgDia:kgExpGir }
@@ -4238,14 +4238,14 @@ function AgroMindPro() {
           <div style={{ fontSize:22, marginBottom:4 }}>📍</div>
           {coords ? "GPS activo" : "Usar GPS"}
         </button>
-        <div style={{
+        <button onClick={() => { setTimeout(() => { const el = document.getElementById("campo-localidad"); if(el){ el.scrollIntoView({behavior:"smooth",block:"center"}); el.focus(); } }, 100); }} style={{
           background:`${C.blue}10`, borderRadius:12, border:`1px solid ${C.blue}30`,
-          padding:"14px 10px", textAlign:"center"
+          padding:"14px 10px", textAlign:"center", cursor:"pointer", width:"100%"
         }}>
           <div style={{ fontSize:22, marginBottom:4 }}>✏️</div>
           <div style={{ fontFamily:C.sans, fontSize:12, color:C.blue, fontWeight:600 }}>Cargar manual</div>
           <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:2 }}>Ingresá zona y localidad abajo</div>
-        </div>
+        </button>
       </div>
       {coords && (
         <Alerta tipo="ok">
@@ -4285,7 +4285,7 @@ function AgroMindPro() {
         ["neutro","Neutro"],["nino","El Niño (+25% oferta)"],["nina","La Niña (−25% oferta)"],
       ]} />
       <Input label="PRODUCTOR / ESTABLECIMIENTO" value={form.nombreProductor} onChange={v=>set("nombreProductor",v)} placeholder="Nombre del establecimiento" />
-      <Input label="LOCALIDAD / PARAJE" value={form.localidad} onChange={v=>set("localidad",v)} placeholder="Ej: Charata, Clorinda, Concepción…" sub="Para contexto geográfico en el informe" />
+      <Input id="campo-localidad" label="LOCALIDAD / PARAJE" value={form.localidad} onChange={v=>set("localidad",v)} placeholder="Ej: Charata, Clorinda, Concepción…" sub="Para contexto geográfico en el informe" />
 
       {/* ── MÓDULO DIAGNÓSTICO TOROS ── */}
       {parseInt(form.torosN) > 0 && (
@@ -4745,15 +4745,36 @@ function AgroMindPro() {
                 {vaq1E.alertaAlgodon && <Alerta tipo="warn" style={{ marginTop:6 }}>{vaq1E.alertaAlgodon}</Alerta>}
                 {vaq1E.nota && !vaq1E.nota.includes("Hiperprecoz") && <Alerta tipo="info" style={{ marginTop:6 }}>{vaq1E.nota}</Alerta>}
                 {/* Objetivo entore vinculado a política del establecimiento */}
-                <div style={{ marginTop:8, padding:"8px 12px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}20` }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:2 }}>OBJETIVO AGOSTO (fin 1° invierno)</div>
-                    <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim }}>
-                      PV objetivo agosto: <strong style={{color:C.text}}>≥ 220 kg</strong> — 
-                      {(vaq1E.pvSal || 0) >= 220
-                        ? <span style={{color:C.green}}> ✓ Llega a {vaq1E.pvSal} kg con esta suplementación</span>
-                        : <span style={{color:C.amber}}> ⚠ Proyectado {vaq1E.pvSal} kg — ajustar dosis para llegar a 220 kg</span>}
-                    </div>
-                  </div>
+                {(() => {
+                    const pvAdulta = parseFloat(form.pvVacaAdulta)||320;
+                    const pvAgosto = vaq1E.pvSal || 0;
+                    const obj220   = 220;
+                    const pct65    = Math.round(pvAdulta * 0.65);
+                    const llegaObj = pvAgosto >= obj220;
+                    const llegaPct65 = pvAgosto >= pct65;
+                    return (
+                      <div style={{ marginTop:8, padding:"10px 12px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}20` }}>
+                        <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:4 }}>OBJETIVO AGOSTO (fin 1° invierno)</div>
+                        <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginBottom:6 }}>
+                          PV objetivo: <strong style={{color:C.text}}>≥ {obj220} kg</strong> — 
+                          {llegaObj
+                            ? <span style={{color:C.green}}> ✓ Proyectado {pvAgosto} kg</span>
+                            : <span style={{color:C.amber}}> ⚠ Proyectado {pvAgosto} kg — ajustar suplementación</span>}
+                        </div>
+                        {llegaPct65 && (
+                          <div style={{ padding:"6px 10px", borderRadius:6, background:`${C.green}12`, border:`1px solid ${C.green}30` }}>
+                            <div style={{ fontFamily:C.font, fontSize:9, color:C.green, fontWeight:700, marginBottom:2 }}>
+                              ✅ APTA ENTORE ANTICIPADO
+                            </div>
+                            <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim }}>
+                              Proyecta {pvAgosto} kg en agosto ≥ 65% PV adulto ({pct65} kg). 
+                              Si superó ese umbral, evaluá entore anticipado en noviembre para que la vaquillona entre al servicio con mejor CC y recuperación. No esperar al servicio del año siguiente si ya tiene el peso.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
               </div>
             )
           )}
@@ -5697,14 +5718,28 @@ function AgroMindPro() {
                 </div>
               )}
               {/* Ingreso de stock */}
-              <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:6 }}>STOCK DISPONIBLE HOY</div>
+              <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:8 }}>STOCK DISPONIBLE HOY (toneladas)</div>
+              <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim, marginBottom:10, lineHeight:1.4 }}>
+                🔸 Resaltados = usados en tu plan · Los demás también pueden cargarse
+              </div>
               {ALIM_NOMBRES.map(alim => {
                 const item = stockAlim.find(s => s.alimento === alim) || { alimento:alim, toneladas:"" };
                 const demanda = demandaPorAlim[alim];
+                const stockKg = item.toneladas ? parseFloat(item.toneladas) * 1000 : 0;
+                const deficit = demanda && stockKg > 0 ? demanda - stockKg : null;
                 return (
-                  <div key={alim} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
-                    <div style={{ flex:1, fontFamily:C.font, fontSize:9, color: demanda ? C.text : C.textFaint }}>{alim}</div>
-                    <div style={{ display:"flex", alignItems:"center", gap:4, width:120 }}>
+                  <div key={alim} style={{
+                    display:"flex", alignItems:"center", gap:8, marginBottom:8,
+                    padding:"8px 10px", borderRadius:8,
+                    background: demanda ? `${C.amber}08` : "transparent",
+                    border:`1px solid ${demanda ? C.amber+"30" : C.border}`,
+                  }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontFamily:C.font, fontSize:10, color: demanda ? C.text : C.textFaint, fontWeight: demanda ? 600 : 400 }}>{alim}</div>
+                      {demanda && <div style={{ fontFamily:C.font, fontSize:8, color:C.amber }}>Necesitás {(demanda/1000).toFixed(1)} t</div>}
+                      {deficit !== null && <div style={{ fontFamily:C.font, fontSize:8, color: deficit > 0 ? C.red : C.green }}>{deficit > 0 ? `⚠ Faltan ${(deficit/1000).toFixed(1)} t` : `✓ Stock OK`}</div>}
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:4 }}>
                       <input
                         type="number" step="0.5" min="0"
                         value={item.toneladas}
@@ -5715,8 +5750,8 @@ function AgroMindPro() {
                           set("stockAlim", newStock);
                         }}
                         placeholder="0.0"
-                        style={{ width:65, background:C.card, border:`1px solid ${demanda ? C.amber+"50" : C.border}`,
-                          borderRadius:6, color:C.text, padding:"5px 7px", fontFamily:C.font, fontSize:11 }}
+                        style={{ width:70, background:C.card, border:`1px solid ${demanda ? C.amber+"60" : C.border}`,
+                          borderRadius:6, color:C.text, padding:"6px 8px", fontFamily:C.font, fontSize:12 }}
                       />
                       <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>t</span>
                     </div>
