@@ -100,7 +100,6 @@ const CLIMA_HIST = {
   "Córdoba":     [{t:25,p:95}, {t:24,p:90}, {t:22,p:95}, {t:17,p:75}, {t:13,p:50},{t:10,p:35},{t:9, p:30},{t:11,p:45},{t:15,p:65},{t:19,p:80}, {t:22,p:95}, {t:25,p:95}],
   "La Pampa":    [{t:23,p:70}, {t:22,p:65}, {t:20,p:75}, {t:15,p:60}, {t:11,p:40},{t:8, p:25},{t:7, p:22},{t:9, p:35},{t:12,p:50},{t:17,p:65}, {t:20,p:70}, {t:23,p:70}],
 };
-const getClima = (prov) => CLIMA_HIST[prov] || CLIMA_HIST["Corrientes"];
 
 // ─── OFERTA MENSUAL CON VARIACIÓN ESTACIONAL ──────────────────────
 // La oferta NO es plana: colapsa en invierno (T<15°C en gramíneas C4)
