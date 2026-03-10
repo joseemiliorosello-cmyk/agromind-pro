@@ -1,4 +1,15 @@
 "use client";
+import React, { useState, useEffect, useMemo } from "react";
+import { useSession, signOut, signIn, SessionProvider } from "next-auth/react";
+// ... resto de imports ...
+
+export default function Home() {
+  return <AgroMindPro />;
+}
+
+function AgroMindPro() {
+  // ... tu código actual ...
+}
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signOut, signIn, SessionProvider } from "next-auth/react";
