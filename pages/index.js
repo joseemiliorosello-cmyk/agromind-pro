@@ -812,9 +812,12 @@ function calcV2S(pvV2s, pvAdulta, ccActual, conTernero, biotipo, cadena) {
   const diasAnestro = Math.round(60 + defCC * 32 + defMin * 28); // base 60d (entre 50d adulta y 70d 1°parto)
   const riesgoAnestro = diasAnestro > 60;
 
-  // CC al servicio
+  // CC al servicio — acotar recuperación a días reales disponibles en cadena
+  // Si hay poco tiempo entre destete y servicio, la vaca no recupera lo máximo teórico
+  const diasRecup2 = cadena ? Math.max(0, Math.round(((cadena.ini ? cadena.ini.getTime() : Date.now()) - Date.now()) / 86400000) - diasHastaParto - Math.round(mesesLact2 * 30)) : 75;
+  const diasRecupEfectivo = Math.min(75, Math.max(0, diasRecup2));
   const ccServ2 = parseFloat(Math.min(8, Math.max(1.5,
-    ccMin2 + tR * 75
+    ccMin2 + tR * diasRecupEfectivo
   )).toFixed(2));
 
   // Preñez en 2° servicio
@@ -958,7 +961,9 @@ function calcConsumoAgua(pvVaca, tempC, lactando) {
   // Exponente 1.3 para reflejar mejor demanda en NEA/Chaco (38-42°C verano)
   const base = pv * 0.066 * Math.pow(Math.max(10, t) / 20, 1.3);
   const mult = lactando ? 1.60 : 1.0; // lactación eleva consumo 55–65% (NRC 2000/Beede 1992)
-  return Math.round(base * mult);
+  // Mínimo 65L en período crítico de verano (NEA/Chaco >30°C)
+  const resultado = Math.round(base * mult);
+  return t >= 30 ? Math.max(65, resultado) : resultado;
 }
 
 function evaluarAgua(tds, tipoSal, pvVaca, tempC, lactando, enso) {
@@ -2033,6 +2038,28 @@ function PanelAgua({ form, set, sat }) {
         {form.sanBrucelosis === "no" && <Alerta tipo="error">Brucelosis sin vacunar — obligatoria en terneras 3–8 meses (SENASA RES.114/21). Zoonosis. Riesgo de aborto masivo al 7° mes.</Alerta>}
 
         <Toggle label="💉 ¿Vacunación IBR/DVB al día?"       value={form.sanVacunas  === "si"}           onChange={v => set("sanVacunas",   v ? "si" : "no")} />
+        <div style={{ marginTop:12 }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, letterSpacing:1, marginBottom:8 }}>🦟 CONTROL PARASITARIO</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <SelectF label="PARÁSITOS EXTERNOS (garrapatas)" value={form.sanParasitoExt||""} onChange={v=>set("sanParasitoExt",v)} options={[
+              ["no","No realiza control"],
+              ["si_1","1 tratamiento/año"],
+              ["si_2","2–3 tratamientos/año"],
+              ["si_completo","Control completo (baño + pour-on)"],
+            ]} />
+            <SelectF label="PARÁSITOS INTERNOS" value={form.sanParasitoInt||""} onChange={v=>set("sanParasitoInt",v)} options={[
+              ["no","No realiza control"],
+              ["si_1","1 tratamiento/año (destete)"],
+              ["si_2","2 tratamientos/año"],
+              ["si_rotacion","Rotación de principios activos"],
+            ]} />
+          </div>
+          {(form.sanParasitoExt==="no" || form.sanParasitoInt==="no") && (
+            <Alerta tipo="warn" style={{marginTop:8}}>
+              Sin control parasitario: reducción GDP 15-25% · mayor susceptibilidad invierno (INTA EEA Colonia Benítez 2025)
+            </Alerta>
+          )}
+        </div>
         {form.sanVacunas === "no" && <Alerta tipo="error">IBR/DVB sin vacunar: riesgo de reducción de preñez hasta −15 pp.</Alerta>}
 
         <Toggle label="🐂 ¿Toros con evaluación ESAN?"       value={form.sanToros    === "con_control"}   onChange={v => set("sanToros",     v ? "con_control" : "sin_control")} />
@@ -2541,6 +2568,26 @@ function GraficoBalance({ form, sat, cadena, tray, motor }) {
           </ResponsiveContainer>
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ─── TARJETA ESCENARIO ────────────────────────────────────────────
+function TarjetaEscenario({ idx, esc, color, activo, onToggle }) {
+  const ESC_LABELS = ["Base", "Escenario A", "Escenario B"];
+  return (
+    <div onClick={onToggle} style={{
+      flex:1, padding:"10px 8px", borderRadius:10, cursor:"pointer", textAlign:"center",
+      background: activo ? color+"20" : "transparent",
+      border:`1px solid ${activo ? color : "#333"}`,
+      opacity: activo ? 1 : 0.5,
+    }}>
+      <div style={{ fontFamily:"monospace", fontSize:9, color, letterSpacing:1, marginBottom:2 }}>{ESC_LABELS[idx]}</div>
+      <div style={{ fontFamily:"monospace", fontSize:11, color, fontWeight:700 }}>
+        {esc.tray?.ccServ ?? "—"}
+      </div>
+      <div style={{ fontFamily:"sans-serif", fontSize:9, color:"#888", marginTop:2 }}>CC servicio</div>
     </div>
   );
 }
@@ -4696,19 +4743,17 @@ function AgroMindPro() {
                 </div>
                 {vaq1E.advertencia && <Alerta tipo="warn" style={{ marginTop:8 }}>{vaq1E.advertencia}</Alerta>}
                 {vaq1E.alertaAlgodon && <Alerta tipo="warn" style={{ marginTop:6 }}>{vaq1E.alertaAlgodon}</Alerta>}
-                {vaq1E.nota && <Alerta tipo="info" style={{ marginTop:6 }}>{vaq1E.nota}</Alerta>}
+                {vaq1E.nota && !vaq1E.nota.includes("Hiperprecoz") && <Alerta tipo="info" style={{ marginTop:6 }}>{vaq1E.nota}</Alerta>}
                 {/* Objetivo entore vinculado a política del establecimiento */}
-                {form.edadPrimerEntore && (
-                  <div style={{ marginTop:8, padding:"8px 12px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}20` }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:2 }}>OBJETIVO ENTORE ({form.edadPrimerEntore} meses)</div>
+                <div style={{ marginTop:8, padding:"8px 12px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}20` }}>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:2 }}>OBJETIVO AGOSTO (fin 1° invierno)</div>
                     <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim }}>
-                      PV mínimo al entore: <strong style={{color:C.text}}>{Math.round((parseFloat(form.pvVacaAdulta)||320)*0.60)} kg</strong> (60% PV adulto) — 
-                      {vaq1E.pvSal >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.60)
-                        ? <span style={{color:C.green}}> ✓ Llega al objetivo con esta suplementación</span>
-                        : <span style={{color:C.red}}> ✗ No llega al objetivo — ajustar dosis o evaluar entore tardío</span>}
+                      PV objetivo agosto: <strong style={{color:C.text}}>≥ 220 kg</strong> — 
+                      {(vaq1E.pvSal || 0) >= 220
+                        ? <span style={{color:C.green}}> ✓ Llega a {vaq1E.pvSal} kg con esta suplementación</span>
+                        : <span style={{color:C.amber}}> ⚠ Proyectado {vaq1E.pvSal} kg — ajustar dosis para llegar a 220 kg</span>}
                     </div>
                   </div>
-                )}
               </div>
             )
           )}
@@ -5145,13 +5190,30 @@ function AgroMindPro() {
                   </select>
                 </div>
               </div>
-              <div>
+              <div style={{ marginBottom:8 }}>
                 <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, marginBottom:5 }}>Vegetación</div>
                 <select value={p.veg} onChange={e=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],veg:e.target.value};return n;})}
                   style={{ width:"100%", background:C.card, border:`1px solid ${C.border}`, borderRadius:8, color:C.text, padding:"10px", fontFamily:C.sans, fontSize:13 }}>
                   {Object.keys(PROD_BASE).map(v=><option key={v} value={v}>{v}</option>)}
                 </select>
               </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                <Input label="Altura pasto (cm)" value={p.altPasto||""} onChange={v=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],altPasto:v};return n;})} placeholder="20" type="number" sub="Promedio caminando" />
+                <div>
+                  <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, marginBottom:5 }}>Tipo de pasto</div>
+                  <select value={p.tipoPasto||"corto_denso"} onChange={e=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],tipoPasto:e.target.value};return n;})}
+                    style={{ width:"100%", background:C.card, border:`1px solid ${C.border}`, borderRadius:8, color:C.text, padding:"10px", fontFamily:C.sans, fontSize:12 }}>
+                    <option value="corto_denso">Cortos densos (pasto horqueta, grama)</option>
+                    <option value="alto_ralo">Altos ralos (Paspalum, Elionorus)</option>
+                    <option value="alto_denso">Altos densos (paja colorada, paja amarilla)</option>
+                  </select>
+                </div>
+              </div>
+              {p.altPasto && (() => { const d = calcDisponibilidadMS(p.altPasto, p.tipoPasto||"corto_denso"); return d ? (
+                <div style={{ padding:"6px 10px", borderRadius:8, background:`${C.green}08`, border:`1px solid ${C.green}20`, fontFamily:C.sans, fontSize:10, color:C.textDim }}>
+                  📏 Disponibilidad estimada: <strong style={{color:C.green}}>{d.msHa} kgMS/ha</strong> · Nivel: {d.nivel}
+                </div>
+              ) : null; })()}
             </div>
           ))}
           <button onClick={()=>setPotreros(ps=>[...ps,{ha:"",veg:"Pastizal natural NEA/Chaco",fenol:"menor_10"}])}
@@ -5172,8 +5234,13 @@ function AgroMindPro() {
     const pvVacaS   = parseFloat(form.pvVacaAdulta) || 320;
     const pvV2sS    = parseFloat(form.v2sPV) || Math.round(pvVacaS * 0.88);
     const pvToroS   = Math.round(pvVacaS * 1.3);
-    const pvVaq2S   = parseFloat(pvEntradaVaq2) || Math.round(pvVacaS * 0.65);
-    const pvVaq1S   = parseFloat(form.vaq1PV || tcSave?.pvMayoPond) || Math.round(pvVacaS * 0.40);
+    // Vaq2: promedio del período mayo→entore (entrada + 75% PV adulto) / 2
+    const pvVaq2Ent = parseFloat(pvEntradaVaq2) || Math.round(pvVacaS * 0.65);
+    const pvVaq2Obj = Math.round((parseFloat(form.pvVacaAdulta)||320) * 0.75);
+    const pvVaq2S   = Math.round((pvVaq2Ent + pvVaq2Obj) / 2);
+    // Vaq1: promedio mayo-agosto con ganancia esperada 70kg (entrada + 35kg promedio)
+    const pvVaq1Ent = parseFloat(form.vaq1PV || tcSave?.pvMayoPond) || Math.round(pvVacaS * 0.40);
+    const pvVaq1S   = Math.round(pvVaq1Ent + 35);
     const pvTernS   = tcSave?.pvMayoPond || 80;
 
     // ── CATÁLOGO DE ALIMENTOS con clasificación y valores nutricionales ──
@@ -5660,29 +5727,6 @@ function AgroMindPro() {
           );
         })()}
 
-        {/* ── SANIDAD PARASITARIA ── */}
-        <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:14, marginTop:4 }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, letterSpacing:1, marginBottom:10 }}>🩺 SANIDAD PARASITARIA</div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <SelectF label="PARÁSITOS EXTERNOS (garrapatas)" value={form.sanParasitoExt||""} onChange={v=>set("sanParasitoExt",v)} options={[
-              ["no","No realiza control"],
-              ["si_1","1 tratamiento/año"],
-              ["si_2","2–3 tratamientos/año"],
-              ["si_completo","Control completo (baño + pour-on)"],
-            ]} />
-            <SelectF label="PARÁSITOS INTERNOS" value={form.sanParasitoInt||""} onChange={v=>set("sanParasitoInt",v)} options={[
-              ["no","No realiza control"],
-              ["si_1","1 tratamiento/año (destete)"],
-              ["si_2","2 tratamientos/año"],
-              ["si_rotacion","Rotación de principios activos"],
-            ]} />
-          </div>
-          {(form.sanParasitoExt==="no" || form.sanParasitoInt==="no") && (
-            <Alerta tipo="warn" style={{marginTop:8}}>
-              Sin control parasitario: reducción GDP 15-25% · mayor susceptibilidad invierno (INTA EEA Colonia Benítez 2025)
-            </Alerta>
-          )}
-        </div>
 
       </div>
     );
