@@ -3492,7 +3492,7 @@ function PanelRecomendaciones({ motor, form }) {
                     <div key={k} style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
                       <span style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>{k.replace(/_/g," ")}</span>
                       <span style={{ fontFamily:T.font, fontSize:10, color:T.red, fontWeight:700 }}>
-                        {typeof v==="boolean"?(v?"Sí":"No"):typeof v==="number"?v.toFixed?.(1):v:v}
+                        {typeof v==="boolean"?(v?"Sí":"No"):typeof v==="number"?(Number.isInteger(v)?v:v.toFixed(1)):String(v)}
                       </span>
                     </div>
                   ))}
@@ -3503,7 +3503,7 @@ function PanelRecomendaciones({ motor, form }) {
                     <div key={k} style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
                       <span style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>{k.replace(/_/g," ")}</span>
                       <span style={{ fontFamily:T.font, fontSize:10, color:T.green, fontWeight:700 }}>
-                        {typeof v==="boolean"?(v?"Sí":"No"):typeof v==="number"?v.toFixed?.(1):v:v}
+                        {typeof v==="boolean"?(v?"Sí":"No"):typeof v==="number"?(Number.isInteger(v)?v:v.toFixed(1)):String(v)}
                       </span>
                     </div>
                   ))}
