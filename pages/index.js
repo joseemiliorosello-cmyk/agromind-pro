@@ -1470,7 +1470,7 @@ function correrMotor(form, sat, potreros, usaPotreros) {
       ? Math.round(caidaCC * MCAL_CC * nVacas / Math.max(1, mesesLactN*30)) : 0;
 
     // Verdeo
-    const verdeoAp = tieneVerdeo
+    const verdeoAp = form.tieneVerdeo
       ? (i >= verdeoMesInicio && i <= verdeoMesInicio+2 ? verdeoAporteMcalMes : 0) : 0;
 
     const ofertaTotal = ofPastoTotal + ccAporte + suplRodeoMcalDia + verdeoAp;
