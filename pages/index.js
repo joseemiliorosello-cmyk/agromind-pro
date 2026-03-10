@@ -327,7 +327,10 @@ function calcTrayectoriaCC(params) {
   const mesParto   = cadena.partoTemp ? cadena.partoTemp.getMonth() : 10;
   const mesDestete = (mesParto + Math.round(mesesLact)) % 12;
   const mesServ    = cadena.ini ? cadena.ini.getMonth() : (mesParto + 3) % 12;
-  const diasRecup  = Math.max(0, ((mesServ - mesDestete + 12) % 12) * 30);
+  // Acotar a máximo 180 días (6 meses) — evita que ccServ llegue a valores imposibles
+  // cuando el servicio queda muy lejos o la fecha no está cargada
+  const diasRecupRaw = ((mesServ - mesDestete + 12) % 12) * 30;
+  const diasRecup    = Math.min(180, Math.max(0, diasRecupRaw));
 
   const mcalSuplInv   = mcalSuplemento(supl1, parseFloat(dosis1) || 0);
   let   ccServ        = ccDestete;
@@ -335,12 +338,15 @@ function calcTrayectoriaCC(params) {
     const mes = (mesDestete + Math.floor(d / 30)) % 12;
     const t   = hist[mes]?.t || 20;
     // Tasa de recuperación: verano con buen pasto C4 = 0.015/día; invierno = 0.004/día
-    const tasaRecup = t >= 25 ? 0.016 : t >= 20 ? 0.012 : t >= 15 ? 0.006 : 0.003;
+    // Tasa diaria calibrada: verano C4 activo max 0.5 CC/mes = 0.017/día
+    // pero acotada: el animal no puede ganar más de 1.5 CC en toda la recuperación
+    const tasaRecup = t >= 25 ? 0.013 : t >= 20 ? 0.009 : t >= 15 ? 0.005 : 0.003;
     // Boost por suplemento invernal
     const boostSupl = mcalSuplInv > 0 ? Math.min(0.005, mcalSuplInv * 0.0015) : 0;
     ccServ += (tasaRecup + boostSupl + ajCarga / Math.max(1, diasRecup));
   }
-  ccServ = parseFloat(Math.min(9, Math.max(1, ccServ)).toFixed(2));
+  // No puede superar la CC al parto + 1.5 (techo fisiológico de recuperación post-parto)
+  ccServ = parseFloat(Math.min(ccParto + 1.5, Math.min(7.5, Math.max(1, ccServ))).toFixed(2));
 
   const pr = interpCC(ccServ).pr;
 
@@ -4795,66 +4801,18 @@ function AgroMindPro() {
               <div style={{ fontFamily:C.font, fontSize:22, color:C.green, fontWeight:700 }}>{tcSave.pvMayoPond} kg</div>
             </div>
           )}
-          {vaq1E && (vaq1E.mensaje
-            ? <Alerta tipo="ok">{vaq1E.mensaje}</Alerta>
-            : (
-              <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:10, padding:12 }}>
-                <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:8 }}>ESC {vaq1E.esc} — SUPLEMENTACIÓN VAQ1</div>
-                {/* Cantidad + calidad de pasto */}
-                {vaq1E.nivelMS && (
-                  <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
-                    <Pill color={vaq1E.nivelMS==="baja"?C.red:vaq1E.nivelMS==="media"?C.amber:C.green}>
-                      Pasto {vaq1E.msHa} kgMS/ha ({vaq1E.nivelMS})
-                    </Pill>
-                    <Pill color={vaq1E.calidadBaja?C.amber:C.green}>
-                      {vaq1E.calidadBaja?"Calidad baja (encañado)":"Calidad adecuada"}
-                    </Pill>
-                  </div>
-                )}
-                {/* Tarjetas suplementación Vaq1 — formato claro */}
-                <div style={{ background:`${C.card}`, borderRadius:10, padding:10, marginBottom:8, border:`1px solid ${C.amber}20` }}>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>PLAN DE SUPLEMENTACIÓN</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                    <div style={{ borderRadius:8, background:`${C.amber}10`, padding:"8px 10px" }}>
-                      <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>SUPLEMENTO PROTEICO</div>
-                      <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:C.amber }}>{vaq1E.protKg} kg/día</div>
-                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>Expeller girasol/algodón/soja</div>
-                      {vaq1E.alertaAlgodon && <div style={{ fontFamily:C.font, fontSize:8, color:C.red, marginTop:3 }}>⚠ Máx {Math.round((parseFloat(form.vaq1PV||tcSave?.pvMayoPond||100))*0.004*10)/10}kg si semilla algodón</div>}
-                    </div>
-                    <div style={{ borderRadius:8, background:`${vaq1E.energKg>0?C.blue:C.card}10`, padding:"8px 10px" }}>
-                      <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>SUPLEMENTO ENERGÉTICO</div>
-                      {vaq1E.energKg > 0
-                        ? <><div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:C.blue }}>{vaq1E.energKg} kg/día</div>
-                            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{vaq1E.fuenteEnerg||"Sorgo/maíz molido"}</div></>
-                        : <><div style={{ fontFamily:C.font, fontSize:12, fontWeight:600, color:C.textDim }}>No requerido</div>
-                            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>Con pasto de buena calidad</div></>
-                      }
-                    </div>
-                    <div style={{ borderRadius:8, background:`${vaq1E.freq==="Diario"?C.red:C.green}10`, padding:"8px 10px", gridColumn:"1/-1" }}>
-                      <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>FRECUENCIA DE SUMINISTRO</div>
-                      <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:vaq1E.freq==="Diario"?C.red:C.green }}>{vaq1E.freq}</div>
-                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{vaq1E.freqDetalle}</div>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                  <div style={{ borderRadius:8, background:`${C.green}10`, padding:"8px 10px" }}>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>GDP ESTIMADO</div>
-                    <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:C.green }}>{vaq1E.gdpReal} g/día</div>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>+{Math.round(vaq1E.gdpReal*122/1000)} kg en 122 días</div>
-                  </div>
-                  <div style={{ borderRadius:8, background:`${vaq1E.deficit?C.red:C.green}10`, padding:"8px 10px" }}>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>PV AL SALIR DEL INVIERNO</div>
-                    <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:vaq1E.deficit?C.red:C.green }}>{vaq1E.pvSal} kg</div>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
-                      {vaq1E.deficit ? `⚠ Gana ${vaq1E.pvSal-(parseFloat(form.vaq1PV||tcSave?.pvMayoPond)||0)}kg — falta ${vaq1E.objetivo-vaq1E.pvSal}kg vs obj. +65kg` : `✓ Gana +${Math.round(vaq1E.pvSal-(parseFloat(form.vaq1PV||tcSave?.pvMayoPond)||0))}kg — alcanza objetivo`}
-                    </div>
-                  </div>
-                </div>
-                {vaq1E.advertencia && <Alerta tipo="warn" style={{ marginTop:8 }}>{vaq1E.advertencia}</Alerta>}
-                {vaq1E.alertaAlgodon && <Alerta tipo="warn" style={{ marginTop:6 }}>{vaq1E.alertaAlgodon}</Alerta>}
-                {vaq1E.nota && !vaq1E.nota.includes("Hiperprecoz") && <Alerta tipo="info" style={{ marginTop:6 }}>{vaq1E.nota}</Alerta>}
-                {/* Objetivo entore vinculado a política del establecimiento */}
+          {vaq1E && vaq1E.mensaje && <Alerta tipo="ok">{vaq1E.mensaje}</Alerta>}
+          {vaq1E && !vaq1E.mensaje && (
+            <div style={{ padding:"8px 12px", background:`${C.green}06`, border:`1px solid ${C.green}20`, borderRadius:8, marginBottom:8 }}>
+              <div style={{ fontFamily:C.font, fontSize:9, color:C.green }}>
+                📊 GDP proyectado: <strong>{vaq1E.gdpReal} g/día</strong> · PV agosto: <strong>{vaq1E.pvSal} kg</strong>
+              </div>
+              <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>
+                El plan de suplementación detallado aparece en la sección Suplementación →
+              </div>
+            </div>
+          )}
+                                {/* Objetivo entore vinculado a política del establecimiento */}
                 {(() => {
                     const pvAdulta = parseFloat(form.pvVacaAdulta)||320;
                     const pvAgosto = vaq1E.pvSal || 0;
@@ -4911,39 +4869,20 @@ function AgroMindPro() {
                   <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:2 }}>Entrada real al 2° invierno</div>
                 </div>
               )}
-              {/* Vaq2 SIEMPRE muestra suplementación mínima */}
-                {vaq2E.mensajeBase && <Alerta tipo="warn" style={{marginBottom:8}}>{vaq2E.mensajeBase}</Alerta>}
-                {vaq2E.esc === "—"
-                ? <Alerta tipo="ok">Pasto suficiente para GDP mínimo, pero suplementar proteína 2–3×/sem para asegurar {300}g/d</Alerta>
-                : (
-                  <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:10, padding:12 }}>
-                    <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:8 }}>ESC {vaq2E.esc} — SUPLEMENTACIÓN VAQ2 INVIERNO</div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-                      <MetricCard label="PROTEÍNA"   value={(vaq2E.protKg||"—")+"kg/d"} color={C.amber}
-                        sub="Expeller girasol/algodón/soja" />
-                      <MetricCard label="ENERGÍA"    value={vaq2E.energKg>0?(vaq2E.energKg+"kg/d"):"S.Algodón ad lib"} color={C.blue}
-                        sub={vaq2E.fuenteEnerg||"Sin energía adicional"} />
-                      <MetricCard label="FRECUENCIA" value={vaq2E.freq||"—"} color={vaq2E.freq==="Diario"?C.red:C.green}
-                        style={{gridColumn:"1/-1"}} sub={vaq2E.freqDetalle||""} />
-                      <MetricCard label="GDP INV."   value={(vaq2E.gdpInv||300)+"g/d"} color={C.green}
-                        sub="Mínimo 300 g/d garantizado" />
-                      <MetricCard label="PV AGOSTO"  value={(vaq2E.pvV2Agosto||"—")+"kg"} color={C.blue}
-                        sub="Salida invierno" />
-                    </div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                      <MetricCard label="PV ENTORE"  value={vaq2E.pvEntore+"kg"} color={vaq2E.llegas?C.green:C.red}
-                        sub="Proyección noviembre" />
-                      <MetricCard label="OBJETIVO"   value={vaq2E.pvMinEntore+"kg"} color={C.textDim}
-                        sub="75% PV adulto" />
-                    </div>
-                    {vaq2E.alertaAlgodon && <Alerta tipo="info" style={{marginTop:6}}>{vaq2E.alertaAlgodon}</Alerta>}
-                    {!vaq2E.llegas && <Alerta tipo="error" style={{ marginTop:8 }}>No alcanza peso mínimo de entore — aumentar suplementación o revisar fecha de entore</Alerta>}
+              {vaq2E && (
+                <div style={{ padding:"8px 12px", background:`${C.blue}06`, border:`1px solid ${C.blue}20`, borderRadius:8 }}>
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.blue }}>
+                    📊 PV entrada: <strong>{pvEntradaVaq2||"—"} kg</strong> · PV entore proyectado: <strong style={{color:vaq2E.llegas?C.green:C.red}}>{vaq2E.pvEntore||"—"} kg</strong>
+                    {vaq2E.llegas
+                      ? <span style={{color:C.green}}> ✓ Llega al objetivo</span>
+                      : <span style={{color:C.red}}> ⚠ No llega a {vaq2E.pvMinEntore} kg</span>}
                   </div>
-                )
-              }
-            </div>
-          )}
-        </div>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>
+                    El plan de suplementación detallado aparece en la sección Suplementación →
+                  </div>
+                </div>
+              )}
+                </div>
       </details>
 
       {/* Vacas 2° servicio */}
@@ -5871,20 +5810,29 @@ function AgroMindPro() {
           {tab === "acciones" && (
             <div>
               <PanelRecomendaciones motor={motor} form={form} />
-              {/* Informe IA expandible */}
-              <details style={{ marginTop:12 }}>
-                <summary style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, cursor:"pointer", padding:"8px 12px", background:C.card2, borderRadius:8, border:`1px solid ${C.border}`, listStyle:"none" }}>
-                  📄 Ver informe completo del asesor IA ▼
-                </summary>
-                <div style={{ marginTop:8 }}>
-                  <RenderInforme texto={result} />
-                </div>
-              </details>
+              {/* Informe IA — expandible si existe, botón generarlo si no */}
+              {result ? (
+                <details style={{ marginTop:12 }}>
+                  <summary style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, cursor:"pointer", padding:"8px 12px", background:C.card2, borderRadius:8, border:`1px solid ${C.border}`, listStyle:"none" }}>
+                    📄 Ver informe completo del asesor IA ▼
+                  </summary>
+                  <div style={{ marginTop:8 }}>
+                    <RenderInforme texto={result} />
+                  </div>
+                </details>
+              ) : (
+                <button onClick={runAnalysis} style={{ width:"100%", background:`${C.green}15`, border:`1px solid ${C.green}40`, borderRadius:10, color:C.green, padding:13, fontFamily:C.font, fontSize:12, cursor:"pointer", marginTop:12, fontWeight:700, letterSpacing:1 }}>
+                  ⚡ GENERAR INFORME IA
+                </button>
+              )}
+              {/* PDF y CSV siempre disponibles */}
               <div style={{ display:"flex", gap:8, marginTop:10 }}>
                 <button onClick={descargarPDF} style={{ flex:2, background:`${C.blue}12`, border:`1px solid ${C.blue}35`, borderRadius:10, color:C.blue, padding:13, fontFamily:C.sans, fontSize:13, cursor:"pointer" }}>⬇ PDF</button>
                 <button onClick={descargarCSV} style={{ flex:1, background:`${C.green}10`, border:`1px solid ${C.green}35`, borderRadius:10, color:C.green, padding:13, fontFamily:C.sans, fontSize:13, cursor:"pointer" }}>📊 CSV</button>
               </div>
-              <button onClick={runAnalysis} style={{ width:"100%", background:`${C.green}06`, border:`1px solid ${C.border}`, borderRadius:10, color:C.textDim, padding:11, fontFamily:C.sans, fontSize:12, cursor:"pointer", marginTop:8 }}>🔄 Regenerar</button>
+              {result && (
+                <button onClick={runAnalysis} style={{ width:"100%", background:`${C.green}06`, border:`1px solid ${C.border}`, borderRadius:10, color:C.textDim, padding:11, fontFamily:C.sans, fontSize:12, cursor:"pointer", marginTop:8 }}>🔄 Regenerar informe</button>
+              )}
             </div>
           )}
 
@@ -6033,7 +5981,7 @@ function AgroMindPro() {
         </div>
       )}
 
-        {/* ══ ESCENARIOS VAQ1 y VAQ2 — resumen post suplementación ══ */}
+        {/* ══ PROYECCIÓN VAQ1 y VAQ2 post suplementación ══ */}
         {(vaq1E || vaq2E) && (
           <div style={{ marginTop:16 }}>
             <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:10 }}>
@@ -6044,46 +5992,68 @@ function AgroMindPro() {
             {vaq1E && !vaq1E.mensaje && (
               <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:10, padding:12, marginBottom:10 }}>
                 <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:6, fontWeight:600 }}>
-                  🐄 VAQUILLONA 1° INVIERNO — ESC {vaq1E.esc}
+                  🐮 VAQUILLONA 1° INVIERNO
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-                  <MetricCard label="GDP CON SUPL" value={(vaq1E.gdpReal||"—")+" g/d"} color={C.green} />
-                  <MetricCard label="PV AGOSTO" value={(vaq1E.pvSal||"—")+" kg"} color={(vaq1E.pvSal||0)>=220?C.green:C.amber} />
-                  <MetricCard label="OBJETIVO" value="≥ 220 kg" color={C.textDim} />
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                  <MetricCard label="GDP PROYECTADO" value={(vaq1E.gdpReal||"—")+" g/d"} color={C.green} />
+                  <MetricCard label="PV AGOSTO" value={(vaq1E.pvSal||"—")+" kg"} color={(vaq1E.pvSal||0)>=220?C.green:C.amber}
+                    sub={(vaq1E.pvSal||0)>=220?"✓ Supera objetivo":"< 220 kg objetivo"} />
                 </div>
-                {(vaq1E.pvSal||0) >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.65) && (
-                  <div style={{ marginTop:8, padding:"6px 10px", background:`${C.green}10`, borderRadius:6, fontFamily:C.font, fontSize:9, color:C.green }}>
-                    ✅ Supera 65% PV adulto — evaluar entore anticipado en noviembre
+                {/* Entore anticipado si supera 65% PV adulto */}
+                {(vaq1E.pvSal||0) >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.65) ? (
+                  <div style={{ background:`${C.green}10`, border:`1px solid ${C.green}30`, borderRadius:8, padding:"10px 12px" }}>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.green, fontWeight:700, marginBottom:4 }}>
+                      ✅ Supera 65% PV adulto — EVALUAR ENTORE ANTICIPADO
+                    </div>
+                    <div style={{ fontFamily:C.sans, fontSize:11, color:C.text, lineHeight:1.5 }}>
+                      Con {vaq1E.pvSal} kg en agosto ya está en condición para entore. Adelantar el servicio a <strong>agosto–septiembre</strong> de este año en lugar de esperar al servicio general del año siguiente. Ganás un ciclo productivo completo.
+                    </div>
                   </div>
-                )}
-                {(vaq1E.pvSal||0) < 220 && (
-                  <Alerta tipo="warn" style={{marginTop:8}}>
-                    Proyecta {vaq1E.pvSal} kg en agosto — revisar dosis de suplementación en la sección de suplementos arriba
+                ) : (
+                  <Alerta tipo="warn">
+                    Proyecta {vaq1E.pvSal} kg en agosto — revisar dosis de suplementación
                   </Alerta>
                 )}
               </div>
             )}
 
-            {/* Vaq2 */}
+            {/* Vaq2 — dos cuadrantes: agosto y entore */}
             {vaq2E && (
               <div style={{ background:`${C.blue}08`, border:`1px solid ${C.blue}30`, borderRadius:10, padding:12 }}>
-                <div style={{ fontFamily:C.font, fontSize:10, color:C.blue, marginBottom:6, fontWeight:600 }}>
+                <div style={{ fontFamily:C.font, fontSize:10, color:C.blue, marginBottom:8, fontWeight:600 }}>
                   🐂 VAQUILLONA 2° INVIERNO
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-                  <MetricCard label="PV MAYO 2°INV" value={(pvEntradaVaq2||"—")+" kg"} color={C.blue} />
-                  <MetricCard label="PV AGOSTO" value={(vaq2E.pvV2Agosto||"—")+" kg"} color={C.amber} />
-                  <MetricCard label="PV ENTORE" value={(vaq2E.pvEntore||"—")+" kg"} color={vaq2E.llegas?C.green:C.red} sub={`obj ${vaq2E.pvMinEntore} kg`} />
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                  {/* Cuadrante agosto */}
+                  <div style={{ background:C.card, borderRadius:8, padding:"10px 12px", border:`1px solid ${C.border}` }}>
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1, marginBottom:4 }}>PESO AGOSTO</div>
+                    <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700,
+                      color:(vaq2E.pvV2Agosto||0) >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.72) ? C.green : C.amber }}>
+                      {vaq2E.pvV2Agosto || pvEntradaVaq2 || "—"} kg
+                    </div>
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+                      obj: {Math.round((parseFloat(form.pvVacaAdulta)||320)*0.72)} kg (72% PV adulto)
+                    </div>
+                  </div>
+                  {/* Cuadrante entore */}
+                  <div style={{ background:C.card, borderRadius:8, padding:"10px 12px", border:`1px solid ${vaq2E.llegas?C.green:C.red}40` }}>
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1, marginBottom:4 }}>PESO ENTORE</div>
+                    <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:vaq2E.llegas?C.green:C.red }}>
+                      {vaq2E.pvEntore||"—"} kg
+                    </div>
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+                      obj: {vaq2E.pvMinEntore} kg (75% PV adulto)
+                    </div>
+                  </div>
                 </div>
-                {!vaq2E.llegas && (
-                  <Alerta tipo="error" style={{marginTop:8}}>
-                    No llega al objetivo ({vaq2E.pvMinEntore} kg = 75% PV adulto) — aumentar dosis o revisar suplementación arriba
-                  </Alerta>
-                )}
-                {vaq2E.llegas && (
-                  <div style={{ marginTop:8, padding:"6px 10px", background:`${C.green}10`, borderRadius:6, fontFamily:C.font, fontSize:9, color:C.green }}>
+                {vaq2E.llegas ? (
+                  <div style={{ padding:"6px 10px", background:`${C.green}10`, borderRadius:6, fontFamily:C.font, fontSize:9, color:C.green }}>
                     ✅ Llega al objetivo de entore con esta suplementación
                   </div>
+                ) : (
+                  <Alerta tipo="error">
+                    No llega a {vaq2E.pvMinEntore} kg para el entore — revisar dosis de suplementación
+                  </Alerta>
                 )}
               </div>
             )}
