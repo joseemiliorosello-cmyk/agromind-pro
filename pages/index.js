@@ -87,20 +87,6 @@ const factorN     = (ndvi) => Math.min(1.5, Math.max(0.5, 0.5 + parseFloat(ndvi|
 const modENSO     = (e) => e==="nino"?1.25 : e==="nina"?0.75 : 1.0;
 
 // ─── CLIMA HISTÓRICO POR PROVINCIA (T°C media, Precip mm/mes) ────
-// Fuente: SMN Argentina / datos normales 1991-2020
-const CLIMA_HIST = {
-  "Corrientes":  [{t:28,p:140},{t:27,p:130},{t:26,p:120},{t:22,p:100},{t:18,p:70},{t:14,p:50},{t:14,p:40},{t:16,p:50},{t:19,p:80},{t:23,p:110},{t:26,p:130},{t:28,p:140}],
-  "Chaco":       [{t:29,p:130},{t:28,p:120},{t:27,p:110},{t:23,p:90}, {t:19,p:60},{t:15,p:35},{t:14,p:30},{t:16,p:40},{t:20,p:70},{t:25,p:100},{t:27,p:120},{t:29,p:130}],
-  "Formosa":     [{t:30,p:135},{t:29,p:125},{t:28,p:115},{t:24,p:95}, {t:20,p:60},{t:15,p:32},{t:15,p:28},{t:17,p:38},{t:21,p:70},{t:26,p:100},{t:28,p:120},{t:30,p:135}],
-  "Entre Ríos":  [{t:25,p:110},{t:24,p:100},{t:22,p:100},{t:18,p:90}, {t:14,p:70},{t:11,p:55},{t:10,p:45},{t:12,p:60},{t:15,p:80},{t:19,p:90}, {t:22,p:100},{t:25,p:110}],
-  "Santa Fe":    [{t:26,p:115},{t:25,p:105},{t:23,p:105},{t:19,p:90}, {t:15,p:65},{t:12,p:50},{t:11,p:40},{t:13,p:55},{t:16,p:80},{t:20,p:95}, {t:24,p:110},{t:26,p:115}],
-  "Santiago del Estero":[{t:30,p:90},{t:29,p:85},{t:28,p:80},{t:24,p:60},{t:19,p:40},{t:15,p:20},{t:14,p:15},{t:16,p:25},{t:20,p:50},{t:25,p:70},{t:28,p:85},{t:30,p:90}],
-  "Salta":       [{t:25,p:180},{t:24,p:160},{t:23,p:120},{t:20,p:60}, {t:16,p:20},{t:13,p:10},{t:12,p:8}, {t:14,p:12},{t:18,p:30},{t:22,p:80}, {t:24,p:140},{t:25,p:170}],
-  "Buenos Aires":[{t:23,p:90}, {t:22,p:85}, {t:20,p:95}, {t:16,p:90}, {t:12,p:70},{t:9, p:60},{t:8, p:55},{t:10,p:65},{t:13,p:75},{t:17,p:80}, {t:20,p:90}, {t:23,p:90}],
-  "Córdoba":     [{t:25,p:95}, {t:24,p:90}, {t:22,p:95}, {t:17,p:75}, {t:13,p:50},{t:10,p:35},{t:9, p:30},{t:11,p:45},{t:15,p:65},{t:19,p:80}, {t:22,p:95}, {t:25,p:95}],
-  "La Pampa":    [{t:23,p:70}, {t:22,p:65}, {t:20,p:75}, {t:15,p:60}, {t:11,p:40},{t:8, p:25},{t:7, p:22},{t:9, p:35},{t:12,p:50},{t:17,p:65}, {t:20,p:70}, {t:23,p:70}],
-};
-
 // ─── OFERTA MENSUAL CON VARIACIÓN ESTACIONAL ──────────────────────
 // La oferta NO es plana: colapsa en invierno (T<15°C en gramíneas C4)
 function calcOfertaMensualArray(veg, ndvi, provincia, enso, fenolActual) {
