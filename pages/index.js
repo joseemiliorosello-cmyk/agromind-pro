@@ -13,49 +13,25 @@ import {
 // AGROMIND PRO v16 — PARTE 1: MOTOR DEL MODELO
 // ══════════════════════════════════════════════════════════════════
 // ─── BIOTIPOS ─────────────────────────────────────────────────────
-// Parámetros: movCC = movilización CC (1=Angus base) · recCC = recuperación
-// umbralAnestro = CC mínima para ciclar · factReq = factor requerimiento energético
-// Fuentes: Short et al. 1990; Neel et al. 2007; Peruchena INTA 2003; Balbuena 2001-2009
+// movCC = movilización CC · recCC = recuperación CC · umbralAnestro = CC mínima para ciclar
+// factReq = factor requerimiento energético vs Angus base
 const BIOTIPOS = {
-  // ── Cebú puro — dominante en NEA subtropical ───────────────────
-  "Nelore":               { movCC:0.72, recCC:0.83, umbralAnestro:2.9, factReq:0.89, nombre:"Nelore (Zebu)" },
-  "Brahman":              { movCC:0.70, recCC:0.85, umbralAnestro:2.8, factReq:0.90, nombre:"Brahman puro" },
-  "Indobrasil":           { movCC:0.71, recCC:0.84, umbralAnestro:2.8, factReq:0.90, nombre:"Indobrasil" },
-  "Gyr / Guzerat":        { movCC:0.71, recCC:0.83, umbralAnestro:2.8, factReq:0.89, nombre:"Gyr / Guzerat" },
+  // ── Cebú puro ─────────────────────────────────────────────────
+  "Nelore":       { movCC:0.72, recCC:0.83, umbralAnestro:2.9, factReq:0.89, nombre:"Nelore" },
+  "Brahman":      { movCC:0.70, recCC:0.85, umbralAnestro:2.8, factReq:0.90, nombre:"Brahman" },
+  "Indobrasil":   { movCC:0.71, recCC:0.84, umbralAnestro:2.8, factReq:0.90, nombre:"Indobrasil" },
 
-  // ── Aberdeen Angus y cruces ─────────────────────────────────────
-  "Aberdeen Angus":       { movCC:1.00, recCC:1.00, umbralAnestro:3.8, factReq:1.00, nombre:"Aberdeen Angus" },
-  // F1 son los más comunes en NEA: heterosis máxima
-  "F1 Nelore × Angus":    { movCC:0.85, recCC:0.93, umbralAnestro:3.2, factReq:0.94, nombre:"F1 Nelore × Angus (50% Cebú)" },
-  "F1 Nelore × Hereford": { movCC:0.84, recCC:0.92, umbralAnestro:3.1, factReq:0.94, nombre:"F1 Nelore × Hereford (50% Cebú)" },
-  "Brangus 3/8":          { movCC:0.82, recCC:0.92, umbralAnestro:3.2, factReq:0.95, nombre:"Brangus 3/8 Cebú (Angus×Brahman)" },
-  "Brangus 5/8":          { movCC:0.88, recCC:0.96, umbralAnestro:3.4, factReq:0.98, nombre:"Brangus 5/8 Cebú (Angus×Brahman)" },
+  // ── Braford (Hereford × Cebú) ─────────────────────────────────
+  "Braford 3/8":  { movCC:0.83, recCC:0.91, umbralAnestro:3.1, factReq:0.94, nombre:"Braford 3/8 Cebú" },
+  "Braford 5/8":  { movCC:0.87, recCC:0.95, umbralAnestro:3.3, factReq:0.97, nombre:"Braford 5/8 Cebú" },
 
-  // ── Hereford y cruces ──────────────────────────────────────────
-  "Hereford":             { movCC:0.98, recCC:0.98, umbralAnestro:3.7, factReq:1.00, nombre:"Hereford" },
-  // Bradford = Hereford × Brahman
-  // 3/8 Cebú: heterosis máxima — mejor adaptación al calor que Hereford puro,
-  // menor sensibilidad a fotoperíodo, umbral anestro intermedio.
-  // Fuente: Short et al. 1990; Neel et al. 2007; Peruchena INTA 2003
-  "Bradford 3/8":         { movCC:0.83, recCC:0.91, umbralAnestro:3.1, factReq:0.94, nombre:"Bradford 3/8 Cebú (Hereford×Brahman)" },
-  "Bradford 5/8":         { movCC:0.87, recCC:0.95, umbralAnestro:3.3, factReq:0.97, nombre:"Bradford 5/8 Cebú (Hereford×Brahman)" },
-  // Braford (mismo fenotipo pero denominación uruguaya/brasileña — parámetros idénticos)
-  "Braford 3/8":          { movCC:0.83, recCC:0.91, umbralAnestro:3.1, factReq:0.94, nombre:"Braford 3/8 Cebú (Hereford×Cebú)" },
-  "Braford 5/8":          { movCC:0.87, recCC:0.95, umbralAnestro:3.3, factReq:0.97, nombre:"Braford 5/8 Cebú (Hereford×Cebú)" },
+  // ── Brangus (Angus × Brahman) ─────────────────────────────────
+  "Brangus 3/8":  { movCC:0.82, recCC:0.92, umbralAnestro:3.2, factReq:0.95, nombre:"Brangus 3/8 Cebú" },
+  "Brangus 5/8":  { movCC:0.88, recCC:0.96, umbralAnestro:3.4, factReq:0.98, nombre:"Brangus 5/8 Cebú" },
 
-  // ── Otras razas europeas ────────────────────────────────────────
-  "Limousin":             { movCC:1.02, recCC:1.01, umbralAnestro:3.9, factReq:1.02, nombre:"Limousin" },
-  "Charolais":            { movCC:1.01, recCC:1.00, umbralAnestro:3.8, factReq:1.02, nombre:"Charolais" },
-  "Simmental":            { movCC:0.99, recCC:0.99, umbralAnestro:3.7, factReq:1.01, nombre:"Simmental" },
-
-  // ── Razas adaptadas tropicales ──────────────────────────────────
-  "Bonsmara":             { movCC:0.80, recCC:0.90, umbralAnestro:3.1, factReq:0.93, nombre:"Bonsmara (5/8 Afrikaner × Hereford/Shorthorn)" },
-  "Simbrah":              { movCC:0.81, recCC:0.90, umbralAnestro:3.0, factReq:0.93, nombre:"Simbrah (Simmental×Brahman)" },
-  "Senepol":              { movCC:0.84, recCC:0.92, umbralAnestro:3.2, factReq:0.94, nombre:"Senepol" },
-  "Beefmaster":           { movCC:0.80, recCC:0.89, umbralAnestro:3.0, factReq:0.92, nombre:"Beefmaster" },
-
-  // ── Cruza comercial ─────────────────────────────────────────────
-  "Cruza comercial":      { movCC:0.88, recCC:0.93, umbralAnestro:3.3, factReq:0.96, nombre:"Cruza comercial (promedio)" },
+  // ── Británicas puras ───────────────────────────────────────────
+  "Hereford":       { movCC:0.98, recCC:0.98, umbralAnestro:3.7, factReq:1.00, nombre:"Hereford" },
+  "Aberdeen Angus": { movCC:1.00, recCC:1.00, umbralAnestro:3.8, factReq:1.00, nombre:"Aberdeen Angus" },
 };
 const BIOTIPO_DEF = BIOTIPOS["Brangus 3/8"];
 const getBiotipo = (k) => BIOTIPOS[k] || BIOTIPO_DEF;
@@ -278,26 +254,15 @@ function calcTrayectoriaCC(params) {
 
   const hist = getClima(provincia || "Corrientes");
 
-  // ── FASE 1: HOY → PARTO ──
-  // Determinar la tasa de pérdida/ganancia por mes según temperatura
-  // La vaca en gestación avanzada e invierno PIERDE CC, no gana
-  const diasHastaParto = Math.max(0, cadena.diasPartoTemp || 0);
-  const mcalSuplPreP   = mcalSuplemento(supl3, parseFloat(dosis3) || 0);
-  // Suplemento preparto reduce pérdida: 0.5 Mcal/d ≈ −0.15 CC menos de pérdida
-  const reducPerdPreP  = mcalSuplPreP > 0 ? Math.min(0.5, mcalSuplPreP * 0.08) : 0;
-
-  // Simular mes a mes de hoy al parto
-  const hoyMes = new Date().getMonth();
-  let ccParto  = ccH;
-  for (let d = 0; d < diasHastaParto; d++) {
-    const mes = (hoyMes + Math.floor(d / 30)) % 12;
-    const t   = hist[mes]?.t || 20;
-    // Tasa diaria: invierno (C4 off) = pierde más; verano = pierde menos o se mantiene
-    const tasaDia = t < 15 ? -0.007 : t < 20 ? -0.004 : -0.001;
-    // Suplemento modera la pérdida (convierte pérdida en menor pérdida)
-    ccParto += tasaDia + reducPerdPreP / Math.max(1, diasHastaParto);
-  }
-  ccParto = parseFloat(Math.min(9, Math.max(1, ccParto)).toFixed(2));
+  // ── FASE 1: CC AL TACTO = CC AL PARTO ──
+  // La CC se mide al tacto (mar-abr), 60-90 días antes del parto.
+  // En gestación avanzada la vaca sin ternero al pie apenas moviliza reservas.
+  // La CC ingresada es directamente la CC al parto.
+  // Único ajuste: suplemento preparto puede sumar +0.1 a +0.2 CC.
+  const mcalSuplPreP = mcalSuplemento(supl3, parseFloat(dosis3) || 0);
+  const boostPreP    = mcalSuplPreP > 0 ? Math.min(0.20, mcalSuplPreP * 0.04) : 0;
+  const diasHastaParto = 0; // ya no se usa para proyección — CC ingresada es CC parto
+  let ccParto = parseFloat(Math.min(9, Math.max(1, ccH + boostPreP)).toFixed(2));
 
   // ── FASE 2: PARTO → DESTETE ──
   const pT = parseFloat(destTrad)  || 0;
@@ -412,39 +377,39 @@ function calcDistCC(params) {
   const mcalSuplLact = mcalSuplemento(supl2, parseFloat(dosis2) || 0);
   const mcalSuplInv  = mcalSuplemento(supl1, parseFloat(dosis1) || 0);
   const mcalSuplPreP = mcalSuplemento(supl3, parseFloat(dosis3) || 0);
-  const reducPerdPreP = mcalSuplPreP > 0 ? Math.min(0.5, mcalSuplPreP * 0.08) : 0;
-  const reducCaida    = mcalSuplLact > 0 ? Math.min(0.30, mcalSuplLact * 0.030) : 0;
+  const boostPreP    = mcalSuplPreP > 0 ? Math.min(0.20, mcalSuplPreP * 0.04) : 0;
+  const reducCaida   = mcalSuplLact > 0 ? Math.min(0.30, mcalSuplLact * 0.030) : 0;
 
   // Fechas clave
-  const hoyMes    = new Date().getMonth();
-  const mesParto  = cadena.partoTemp ? cadena.partoTemp.getMonth() : 10;
-  const mesServ   = cadena.ini ? cadena.ini.getMonth() : (mesParto + 3) % 12;
-  const diasHastaParto = Math.max(0, cadena.diasPartoTemp || 0);
+  const mesParto = cadena.partoTemp ? cadena.partoTemp.getMonth() : 10;
+  const mesServ  = cadena.ini ? cadena.ini.getMonth() : (mesParto + 3) % 12;
 
-  // Función: calcular CC al parto para un grupo dado su CC actual
-  const calcCcParto = (ccHoy) => {
-    let cc = ccHoy;
-    for (let d = 0; d < diasHastaParto; d++) {
-      const mes = (hoyMes + Math.floor(d / 30)) % 12;
-      const t   = hist[mes]?.t || 20;
-      const tasaDia = t < 15 ? -0.007 : t < 20 ? -0.004 : -0.001;
-      cc += tasaDia + reducPerdPreP / Math.max(1, diasHastaParto);
-    }
-    return parseFloat(Math.min(9, Math.max(1, cc)).toFixed(2));
-  };
+  // CC al tacto = CC al parto (la vaca gestante sin ternero no moviliza reservas)
+  // Único ajuste: suplemento preparto puede sumar hasta +0.2 CC
+  const calcCcParto = (ccHoy) =>
+    parseFloat(Math.min(9, Math.max(1, ccHoy + boostPreP)).toFixed(2));
 
   // Función: calcular CC al servicio dado ccDestete y mes de destete
   const calcCcServ = (ccDestete, mesDestete) => {
-    const diasRecup = Math.max(0, ((mesServ - mesDestete + 12) % 12) * 30);
+    const diasRecupRaw = ((mesServ - mesDestete + 12) % 12) * 30;
+    // Máximo 120 días: intervalo destete→servicio real en NEA.
+    // Sin este límite, vacas que paren temprano acumulan meses extras
+    // de recuperación que nunca ocurren en la práctica.
+    const diasRecup = Math.min(120, Math.max(0, diasRecupRaw));
     let cc = ccDestete;
     for (let d = 0; d < diasRecup; d++) {
       const mes = (mesDestete + Math.floor(d / 30)) % 12;
       const t   = hist[mes]?.t || 20;
-      const tasaRecup = t >= 25 ? 0.016 : t >= 20 ? 0.012 : t >= 15 ? 0.006 : 0.003;
-      const boostSupl = mcalSuplInv > 0 ? Math.min(0.005, mcalSuplInv * 0.0015) : 0;
+      // Tasas calibradas campo NEA: sistema pastoril extensivo
+      // Verano C4 activo con buen pasto: 0.35-0.40 CC/mes = 0.012/día
+      // Invierno sin suplemento: 0.05-0.10 CC/mes = 0.003/día
+      const tasaRecup = t >= 25 ? 0.012 : t >= 20 ? 0.008 : t >= 15 ? 0.004 : 0.002;
+      const boostSupl = mcalSuplInv > 0 ? Math.min(0.004, mcalSuplInv * 0.001) : 0;
       cc += tasaRecup + boostSupl + ajCarga / Math.max(1, diasRecup);
     }
-    return parseFloat(Math.min(9, Math.max(1, cc)).toFixed(2));
+    // Techo: no puede superar ccDestete+1.0 (máximo recuperable en 4 meses pastoreo)
+    // ni CC 6.0 (techo biológico en sistema extensivo)
+    return parseFloat(Math.min(ccDestete + 1.0, Math.min(6.0, Math.max(1, cc))).toFixed(2));
   };
 
   const grupos = (dist || []).map(d => {
@@ -1445,16 +1410,10 @@ function correrMotor(form, sat, potreros, usaPotreros) {
     { sk:"supl_vaq2",   dk:"dosis_vaq2",   n:nVaq2  }, // recría: sí suplemento
     { sk:"supl_vaq1",   dk:"dosis_vaq1",   n:nVaq1  }, // 1° invierno: sí suplemento, respuesta máxima
   ];
-  // Duración campaña de suplementación: 90d=3 meses, 120d=4 meses, 150d=5 meses
-  // Esto define en qué meses del año aplica el suplemento en el balance mensual
-  const diasSuplInv    = parseInt(form.diasSuplInv) || 90;
-  const mesesSuplInv   = Math.round(diasSuplInv / 30); // 3, 4 o 5
-  // Meses donde aplica: siempre centrado en jun-ago (5,6,7)
-  // 3 meses: [5,6,7]; 4 meses: [4,5,6,7]; 5 meses: [4,5,6,7,8]
-  const suplMesInicio  = mesesSuplInv >= 5 ? 4 : mesesSuplInv >= 4 ? 4 : 5;
-  const suplMesFin     = mesesSuplInv >= 5 ? 8 : mesesSuplInv >= 4 ? 7 : 7;
-  // Conjunto de meses donde aplica el suplemento
-  const MESES_SUPL = new Set(Array.from({length: suplMesFin - suplMesInicio + 1}, (_, k) => suplMesInicio + k));
+  // Meses de suplementación configurados por el usuario (0=ene … 11=dic)
+  const suplMesesArr = (form.suplMeses || ["5","6","7"]).map(Number);
+  const MESES_SUPL   = new Set(suplMesesArr);
+  const fracSuplAnual = MESES_SUPL.size / 12;
 
   const suplRodeoMcalDia = suplCats.reduce((acc,c) => {
     const s = SUPLEMENTOS[form[c.sk]];
@@ -1462,7 +1421,6 @@ function correrMotor(form, sat, potreros, usaPotreros) {
     return acc + (s ? s.em*d*c.n : 0);
   }, 0);
   // Fracción anual del suplemento (para cálculo de costos e intensidad GEI)
-  const fracSuplAnual  = diasSuplInv / 365;
 
   // Suplemento desglosado por categoría (para el gráfico de demanda vs solución)
   const suplDetalle = suplCats.reduce((acc,c) => {
@@ -2020,7 +1978,7 @@ function PanelAgua({ form, set, sat }) {
       <div style={{ background:`${C.blue}10`, border:`1px solid ${C.blue}30`, borderRadius:12, padding:12, marginBottom:14 }}>
         <div style={{ fontFamily:C.font, fontSize:10, color:C.blue, letterSpacing:1, marginBottom:4 }}>💧 AGUA DE BEBIDA</div>
         <div style={{ fontFamily:C.sans, fontSize:12, color:C.textDim, lineHeight:1.6 }}>
-          Fuente: López et al. 2021, JAS 99(8). TDS {">"} 3.000 mg/L reduce DMI y consumo de agua significativamente.
+          Agua salobre o con alta concentración de sólidos disueltos reduce el consumo de materia seca y el rendimiento productivo.
         </div>
       </div>
 
@@ -2076,7 +2034,6 @@ function PanelAgua({ form, set, sat }) {
           {evalAgua.warnings.map((w, i) => (
             <Alerta key={i} tipo={w.nivel === "rojo" ? "error" : w.nivel === "ambar" ? "warn" : "ok"}>{w.msg}</Alerta>
           ))}
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:4 }}>Fuente: López et al. 2021, JAS 99(8):skab215</div>
         </div>
       )}
 
@@ -3778,11 +3735,11 @@ function SimuladorEscenarios({ form, cadena, baseParams, sat }) {
   const [escA, setEscA] = useState({
     supl1:form.supl1||"Expeller girasol", dosis1:parseFloat(form.dosis1)||0.3,
     supl2:"Expeller girasol", dosis2:0.5, supl3:"", dosis3:0,
-    destTrad:parseFloat(form.destTrad)||0, destAntic:parseFloat(form.destAntic)||0, destHiper:parseFloat(form.destHiper)||100,
+    destTrad:parseFloat(form.destTrad)||0, destAntic:parseFloat(form.destAntic)||0, destHiper:parseFloat(form.destHiper)||0,
   });
   const [escB, setEscB] = useState({
     supl1:"Expeller soja", dosis1:0.5, supl2:"Expeller soja", dosis2:0.8, supl3:"", dosis3:0,
-    destTrad:0, destAntic:0, destHiper:100,
+    destTrad:0, destAntic:0, destHiper:0,
   });
 
   const calcEsc = (extra) => calcTrayectoriaCC({ ...baseParams, ...extra });
@@ -4743,8 +4700,8 @@ const FORM_DEF = {
   altPasto:"20", tipoPasto:"alto_denso",
   // Verdeos de invierno (nuevo v15)
   tieneVerdeo:"no", verdeoHa:"", verdeoTipo:"Avena/Cebadilla", verdeoDisp:"agosto",
-  diasSuplInv:"90",   // duración campaña de suplementación invernal (días)
-  diasDesdeCC:"hoy",  // antigüedad de la medición de CC
+  suplMeses:["5","6","7"],  // meses de suplementación invernal (0=ene … 11=dic)
+  mesTacto:"abr",     // mes en que se hizo el tacto (feb/mar/abr/may/jun/otro)
   verdeoDestinoVaq:"si",   // ¿se reserva para vaquillona?
   // ── Categorías ─────────────────────────────────────────────────
   v2sN:"", v2sPV:"", v2sTernero:"",
@@ -4754,7 +4711,7 @@ const FORM_DEF = {
   distribucionCC:[{ cc:"5.5", pct:"20" },{ cc:"5.0", pct:"50" },{ cc:"4.5", pct:"30" }],
   fechaCC:"",            // fecha en que se midió la CC (nueva v15)
   // ── Destete ────────────────────────────────────────────────────
-  destTrad:"0", destAntic:"0", destHiper:"100",
+  destTrad:"0", destAntic:"0", destHiper:"0",
   // ── Toros — diagnóstico preparo de servicio (nuevo v15) ────────
   torosLote:"si",        // ¿están todos en un lote o distribuidos?
   torosLotes:"",         // cantidad de lotes si distribuidos
@@ -5056,6 +5013,9 @@ function AgroMindPro() {
         return `  ${cat}: ${form[sk]} (${tipo}) · ${d}kg/d · ${m}Mcal/d · PB:${pbDia}g/d · ${pctPV}%PV · ${freq}`;
       });
     if (suplLines.length > 0) t += `\nSUPLEMENTACIÓN POR CATEGORÍA:\n${suplLines.join("\n")}\n`;
+    const mesesNom = {3:"Abr",4:"May",5:"Jun",6:"Jul",7:"Ago",8:"Sep",9:"Oct",10:"Nov"};
+    const suplMesesStr = (form.suplMeses||["5","6","7"]).map(m=>mesesNom[Number(m)]||m).join("-");
+    if (suplMesesStr) t += `\nCAMPAÑA SUPLEMENTACIÓN: ${suplMesesStr} (${form.suplMeses?.length||3} meses)\n`;
     if (form.sanParasitoExt || form.sanParasitoInt) {
       t += `Parásitos externos: ${form.sanParasitoExt||"no controlados"} · Internos: ${form.sanParasitoInt||"no controlados"}\n`;
     }
@@ -5489,37 +5449,30 @@ function AgroMindPro() {
   // ── PASO 0: UBICACIÓN ─────────────────────────────────────────
   const renderUbicacion = () => (
     <div>
-      {/* Dos opciones bien visibles: GPS o manual */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-        <button onClick={gpsClick} style={{
-          background: coords ? C.green : `${C.green}15`,
-          color: coords ? "#0b1a0c" : C.green,
-          padding:"14px 10px", borderRadius:12, border:`1px solid ${coords?C.green:C.border}`,
-          fontFamily:C.sans, fontSize:12, fontWeight:700, cursor:"pointer", textAlign:"center"
-        }}>
-          <div style={{ fontSize:22, marginBottom:4 }}>📍</div>
-          {coords ? "GPS activo" : "Usar GPS"}
-        </button>
-        <div style={{
-          background:`${C.blue}08`, borderRadius:12, border:`1px solid ${C.blue}25`,
-          padding:"14px 10px", textAlign:"center"
-        }}>
-          <div style={{ fontSize:22, marginBottom:4 }}>🗺️</div>
-          <div style={{ fontFamily:C.sans, fontSize:12, color:C.blue, fontWeight:600 }}>Sin GPS</div>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:2 }}>Seleccioná provincia abajo</div>
+      {/* GPS opcional — provincia es lo que importa */}
+      {!coords && (
+        <div style={{ background:`${C.green}08`, border:`1px solid ${C.green}30`, borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
+          <div style={{ fontFamily:C.sans, fontSize:12, color:C.green, fontWeight:700, marginBottom:4 }}>
+            📌 Seleccioná Zona y Provincia abajo — es todo lo que necesitás
+          </div>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, lineHeight:1.6 }}>
+            El análisis usa datos climáticos históricos por provincia (temperatura, precipitación, estacionalidad).
+            El GPS es opcional: solo agrega temperatura y NDVI del satélite en tiempo real.
+          </div>
+          <button onClick={gpsClick} style={{
+            marginTop:8, padding:"6px 12px", borderRadius:8,
+            background:"transparent", border:`1px solid ${C.green}40`,
+            fontFamily:C.font, fontSize:9, color:C.green, cursor:"pointer"
+          }}>
+            📍 Activar GPS igual (para datos satelitales en tiempo real)
+          </button>
         </div>
-      </div>
+      )}
       {coords && (
         <Alerta tipo="ok">
-          GPS: {form.zona} · {form.provincia} {form.localidad ? `· ${form.localidad}` : ""}
+          📍 GPS activo: {form.zona} · {form.provincia} {form.localidad ? `· ${form.localidad}` : ""}
           <span style={{ opacity:0.6, fontSize:10 }}> ({coords.lat.toFixed(3)}°, {coords.lon.toFixed(3)}°)</span>
         </Alerta>
-      )}
-      {!coords && (
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:8, padding:"8px 12px", background:`${C.blue}06`, border:`1px solid ${C.blue}20`, borderRadius:8 }}>
-          ✅ <strong>Sin GPS funciona igual.</strong> Seleccioná <strong>Zona</strong> y <strong>Provincia</strong> abajo — el sistema usa datos climáticos históricos de esa región.
-          El GPS solo agrega temperatura y NDVI en tiempo real del satélite.
-        </div>
       )}
       {sat && !sat.error && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, margin:"10px 0" }}>
@@ -5531,9 +5484,13 @@ function AgroMindPro() {
       )}
       {sat?.error && <Alerta tipo="warn">{sat.error}</Alerta>}
       <SelectF label="ZONA" value={form.zona} onChange={v=>set("zona",v)} options={[
-        ["NEA","NEA"],["Pampa Húmeda","Pampa Húmeda"],["NOA","NOA"],
-        ["Paraguay Oriental","Paraguay Oriental"],["Chaco Paraguayo","Chaco Paraguayo"],
-        ["Brasil (Cerrado)","Brasil (Cerrado)"],["Bolivia (Llanos)","Bolivia (Llanos)"],
+        ["NEA","NEA — Corrientes / Chaco / Formosa / Misiones"],
+        ["NOA","NOA — Salta / Jujuy / Tucumán"],
+        ["Pampa Húmeda","Pampa Húmeda — Buenos Aires / Entre Ríos / Santa Fe sur"],
+        ["Paraguay Oriental","Paraguay Oriental"],
+        ["Chaco Paraguayo","Chaco Paraguayo"],
+        ["Brasil (Cerrado)","Brasil — Mato Grosso / Cerrado"],
+        ["Bolivia (Llanos)","Bolivia — Llanos orientales"],
       ]} />
       <SelectF label="PROVINCIA / REGIÓN" value={form.provincia} onChange={v=>set("provincia",v)} options={[
         ["Corrientes","Corrientes"],["Chaco","Chaco"],["Formosa","Formosa"],
@@ -5545,10 +5502,10 @@ function AgroMindPro() {
         ["Santa Cruz / Beni (BO)","Santa Cruz / Beni (BO)"],
       ]} />
       <SelectF label="ENSO" value={form.enso} onChange={v=>set("enso",v)} options={[
-        ["neutro","Neutro"],["nino","El Niño (+25% oferta)"],["nina","La Niña (−25% oferta)"],
+        ["neutro","Neutro — año promedio"],["nino","El Niño (+25% oferta forrajera)"],["nina","La Niña (−25% oferta forrajera)"],
       ]} />
       <Input label="PRODUCTOR / ESTABLECIMIENTO" value={form.nombreProductor} onChange={v=>set("nombreProductor",v)} placeholder="Nombre del establecimiento" />
-      <Input id="campo-localidad" label="LOCALIDAD / PARAJE" value={form.localidad} onChange={v=>set("localidad",v)} placeholder="Ej: Charata, Clorinda, Concepción…" sub="Para contexto geográfico en el informe" />
+      <Input id="campo-localidad" label="PARAJE / CAMPO (opcional)" value={form.localidad} onChange={v=>set("localidad",v)} placeholder="Ej: Charata, El Pintado, La Fidelidad…" sub="Solo para el informe — no afecta el cálculo" />
 
       {/* ── MÓDULO DIAGNÓSTICO TOROS ── */}
       {parseInt(form.torosN) > 0 && (
@@ -5620,46 +5577,25 @@ function AgroMindPro() {
     <div>
       <SelectF label="BIOTIPO" value={form.biotipo} onChange={v=>set("biotipo",v)}
         groups={[
-          { label:"── Cebú puro (NEA tropical) ──", opts:[
-            ["Nelore",           "Nelore (Zebu)  ← base NEA/BR"],
-            ["Brahman",          "Brahman puro"],
-            ["Indobrasil",       "Indobrasil"],
-            ["Gyr / Guzerat",    "Gyr / Guzerat"],
+          { label:"── Cebú puro ─────────────────", opts:[
+            ["Nelore",       "Nelore"],
+            ["Brahman",      "Brahman"],
+            ["Indobrasil",   "Indobrasil"],
           ]},
-          { label:"── F1 — cruza comercial más común ──", opts:[
-            ["F1 Nelore × Angus",    "F1 Nelore × Angus  ← heterosis máxima"],
-            ["F1 Nelore × Hereford", "F1 Nelore × Hereford"],
+          { label:"── Braford (Hereford × Cebú) ──", opts:[
+            ["Braford 3/8",  "Braford 3/8 Cebú  ← más común NEA"],
+            ["Braford 5/8",  "Braford 5/8 Cebú"],
           ]},
           { label:"── Brangus (Angus × Brahman) ──", opts:[
-            ["Brangus 3/8",      "Brangus 3/8 Cebú  ← más común AR"],
-            ["Brangus 5/8",      "Brangus 5/8 Cebú"],
+            ["Brangus 3/8",  "Brangus 3/8 Cebú"],
+            ["Brangus 5/8",  "Brangus 5/8 Cebú"],
           ]},
-          { label:"── Braford / Bradford (Hereford × Cebú) ──", opts:[
-            ["Braford 3/8",      "Braford 3/8  ← UY/BR/AR"],
-            ["Braford 5/8",      "Braford 5/8"],
-            ["Bradford 3/8",     "Bradford 3/8  (AR — Hereford×Brahman)"],
-            ["Bradford 5/8",     "Bradford 5/8"],
-          ]},
-          { label:"── Británicas puras (sur, templado) ──", opts:[
-            ["Aberdeen Angus",   "Aberdeen Angus"],
-            ["Hereford",         "Hereford"],
-          ]},
-          { label:"── Europeas continentales ──────", opts:[
-            ["Limousin",         "Limousin"],
-            ["Charolais",        "Charolais"],
-            ["Simmental",        "Simmental"],
-            ["Simbrah",          "Simbrah (Simmental×Brahman)"],
-          ]},
-          { label:"── Tropicales adaptadas ─────────", opts:[
-            ["Bonsmara",         "Bonsmara"],
-            ["Senepol",          "Senepol"],
-            ["Beefmaster",       "Beefmaster"],
-          ]},
-          { label:"── Sin dato / promedio ──────────", opts:[
-            ["Cruza comercial",  "Cruza comercial (promedio)"],
+          { label:"── Británicas puras ─────────────", opts:[
+            ["Hereford",       "Hereford"],
+            ["Aberdeen Angus", "Aberdeen Angus"],
           ]},
         ]}
-        sub="Bradford/Braford = Hereford × Brahman · Brangus = Angus × Brahman"
+        sub="Braford = Hereford × Cebú · Brangus = Angus × Brahman · Cebú puro = mayor tolerancia al calor"
       />
       {form.biotipo && (
         <div style={{ background:C.card2, borderRadius:10, padding:10, marginBottom:12, border:`1px solid ${C.border}` }}>
@@ -5746,44 +5682,77 @@ function AgroMindPro() {
   // ── PASO 2: CC ────────────────────────────────────────────────
   const renderCC = () => (
     <div>
-      {/* Antigüedad de la medición — selector simple */}
+      {/* Contexto de la medición — tacto pre-parto */}
       <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:12, marginBottom:12 }}>
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
-          ¿CUÁNDO MEDISTE LA CC?
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>
+          ¿CUÁNDO SE HIZO EL TACTO?
+        </div>
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, lineHeight:1.6, marginBottom:8 }}>
+          La CC se mide al tacto, 60–90 días antes del parto. Como la vaca preñada sin ternero al pie no moviliza reservas,
+          esta CC <strong style={{color:C.text}}>es prácticamente la CC al parto</strong>. Ingresala en escala 1–9 (INTA).
         </div>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-          {[["hoy","Esta semana","ok"],["15","Hace 15d","ok"],["30","Hace 30d","warn"],["60","Hace 60d","warn"],["90","3+ meses","error"]].map(([val,lbl,tipo]) => {
-            const sel = (form.diasDesdeCC||"hoy") === val;
-            const col = {ok:C.green,warn:C.amber,error:C.red}[tipo];
+          {[["feb","Feb"],["mar","Mar"],["abr","Abr"],["may","May"],["jun","Jun"],["otro","Otro mes"]].map(([val,lbl]) => {
+            const sel = (form.mesTacto||"abr") === val;
+            // ¿Ya pasó el tacto este año? Meses pasados = info confiable
+            const mesTactoN = {feb:1,mar:2,abr:3,may:4,jun:5,otro:3}[val];
+            const mesHoy = new Date().getMonth();
+            const yaFue = mesTactoN <= mesHoy;
             return (
-              <button key={val} onClick={() => set("diasDesdeCC", val)} style={{
+              <button key={val} onClick={() => set("mesTacto", val)} style={{
                 padding:"6px 10px", borderRadius:8, cursor:"pointer",
                 fontFamily:C.font, fontSize:9, fontWeight:sel?700:400,
-                background: sel ? col+"18" : "transparent",
-                border:`1px solid ${sel ? col : C.border}`,
-                color: sel ? col : C.textDim,
+                background: sel ? `${C.green}18` : "transparent",
+                border:`1px solid ${sel ? C.green : C.border}`,
+                color: sel ? C.green : C.textDim,
               }}>{lbl}</button>
             );
           })}
         </div>
         {(() => {
-          const v = form.diasDesdeCC||"hoy";
-          const dias = v==="hoy"?3:parseInt(v)||0;
-          if (dias<=15) return (
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:6 }}>✓ CC considerada actual — análisis confiable</div>
-          );
+          const mes = form.mesTacto || "abr";
+          const mesTactoN = {feb:1,mar:2,abr:3,may:4,jun:5,otro:3}[mes];
+          const mesHoy = new Date().getMonth();
+          const diasDesde = Math.max(0, (mesHoy - mesTactoN) * 30);
           const bt = getBiotipo(form.biotipo);
-          const caida = (dias/30 * 0.40 * bt.movCC).toFixed(1);
+          if (diasDesde <= 90) {
+            return (
+              <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:6 }}>
+                ✓ Tacto en {mes === "otro" ? "otro mes" : mes.charAt(0).toUpperCase()+mes.slice(1)} — CC pre-parto válida como referencia
+              </div>
+            );
+          }
+          const caidaEst = (diasDesde/30 * 0.40 * bt.movCC).toFixed(1);
           return (
-            <Alerta tipo={dias>=60?"error":"warn"} style={{marginTop:6}}>
-              CC medida hace ~{dias} días. En lactación puede haber caído hasta −{caida} CC.
-              {dias>=60?" Medirla nuevamente da mayor precisión al análisis.":" Aceptable si el rodeo está seco o en gestación."}
+            <Alerta tipo="warn" style={{marginTop:6}}>
+              Han pasado ~{Math.round(diasDesde/30)} meses desde el tacto. Si el rodeo ya parió y está en lactación,
+              la CC actual puede ser {caidaEst} unidades menor que la ingresada. Considerá medir nuevamente o ajustar el valor.
             </Alerta>
           );
         })()}
       </div>
-      <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:12 }}>DISTRIBUCIÓN CC DEL RODEO</div>
+      <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:12 }}>CC AL TACTO (pre-parto) — distribución por grupo (escala 1–9 INTA)</div>
       <DistCC dist={form.distribucionCC} onChange={v=>setDist("distribucionCC",v)} label="" />
+
+      {/* ── DESTETE — el productor ya lo tiene definido ── */}
+      <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginTop:14 }}>
+        <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:4 }}>MODALIDAD DE DESTETE</div>
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:10, lineHeight:1.6 }}>
+          El tipo de destete define la <strong style={{color:C.text}}>caída de CC</strong> post-parto y el intervalo parto-celo.
+          La suma debe ser 100%.
+        </div>
+        <Slider label="🟢 Tradicional (180d)" value={parseFloat(form.destTrad)||0}  min={0} max={100} step={10} onChange={v=>set("destTrad",v)}  unit="%" color={C.green} />
+        <Slider label="🔶 Anticipado (90d)"   value={parseFloat(form.destAntic)||0} min={0} max={100} step={10} onChange={v=>set("destAntic",v)} unit="%" color={C.amber} />
+        <Slider label="⚡ Hiperprecoz (50d)"  value={parseFloat(form.destHiper)||0} min={0} max={100} step={10} onChange={v=>set("destHiper",v)} unit="%" color={C.red}   />
+        {(parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0) !== 100 && (
+          <Alerta tipo="warn">
+            Suma: {(parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0)}% — debe ser 100%
+          </Alerta>
+        )}
+        {(parseFloat(form.destHiper)||0) > 30 && (
+          <Alerta tipo="warn">Hiperprecoz {">"} 30% — planificar suplementación proteica inmediata post-destete (ternero {"<"} 60 kg).</Alerta>
+        )}
+      </div>
 
       {ccPondVal > 0 && tray && (
         <div style={{ marginTop:14 }}>
@@ -5792,18 +5761,17 @@ function AgroMindPro() {
             TRAYECTORIA CC PROYECTADA
           </div>
 
-          {/* Flecha visual de trayectoria */}
+          {/* Flecha visual de trayectoria — CC tacto = CC parto */}
           <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 10px", marginBottom:10 }}>
             <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", justifyContent:"space-between" }}>
               {[
-                { label:"HOY",   val:ccPondVal.toFixed(1), color:smf(ccPondVal,4.5,5.5) },
-                { label:"PARTO", val:tray.ccParto,         color:smf(parseFloat(tray.ccParto),4.5,5.0) },
-                { label:"MÍN.",  val:tray.ccMinLact,       color:smf(parseFloat(tray.ccMinLact),3.5,4.5) },
-                { label:"SERV.", val:tray.ccServ,          color:smf(parseFloat(tray.ccServ),4.5,5.0) },
+                { label:"TACTO/PARTO", val:tray.ccParto,   color:smf(parseFloat(tray.ccParto),4.5,5.0) },
+                { label:"MÍN. LACT.",  val:tray.ccMinLact, color:smf(parseFloat(tray.ccMinLact),3.5,4.5) },
+                { label:"SERVICIO",    val:tray.ccServ,    color:smf(parseFloat(tray.ccServ),4.5,5.0) },
               ].map((item, i, arr) => (
                 <React.Fragment key={item.label}>
-                  <div style={{ textAlign:"center", minWidth:42 }}>
-                    <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:item.color, lineHeight:1 }}>{item.val}</div>
+                  <div style={{ textAlign:"center", minWidth:52 }}>
+                    <div style={{ fontFamily:C.font, fontSize:20, fontWeight:700, color:item.color, lineHeight:1 }}>{item.val}</div>
                     <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>{item.label}</div>
                   </div>
                   {i < arr.length - 1 && (
@@ -5822,10 +5790,10 @@ function AgroMindPro() {
 
           {/* Cards individuales con contexto */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
-            <MetricCard label="CC AL PARTO"
+            <MetricCard label="CC TACTO = CC PARTO"
               value={tray.ccParto}
               color={smf(parseFloat(tray.ccParto),4.5,5.0)}
-              sub={parseFloat(tray.ccParto)<4.5?"⚠ Riesgo anestro prolongado":parseFloat(tray.ccParto)>=5.0?"✓ Óptimo":"Aceptable"} />
+              sub={parseFloat(tray.ccParto)<4.5?"⚠ Riesgo anestro prolongado":parseFloat(tray.ccParto)>=5.0?"✓ Óptimo (escala 1-9)":"Aceptable"} />
             <MetricCard label="CC MÍN. LACTACIÓN"
               value={tray.ccMinLact}
               color={smf(parseFloat(tray.ccMinLact),3.5,4.0)}
@@ -5852,7 +5820,7 @@ function AgroMindPro() {
             <div style={{ marginTop:10 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
                 <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1 }}>POR GRUPO DE CC</div>
-                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>Supervivencia: Rosello Brajovich et al. 2025</div>
+                
               </div>
               {dist.grupos.map((g, i) => {
                 // Sin supervivencia en este panel — solo CC y preñez
@@ -5909,13 +5877,6 @@ function AgroMindPro() {
   // ── PASO 3: CATEGORÍAS ────────────────────────────────────────
   const renderCategorias = () => (
     <div>
-      <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:12 }}>MODALIDAD DE DESTETE</div>
-      <Slider label="🟢 Tradicional (180d)" value={parseFloat(form.destTrad)||0}  min={0} max={100} step={10} onChange={v=>set("destTrad",v)}  unit="%" color={C.green} />
-      <Slider label="🔶 Anticipado (90d)"   value={parseFloat(form.destAntic)||0} min={0} max={100} step={10} onChange={v=>set("destAntic",v)} unit="%" color={C.amber} />
-      <Slider label="⚡ Hiperprecoz (50d)"  value={parseFloat(form.destHiper)||0} min={0} max={100} step={10} onChange={v=>set("destHiper",v)} unit="%" color={C.red}   />
-      {(parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0) !== 100 && (
-        <Alerta tipo="warn">La suma debe ser 100% (actual: {(parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0)}%)</Alerta>
-      )}
 
       {tcSave && (
         <div style={{ background:C.card2, borderRadius:12, padding:12, border:`1px solid ${C.border}`, marginBottom:14 }}>
@@ -5964,12 +5925,32 @@ function AgroMindPro() {
           )}
           {vaq1E && vaq1E.mensaje && <Alerta tipo="ok">{vaq1E.mensaje}</Alerta>}
           {vaq1E && !vaq1E.mensaje && (
-            <div style={{ padding:"8px 12px", background:`${C.green}06`, border:`1px solid ${C.green}20`, borderRadius:8, marginBottom:8 }}>
-              <div style={{ fontFamily:C.font, fontSize:9, color:C.green }}>
-                📊 GDP proyectado: <strong>{vaq1E.gdpReal} g/día</strong> · PV agosto: <strong>{vaq1E.pvSal} kg</strong>
+            <div style={{ padding:"10px 12px", background:`${C.card}`, border:`1px solid ${C.border}`, borderRadius:8, marginBottom:8 }}>
+              <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:6 }}>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:C.amber, lineHeight:1 }}>
+                    {vaq1E.gdpPasto} g/d
+                  </div>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>GDP solo pasto</div>
+                </div>
+                <div style={{ color:C.textFaint, fontSize:14, alignSelf:"center" }}>→</div>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:C.green, lineHeight:1 }}>
+                    {vaq1E.gdpReal} g/d
+                  </div>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>GDP con suplemento*</div>
+                </div>
+                <div style={{ color:C.textFaint, fontSize:14, alignSelf:"center" }}>→</div>
+                <div style={{ textAlign:"center" }}>
+                  <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:vaq1E.pvSal>=220?C.green:C.amber, lineHeight:1 }}>
+                    {vaq1E.pvSal} kg
+                  </div>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>PV agosto est.</div>
+                </div>
               </div>
-              <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>
-                Proyección <em>solo con pasto</em> — sin suplemento cargado todavía
+              <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, borderTop:`1px solid ${C.border}`, paddingTop:4 }}>
+                * GDP con suplemento = estimación al cargar suplemento en el paso siguiente.
+                Sin suplementar, el pasto C4 en invierno da {vaq1E.gdpPasto} g/día — el objetivo de recría no se cumple con pasto solo.
               </div>
             </div>
           )}
@@ -6050,7 +6031,11 @@ function AgroMindPro() {
           {form.v2sN && (
             <span style={{ marginLeft:"auto", fontFamily:C.font, fontSize:9,
               color: (() => {
-                const r = calcV2S(form.v2sPV, form.pvVacaAdulta, form.cc2sDist?.[0]?.cc || "4.2", form.v2sTernero === "si", form.biotipo, cadena);
+                const ccV2sPondUI = form.cc2sDist?.length
+                  ? (form.cc2sDist.reduce((s,g)=>s+(parseFloat(g.cc)||0)*(parseFloat(g.pct)||0),0) /
+                     Math.max(1, form.cc2sDist.reduce((s,g)=>s+(parseFloat(g.pct)||0),0)))
+                  : 4.2;
+                const r = calcV2S(form.v2sPV, form.pvVacaAdulta, ccV2sPondUI.toFixed(1), form.v2sTernero === "si", form.biotipo, cadena);
                 return r?.critico ? C.red : C.amber;
               })()
             }}>
@@ -6435,13 +6420,6 @@ function AgroMindPro() {
     // Suplementar vaca con ternero al pie es costoso e ineficiente: el ternero
     // consume 6–8 Mcal/día que ningún suplemento puede compensar (Wiltbank 1990)
     // Selector duración suplementación invernal
-    const DURAC_SUPL = [
-      ["90",  "90 días — jun-ago (mínimo)"],
-      ["120", "120 días — may-ago (recomendado)"],
-      ["150", "150 días — may-sep (intensivo)"],
-      ["180", "180 días — abr-sep (completo)"],
-    ];
-
     const CATS = [
       { key:"v2s",     label:"Vaca 2° servicio",      icon:"⚡", pv:pvV2sS,   color:C.red,    supl1k:"supl_v2s",     dos1k:"dosis_v2s",     supl2k:"supl2_v2s",    dos2k:"dosis2_v2s",
         razon:"Triple estrés: crecimiento + lactación + preñez. SÍ necesita soporte nutricional adicional al pasto." },
@@ -6481,25 +6459,43 @@ function AgroMindPro() {
 
     return (
       <div>
-        {/* ── Duración campaña de suplementación — afecta balance y costos ── */}
-        <div style={{ background:T.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"10px 14px", marginBottom:12, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, flexShrink:0 }}>
-            DURACIÓN CAMPAÑA INVERNAL
+        {/* ── Meses de suplementación — selector exacto ── */}
+        <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
+            MESES DE SUPLEMENTACIÓN — seleccioná los meses que aplicás
           </div>
-          <div style={{ display:"flex", gap:6, flex:1, flexWrap:"wrap" }}>
-            {DURAC_SUPL.map(([val, lbl]) => (
-              <button key={val} onClick={() => set("diasSuplInv", val)} style={{
-                padding:"5px 10px", borderRadius:8, cursor:"pointer",
-                fontFamily:C.font, fontSize:9,
-                background: (form.diasSuplInv||"90") === val ? `${C.green}20` : "transparent",
-                border:`1px solid ${(form.diasSuplInv||"90") === val ? C.green : C.border}`,
-                color: (form.diasSuplInv||"90") === val ? C.green : C.textDim,
-              }}>{val}d</button>
-            ))}
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            {[["4","May"],["5","Jun"],["6","Jul"],["7","Ago"],["8","Sep"],["9","Oct"],["10","Nov"],["3","Abr"]].map(([idx,lbl]) => {
+              const sel = (form.suplMeses||["5","6","7"]).includes(idx);
+              return (
+                <button key={idx} onClick={() => {
+                  const cur = form.suplMeses||["5","6","7"];
+                  const next = sel ? cur.filter(m=>m!==idx) : [...cur, idx].sort((a,b)=>Number(a)-Number(b));
+                  set("suplMeses", next);
+                }} style={{
+                  padding:"7px 12px", borderRadius:8, cursor:"pointer",
+                  fontFamily:C.font, fontSize:10, fontWeight:sel?700:400,
+                  background: sel ? `${C.green}18` : "transparent",
+                  border:`1px solid ${sel ? C.green : C.border}`,
+                  color: sel ? C.green : C.textDim,
+                }}>{lbl}</button>
+              );
+            })}
           </div>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
-            {DURAC_SUPL.find(([v]) => v === (form.diasSuplInv||"90"))?.[1] || "90 días — jun-ago"}
-          </div>
+          {(() => {
+            const meses = form.suplMeses||["5","6","7"];
+            const nombM = {3:"Abr",4:"May",5:"Jun",6:"Jul",7:"Ago",8:"Sep",9:"Oct",10:"Nov"};
+            const rango = meses.length > 0
+              ? meses.map(m=>nombM[Number(m)]||m).join(" · ")
+              : "ninguno seleccionado";
+            return (
+              <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:8 }}>
+                {meses.length === 0
+                  ? "⚠ Sin meses seleccionados — el suplemento no aplica en el balance"
+                  : `${meses.length} mes${meses.length>1?"es":""}: ${rango} · ${meses.length * 30}d aprox`}
+              </div>
+            );
+          })()}
         </div>
         {/* ══ PANEL 1: MANEJO DE LACTANCIA — herramienta principal para vacas ══ */}
         <div style={{ background:`${C.green}06`, border:`1px solid ${C.green}25`, borderRadius:14, padding:14, marginBottom:16 }}>
