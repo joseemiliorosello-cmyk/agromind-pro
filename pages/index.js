@@ -13,14 +13,21 @@ import {
 // AGROMIND PRO v16 — PARTE 1: MOTOR DEL MODELO
 // ══════════════════════════════════════════════════════════════════
 // ─── BIOTIPOS ─────────────────────────────────────────────────────
+// Parámetros: movCC = movilización CC (1=Angus base) · recCC = recuperación
+// umbralAnestro = CC mínima para ciclar · factReq = factor requerimiento energético
+// Fuentes: Short et al. 1990; Neel et al. 2007; Peruchena INTA 2003; Balbuena 2001-2009
 const BIOTIPOS = {
-  // ── Cebú puro ──────────────────────────────────────────────────
+  // ── Cebú puro — dominante en NEA subtropical ───────────────────
+  "Nelore":               { movCC:0.72, recCC:0.83, umbralAnestro:2.9, factReq:0.89, nombre:"Nelore (Zebu)" },
   "Brahman":              { movCC:0.70, recCC:0.85, umbralAnestro:2.8, factReq:0.90, nombre:"Brahman puro" },
-  "Nelore":               { movCC:0.72, recCC:0.83, umbralAnestro:2.9, factReq:0.89, nombre:"Nelore" },
   "Indobrasil":           { movCC:0.71, recCC:0.84, umbralAnestro:2.8, factReq:0.90, nombre:"Indobrasil" },
+  "Gyr / Guzerat":        { movCC:0.71, recCC:0.83, umbralAnestro:2.8, factReq:0.89, nombre:"Gyr / Guzerat" },
 
   // ── Aberdeen Angus y cruces ─────────────────────────────────────
   "Aberdeen Angus":       { movCC:1.00, recCC:1.00, umbralAnestro:3.8, factReq:1.00, nombre:"Aberdeen Angus" },
+  // F1 son los más comunes en NEA: heterosis máxima
+  "F1 Nelore × Angus":    { movCC:0.85, recCC:0.93, umbralAnestro:3.2, factReq:0.94, nombre:"F1 Nelore × Angus (50% Cebú)" },
+  "F1 Nelore × Hereford": { movCC:0.84, recCC:0.92, umbralAnestro:3.1, factReq:0.94, nombre:"F1 Nelore × Hereford (50% Cebú)" },
   "Brangus 3/8":          { movCC:0.82, recCC:0.92, umbralAnestro:3.2, factReq:0.95, nombre:"Brangus 3/8 Cebú (Angus×Brahman)" },
   "Brangus 5/8":          { movCC:0.88, recCC:0.96, umbralAnestro:3.4, factReq:0.98, nombre:"Brangus 5/8 Cebú (Angus×Brahman)" },
 
@@ -330,7 +337,10 @@ function calcTrayectoriaCC(params) {
   // Acotar a máximo 180 días (6 meses) — evita que ccServ llegue a valores imposibles
   // cuando el servicio queda muy lejos o la fecha no está cargada
   const diasRecupRaw = ((mesServ - mesDestete + 12) % 12) * 30;
-  const diasRecup    = Math.min(180, Math.max(0, diasRecupRaw));
+  // Máximo 120 días (4 meses): intervalo destete-servicio real en NEA
+  // Si no hay fecha de servicio cargada, la estimación automática (mesParto+3)
+  // puede dar hasta 9 meses de recuperación → ccServ irreal.
+  const diasRecup    = Math.min(120, Math.max(0, diasRecupRaw));
 
   const mcalSuplInv   = mcalSuplemento(supl1, parseFloat(dosis1) || 0);
   let   ccServ        = ccDestete;
@@ -346,7 +356,10 @@ function calcTrayectoriaCC(params) {
     ccServ += (tasaRecup + boostSupl + ajCarga / Math.max(1, diasRecup));
   }
   // No puede superar la CC al parto + 1.5 (techo fisiológico de recuperación post-parto)
-  ccServ = parseFloat(Math.min(ccParto + 1.5, Math.min(7.5, Math.max(1, ccServ))).toFixed(2));
+  // Techo biológico real: la vaca no puede recuperar más de 1.0 CC en 4 meses
+  // (en condiciones normales NEA: 0.3–0.5 CC/mes en verano con buen pasto)
+  // Y no puede superar CC 6.0 en un sistema pastoril extensivo
+  ccServ = parseFloat(Math.min(ccParto + 1.0, Math.min(6.0, Math.max(1, ccServ))).toFixed(2));
 
   const pr = interpCC(ccServ).pr;
 
@@ -1432,11 +1445,24 @@ function correrMotor(form, sat, potreros, usaPotreros) {
     { sk:"supl_vaq2",   dk:"dosis_vaq2",   n:nVaq2  }, // recría: sí suplemento
     { sk:"supl_vaq1",   dk:"dosis_vaq1",   n:nVaq1  }, // 1° invierno: sí suplemento, respuesta máxima
   ];
+  // Duración campaña de suplementación: 90d=3 meses, 120d=4 meses, 150d=5 meses
+  // Esto define en qué meses del año aplica el suplemento en el balance mensual
+  const diasSuplInv    = parseInt(form.diasSuplInv) || 90;
+  const mesesSuplInv   = Math.round(diasSuplInv / 30); // 3, 4 o 5
+  // Meses donde aplica: siempre centrado en jun-ago (5,6,7)
+  // 3 meses: [5,6,7]; 4 meses: [4,5,6,7]; 5 meses: [4,5,6,7,8]
+  const suplMesInicio  = mesesSuplInv >= 5 ? 4 : mesesSuplInv >= 4 ? 4 : 5;
+  const suplMesFin     = mesesSuplInv >= 5 ? 8 : mesesSuplInv >= 4 ? 7 : 7;
+  // Conjunto de meses donde aplica el suplemento
+  const MESES_SUPL = new Set(Array.from({length: suplMesFin - suplMesInicio + 1}, (_, k) => suplMesInicio + k));
+
   const suplRodeoMcalDia = suplCats.reduce((acc,c) => {
     const s = SUPLEMENTOS[form[c.sk]];
     const d = parseFloat(form[c.dk]) || 0;
     return acc + (s ? s.em*d*c.n : 0);
   }, 0);
+  // Fracción anual del suplemento (para cálculo de costos e intensidad GEI)
+  const fracSuplAnual  = diasSuplInv / 365;
 
   // Suplemento desglosado por categoría (para el gráfico de demanda vs solución)
   const suplDetalle = suplCats.reduce((acc,c) => {
@@ -1505,7 +1531,9 @@ function correrMotor(form, sat, potreros, usaPotreros) {
     const verdeoAp = form.tieneVerdeo
       ? (i >= verdeoMesInicio && i <= verdeoMesInicio+2 ? verdeoAporteMcalMes : 0) : 0;
 
-    const ofertaTotal = ofPastoTotal + ccAporte + suplRodeoMcalDia + verdeoAp;
+    // Suplemento: solo aplica en los meses de invierno configurados
+    const suplAp = MESES_SUPL.has(i) ? suplRodeoMcalDia : 0;
+    const ofertaTotal = ofPastoTotal + ccAporte + suplAp + verdeoAp;
     const balance     = ofertaTotal - demanda;
 
     // Cuánto suplemento resolvería el déficit (Mcal/animal/día)
@@ -1518,7 +1546,7 @@ function correrMotor(form, sat, potreros, usaPotreros) {
       mes, i,
       // Oferta
       ofPastoTotal:+ofPastoTotal, ofPastoVaca, ccAporte,
-      suplAporte:+suplRodeoMcalDia.toFixed(0),
+      suplAporte:+suplAp.toFixed(0),
       verdeoAporte:+verdeoAp,
       ofertaTotal:+ofertaTotal.toFixed(0),
       // Demanda
@@ -2277,6 +2305,906 @@ function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
 // BALANCE ENERGÉTICO v2 — por categoría + correcciones en cascada
 // Lógica: oferta base → gap por categoría → cuánto cierra cada corrector
 // ═══════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// MÓDULO GEI — Balance CH₄ / CO₂ en sistemas pastoriles bovinos
+// ═══════════════════════════════════════════════════════════════════
+// Fuentes:
+//  McGinn et al. 2014 (J.Env.Quality) — emisión CH4 entérico y flujo CO2 pastizal
+//  Wang et al. 2023 (Nature Comms)    — límites del secuestro por suelos
+//  Li et al. 2021 (Nature Comms)      — balance CH4+N2O+CO2 con manejo
+//  Gere et al. 2024 (Animals)         — CH4 en pastoreo extensivo NEA/trópico
+//  Soussana et al. (Agric.Ecosyst.)   — balance GEI sistema pastoril completo
+//  IPCC Tier 2 / FAO-GLEAM            — factores por categoría y sistema
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Factores de emisión CH₄ entérico (g CH₄/kg MS consumida) ─────
+// IPCC Tier 2 + Gere et al. 2024 calibrado pastoreo extensivo C4/NEA
+// La digestibilidad del pasto MODIFICA la emisión:
+//   alta dig (>65%) → menor CH4/kg MS (fermentación más eficiente)
+//   baja dig (<55%) → mayor CH4/kg MS (fibra no digerible → más metano)
+// Fórmula base: CH4 = Ym × GE / 55.65 (IPCC) donde Ym = fracción metanogénica
+// Ym calibrado por digestibilidad (Benchaar et al.; Kennedy et al.)
+const GEI_YM = (dig) => {
+  // Ym: 5.5-8% de la energía bruta → mayor con pasto de baja digestibilidad
+  if (dig >= 68) return 0.055;  // pasto tierno <10% floración — muy eficiente
+  if (dig >= 63) return 0.062;  // 10-25% floración — normal
+  if (dig >= 58) return 0.071;  // 25-50% floración — encañando
+  return 0.082;                  // >50% floración — muy ineficiente (Gere 2024)
+};
+
+// Energía bruta por kg MS ajustada por digestibilidad
+const GEI_GE_KGMS = (dig) => {
+  // GE ≈ 18.45 MJ/kg MS pasto (IPCC) — ajuste menor por calidad
+  return dig >= 65 ? 18.45 : dig >= 58 ? 18.20 : 18.00; // MJ/kg MS
+};
+
+// CH₄ g/kg MS consumida por categoría y digestibilidad
+function calcCH4_kgMS(dig) {
+  const Ym = GEI_YM(dig);
+  const GE = GEI_GE_KGMS(dig);
+  // CH4 (MJ/dia) = Ym × GE × consumo → CH4 (g/kg MS) = Ym × GE × 1000/55.65
+  return +(Ym * GE * 1000 / 55.65).toFixed(2); // g CH4/kg MS
+}
+
+// Factor de conversión GWP100: CH₄ = 28× CO₂eq (IPCC AR6, excl. retroalimentación)
+// Wang et al. 2023 usa 27-34x — usamos 28 (AR6 fossil-methane eq)
+const GWP_CH4 = 28;
+
+// ── Consumo voluntario de MS por categoría (kg MS/cabeza/día) ────
+// Ajustado por digestibilidad (Lippke 1980; Minson 1990)
+function consumoMSCat(pv, cat, dig, fenol, t) {
+  const cvPct = { menor_10:2.8, "10_25":2.4, "25_50":2.0, mayor_50:1.6 }[fenol] || 2.4;
+  const factT = t >= 25 ? 1.0 : t >= 20 ? 0.90 : t >= 15 ? 0.75 : 0.50;
+  // Factor de categoría sobre el CV base (proporcional al requerimiento relativo)
+  const factCat = {
+    vaca_lact: 1.10,   // lactación: máximo consumo
+    vaca_seca: 0.90,
+    v2s:       1.05,
+    toro:      1.00,
+    vaq2:      0.85,
+    vaq1:      0.70,
+  }[cat] || 1.0;
+  return +(pv * cvPct / 100 * factT * factCat).toFixed(2);
+}
+
+// ── Efecto del suplemento sobre la emisión por kg MS ─────────────
+// Suplemento proteico de alta digestibilidad → dilución de la fibra indigestible
+// → mejora digestibilidad total de la dieta → menor Ym efectivo
+// Beauchemin et al. 2009; Benchaar 2020
+function digConSupl(digBase, pbSupl, dosisSupl, consumoBase) {
+  if (!dosisSupl || dosisSupl <= 0) return digBase;
+  // Digestibilidad del suplemento proteico: 75-82%
+  const digSupl = pbSupl > 30 ? 80 : 72;
+  const totalMS = consumoBase + dosisSupl;
+  const digMix  = (digBase * consumoBase + digSupl * dosisSupl) / totalMS;
+  return Math.min(82, +digMix.toFixed(1));
+}
+
+// ── Ineficiencias productivas → CH₄ "sin retorno" ─────────────────
+// Vaca vacía emite CH₄ sin producir ternero → ineficiencia productiva absoluta
+// IPCC/FAO GLEAM: el CH₄ de vaca vacía es 100% "no productive emission"
+// Vaquillona que entra al servicio con >24 meses: 8-12 meses extra de emisión
+// sin producción (Wang et al. 2023 — ruminant non-productive fraction)
+function calcIneficiencias(nVacas, prenezPct, nVaq1, edadEntoreReal) {
+  const vacasVacias     = Math.round(nVacas * (1 - (prenezPct || 50) / 100));
+  // CH₄ anual de vaca vacía (IPCC Tier 2, sistema extensivo 320kg):
+  // ~ 55 kg CH₄/año × GWP28 = 1540 kg CO₂eq/año por vaca vacía
+  const ch4VacaVaciaAnual = 55; // kg CH₄/año (IPCC 2019, Tier 2, cat. vaca cría)
+  const co2eqVacasVacias = vacasVacias * ch4VacaVaciaAnual * GWP_CH4;
+
+  // Vaquillona entorando tarde (>24 meses → pasa a 36 meses)
+  // Meses extra improductivos: 36 - 24 = 12 meses = 0.5 año adicional de CH₄
+  const edadObj   = 24; // meses ideal (INTA — entore a los 24 meses)
+  const demora    = Math.max(0, (edadEntoreReal || 36) - edadObj); // meses extra
+  const fracInefi = demora / 12; // fracción de año adicional improductivo
+  // CH₄ vaquillona: ~35 kg/año (IPCC, categoría reposición 200-280kg)
+  const ch4VaqAnual = 35; // kg CH₄/año
+  const co2eqVaqTarde = nVaq1 * ch4VaqAnual * fracInefi * GWP_CH4;
+
+  return {
+    vacasVacias,
+    prenezPct: prenezPct || 50,
+    ch4VacaVaciaAnual,
+    co2eqVacasVacias: Math.round(co2eqVacasVacias),
+    demora,
+    fracInefi: +fracInefi.toFixed(2),
+    co2eqVaqTarde: Math.round(co2eqVaqTarde),
+    totalCO2eqInefi: Math.round(co2eqVacasVacias + co2eqVaqTarde),
+  };
+}
+
+// ── Balance CO₂ del pastizal (secuestro/emisión neta) ─────────────
+// McGinn et al. 2014: pastizal manejado puede ser neutro o sumidero débil
+// Soussana et al.: secuestro 0.1-0.6 tC/ha/año según manejo
+// Wang et al. 2023: ADVERTENCIA — no asumir secuestro permanente
+//
+// CO₂ flux depende de:
+//   - tipo de vegetación (C3 mayor secuestro invernal que C4)
+//   - NDVI (proxy de productividad primaria neta)
+//   - precipitación
+//   - carga animal (degradación vs regeneración)
+//   - temperatura (respiración del suelo)
+//
+// Usamos modelo simplificado calibrado con McGinn 2014 y Soussana:
+// NPP neta = producción - respiración heterotrófica - pisoteo
+function calcCO2PastizalAnual(veg, ndvi, supHa, cargaEV_ha, precipAnual, t_media) {
+  // Producción primaria neta (kgC/ha/año) base por vegetación
+  // Calibrado con datos NEA (Chaco húmedo, Corrientes, Formosa)
+  const NPP_BASE = {
+    "Pastizal natural NEA/Chaco":                   600,  // kgC/ha/año — pastizal nativo
+    "Megatérmicas C4 (gatton panic, brachiaria)":   900,  // C4 alta productividad
+    "Pasturas templadas C3":                         750,  // C3 moderada
+    "Mixta gramíneas+leguminosas":                   820,  // mixtura, mejor ciclo N
+    "Bosque nativo":                                1200,  // bosque = máximo secuestro
+    "Verdeo de invierno":                            550,  // anual, ciclo corto
+  }[veg] || 600;
+
+  // NDVI modifica la NPP: NDVI alto → mayor productividad
+  const ndviN  = parseFloat(ndvi) || 0.45;
+  const factN  = 0.5 + ndviN * 1.1; // NDVI 0.3 → 0.83; NDVI 0.7 → 1.27
+
+  // Precipitación: relación lineal por encima de 400mm/año (Li et al. 2021)
+  const precN  = Math.max(0.6, Math.min(1.4, precipAnual / 1000));
+
+  // Respiración heterotrófica: ~50% de la NPP en sistemas tropicales
+  // Wang et al. 2023: R_het = 0.45-0.55 × NPP según T° y humedad
+  const Rh_frac = t_media > 25 ? 0.55 : t_media > 20 ? 0.50 : 0.45;
+
+  // NEP = NPP - R_het (kgC/ha/año, > 0 = secuestro neto)
+  const NPP_real = NPP_BASE * factN * precN;
+  const NEP      = NPP_real * (1 - Rh_frac);
+
+  // Efecto de la carga: sobrecarga → pérdida de cobertura → mayor respiración
+  // Li et al. 2021: pastizales degradados por sobrecarga → fuente neta de CO₂
+  const factCarga = cargaEV_ha > 1.2 ? -0.3   // degradado: pierde carbono
+    : cargaEV_ha > 0.8 ? 0.0     // neutro: balance cero
+    : cargaEV_ha > 0.4 ? 0.15    // óptimo: secuestro moderado
+    : 0.25;                        // subganadera: máximo secuestro
+
+  const CO2_ha_anual = (NEP + NPP_real * factCarga) * 3.667; // kgC → kgCO2
+  // Total del establecimiento
+  const CO2_total = CO2_ha_anual * (supHa || 1);
+
+  return {
+    NPP_real:  Math.round(NPP_real),
+    NEP:       Math.round(NEP),
+    factCarga,
+    CO2_ha:    Math.round(CO2_ha_anual),  // kgCO2eq/ha/año (> 0 = secuestro)
+    CO2_total: Math.round(CO2_total),      // total establecimiento (> 0 = secuestro)
+    esFuente:  CO2_total < 0,              // < 0 = fuente de CO2
+  };
+}
+
+// ── MOTOR GEI PRINCIPAL ──────────────────────────────────────────
+// Calcula balance completo CH₄ vs CO₂ para el sistema
+function calcGEI(form, motor, tray, sat) {
+  const nVacas  = motor?.nVacas  || parseInt(form.vacasN)  || 0;
+  const nToros  = motor?.nToros  || parseInt(form.torosN)  || 0;
+  const nV2s    = motor?.nV2s    || parseInt(form.v2sN)    || 0;
+  const nVaq2   = motor?.nVaq2   || parseInt(form.vaq2N)   || 0;
+  const nVaq1   = motor?.nVaq1   || Math.round(nVacas * (parseFloat(form.pctReposicion)||20)/100);
+  const pvVaca  = parseFloat(form.pvVacaAdulta) || 320;
+  const ndvi    = parseFloat(sat?.ndvi) || parseFloat(form.ndvi) || 0.45;
+  const supHa   = parseFloat(form.supHa) || 100;
+  const cargaEV = motor?.cargaEV_ha || (nVacas / supHa);
+  const prenez  = tray?.pr || parseFloat(form.prenez) || 50;
+
+  // Clima anual
+  const hist        = getClima(form.provincia || "Corrientes");
+  const precipAnual = hist.reduce((s, m) => s + (m.p || 80), 0);
+  const t_media     = +(hist.reduce((s, m) => s + (m.t || 22), 0) / 12).toFixed(1);
+
+  // ── FIX 1: Digestibilidad MES A MES (no foto fija de fenología actual) ────────
+  // La fenología del pasto C4/NEA varía a lo largo del año:
+  // verano = pasto encañado (dig baja, más CH4/kg MS)
+  // invierno = pasto restringido o verdeo (dig alta, menos CH4/kg MS)
+  // Usar un único valor de fenología actual para todo el año inflaría el CH4
+  // invernal o subestimaría el CH4 estival según el momento de carga del form.
+  // Solución: iterar los 12 meses con fenología real y promediar ponderado.
+  const FENOL_MES = [
+    "menor_10","menor_10","10_25","10_25",
+    "25_50","mayor_50","mayor_50","mayor_50",
+    "25_50","10_25","menor_10","menor_10",
+  ];
+  const DIG_FENOL = { menor_10:68, "10_25":63, "25_50":58, mayor_50:52 };
+
+  // Verdeo: si hay verdeo de invierno, meses 5-7 (jun-ago) tienen dig 72
+  const tieneVerdeo = form.tieneVerdeo === "si" && parseFloat(form.verdeoHa) > 0;
+  const verdeoMesI  = { junio:5, julio:6, agosto:7, septiembre:8 }[form.verdeoDisp||"agosto"] || 7;
+
+  const digMensual = FENOL_MES.map((f, i) => {
+    if (tieneVerdeo && i >= verdeoMesI && i <= verdeoMesI + 2) return 72; // verdeo avena/raigrás
+    return DIG_FENOL[f];
+  });
+
+  // CH4/kg MS mensual por temperatura y digestibilidad
+  const ch4MensualBase = digMensual.map((d, i) => ({
+    dig:  d,
+    fenol: FENOL_MES[i],
+    t:     hist[i]?.t || 22,
+    ch4KgMs: calcCH4_kgMS(d),
+  }));
+
+  // Digestibilidad promedio ponderada anual (para mostrar en UI)
+  const digPromAnual = Math.round(digMensual.reduce((s, d) => s + d, 0) / 12);
+
+  // ── FIX 2: lookup correcto de suplemento por categoría ────────────────────────
+  // El form usa claves: supl_v2s, supl_toros, supl_vaq2, supl_vaq1
+  // Las vacas adultas NO tienen suplemento por diseño (herramienta = destete)
+  const SUPL_KEY = {
+    vaca: null,          // sin suplemento
+    v2s:  "supl_v2s",
+    toro: "supl_toros",  // con "s" — forma correcta del field
+    vaq2: "supl_vaq2",
+    vaq1: "supl_vaq1",
+  };
+  const DOSIS_KEY = {
+    vaca: null,
+    v2s:  "dosis_v2s",
+    toro: "dosis_toros",
+    vaq2: "dosis_vaq2",
+    vaq1: "dosis_vaq1",
+  };
+
+  const CATS_BASE = [
+    { id:"vaca", label:"Vacas adultas",     n:nVacas, pv:pvVaca,        catCV:"vaca_lact" },
+    { id:"v2s",  label:"V. 2° servicio",    n:nV2s,   pv:pvVaca * 0.88, catCV:"v2s"       },
+    { id:"toro", label:"Toros",             n:nToros, pv:pvVaca * 1.30, catCV:"toro"      },
+    { id:"vaq2", label:"Vaq. 2° invierno",  n:nVaq2,  pv:pvVaca * 0.65, catCV:"vaq2"      },
+    { id:"vaq1", label:"Vaq. 1° invierno",  n:nVaq1,  pv:pvVaca * 0.40, catCV:"vaq1"      },
+  ].filter(c => c.n > 0).map(c => {
+    const suplKey  = SUPL_KEY[c.id];
+    const dosisKey = DOSIS_KEY[c.id];
+    return {
+      ...c,
+      suplNombre: suplKey ? (form[suplKey] || null) : null,
+      suplPb:     suplKey ? (SUPLEMENTOS[form[suplKey]]?.pb || 0) : 0,
+      suplDosis:  dosisKey ? (parseFloat(form[dosisKey]) || 0) : 0,
+    };
+  });
+
+  // ── Calcular CH₄ por categoría: promedio mensual real ─────────────────────────
+  // Para cada categoría: iterar los 12 meses, calcular CH4/día ese mes,
+  // acumular y dividir por 365. Esto da el CH4 anual real con variación estacional.
+  const catData = CATS_BASE.map(c => {
+    // CH4 mensual base (sin suplemento)
+    let ch4DiaBaseAcum = 0;
+    let ch4DiaSuplAcum = 0;
+    let digSuplPromAcum = 0;
+    let cvBaseAcum = 0;
+
+    ch4MensualBase.forEach(m => {
+      const diasMes = 30; // aproximación uniforme — suficiente para el promedio anual
+      const cvBase  = consumoMSCat(c.pv, c.catCV, m.dig, m.fenol, m.t);
+      // Con suplemento: la dosis aplica todo el año (si fue cargada)
+      const digS    = digConSupl(m.dig, c.suplPb, c.suplDosis, cvBase);
+      const ch4S    = calcCH4_kgMS(digS);
+      const cvS     = c.suplDosis > 0
+        ? +(cvBase * (digS > m.dig + 3 ? 1.12 : 1.05) + c.suplDosis).toFixed(2)
+        : cvBase;
+
+      ch4DiaBaseAcum += cvBase * m.ch4KgMs * diasMes;
+      ch4DiaSuplAcum += cvS   * ch4S       * diasMes;
+      digSuplPromAcum += digS * diasMes;
+      cvBaseAcum      += cvBase * diasMes;
+    });
+
+    // Promedios anuales
+    const ch4DiaBase = +(ch4DiaBaseAcum / 360).toFixed(1); // g CH4/cab/día promedio anual
+    const ch4DiaSupl = +(ch4DiaSuplAcum / 360).toFixed(1);
+    const digConSProm = +(digSuplPromAcum / 360).toFixed(1);
+    const cvBaseProm  = +(cvBaseAcum / 360).toFixed(2);
+
+    // Eficiencia de emisión representativa: g CH4 por kg MS, promedio anual
+    const eficBase = cvBaseProm > 0 ? +(ch4DiaBase / cvBaseProm).toFixed(2) : 0;
+    const eficSupl = cvBaseProm > 0 && c.suplDosis > 0
+      ? +(ch4DiaSupl / (cvBaseProm + c.suplDosis * 0.9)).toFixed(2) : eficBase;
+
+    // CH₄ total rodeo/año (kg/año) — 365 días exactos
+    const ch4AnoBase = Math.round(ch4DiaBase * c.n * 365 / 1000);
+    const ch4AnoSupl = Math.round(ch4DiaSupl * c.n * 365 / 1000);
+
+    // ── FIX 3: GWP correcto ────────────────────────────────────────────────────
+    // GWP100 biogénico AR6 = 27.9 ≈ 28 (igual que fósil en AR6, a diferencia del AR5)
+    // GWP* (métrica dinámica, Allen et al. 2018) para rodeo estable ≈ 4-8×
+    // Mostramos ambos para que el usuario entienda la diferencia
+    const co2eqBase_gwp28  = ch4AnoBase * GWP_CH4;    // GWP100 AR6
+    const co2eqSupl_gwp28  = ch4AnoSupl * GWP_CH4;
+    const GWP_STAR = 4.5; // promedio conservador para rodeo estable (Allen 2018)
+    const co2eqBase_star   = ch4AnoBase * GWP_STAR;   // GWP* — rodeo sin crecimiento
+    const co2eqSupl_star   = ch4AnoSupl * GWP_STAR;
+
+    return {
+      ...c,
+      digPromAnual, digConSProm,
+      cvBaseProm,
+      ch4DiaBase, ch4DiaSupl,
+      ch4AnoBase, ch4AnoSupl,
+      co2eqBase: co2eqBase_gwp28,
+      co2eqSupl: co2eqSupl_gwp28,
+      co2eqBase_star, co2eqSupl_star,
+      delta: ch4AnoSupl - ch4AnoBase,
+      mejora: ch4DiaSuplAcum < ch4DiaBaseAcum,
+      eficBase: +eficBase.toFixed(1),
+      eficSupl: +eficSupl.toFixed(1),
+    };
+  });
+
+  // ── INEFICIENCIAS PRODUCTIVAS ─────────────────────────────────────────────────
+  // ── FIX 4: ineficiencias como FRACCIÓN del total, no suma adicional ───────────
+  // Las vacas vacías y las vaquillones tardías YA están incluidas en el CH4 total
+  // de catData. La ineficiencia se expresa como:
+  //   (a) CO2eq improductivo = fracción del total de esa categoría sin retorno económico
+  //   (b) Intensidad de emisión = kg CO2eq / kg PV producido (el número más honesto)
+  // No se suma al balance neto — sería doble contabilidad.
+  const edadEntoreReal = motor?.vaq1E?.pvSal >= 220 ? 24
+    : motor?.vaq1E?.pvSal >= 200 ? 28 : 36;
+
+  // Fracción improductiva de las vacas: vacías emiten pero no generan ternero
+  const vacasVacias     = Math.round(nVacas * (1 - prenez / 100));
+  const pctInefiVacas   = nVacas > 0 ? vacasVacias / nVacas : 0;
+  const catVaca         = catData.find(c => c.id === "vaca");
+  const co2eqVacasVacias = catVaca ? Math.round(catVaca.co2eqBase * pctInefiVacas) : 0;
+
+  // Fracción improductiva de la vaquillona: meses adicionales antes del primer parto
+  const edadObj         = 24; // meses — INTA
+  const demora          = Math.max(0, edadEntoreReal - edadObj);
+  const fracInefiVaq    = demora > 0 ? demora / (edadEntoreReal || 36) : 0;
+  const catVaq1         = catData.find(c => c.id === "vaq1");
+  const co2eqVaqTarde   = catVaq1 ? Math.round(catVaq1.co2eqBase * fracInefiVaq) : 0;
+
+  // Total improductivo: es una PARTICIÓN del total, no una suma nueva
+  const totalCH4Base   = catData.reduce((s, c) => s + c.ch4AnoBase, 0);
+  const totalCH4Supl   = catData.reduce((s, c) => s + c.ch4AnoSupl, 0);
+  const totalCO2eqBase = totalCH4Base * GWP_CH4;
+  const totalCO2eqSupl = totalCH4Supl * GWP_CH4;
+  const totalCO2eqBaseSTAR = totalCH4Base * 4.5;
+  const totalCO2eqSuplSTAR = totalCH4Supl * 4.5;
+
+  const totalCO2eqInefi = co2eqVacasVacias + co2eqVaqTarde;
+  const pctInefi        = totalCO2eqBase > 0
+    ? +((totalCO2eqInefi / totalCO2eqBase) * 100).toFixed(1) : 0;
+
+  const inefi = {
+    vacasVacias,
+    prenezPct:          prenez,
+    ch4VacaVaciaAnual:  catVaca ? Math.round(catVaca.ch4AnoBase / Math.max(1, nVacas)) : 55,
+    co2eqVacasVacias,
+    demora,
+    fracInefiVaq:       +fracInefiVaq.toFixed(2),
+    co2eqVaqTarde,
+    totalCO2eqInefi,
+    pctInefi,
+    edadEntoreReal,
+    // Nota: estos valores son SUBCONJUNTO del total, no adicionales
+    esSubconjunto: true,
+  };
+
+  // ── BALANCE CO₂ PASTIZAL ──────────────────────────────────────────────────────
+  const co2Pastizal = calcCO2PastizalAnual(
+    form.vegetacion || "Pastizal natural NEA/Chaco",
+    ndvi, supHa, cargaEV, precipAnual, t_media
+  );
+
+  // ── BALANCE NETO CORRECTO: solo CH4 total - secuestro pastizal ────────────────
+  // Las ineficiencias NO se suman al balance neto — ya están en el CH4 total.
+  // El balance neto es una ecuación de flujo físico, no de eficiencia económica.
+  const balanceNetoBase = totalCO2eqBase - co2Pastizal.CO2_total;
+  const balanceNetoSupl = totalCO2eqSupl - co2Pastizal.CO2_total;
+
+  // ── INTENSIDAD: la métrica más honesta ────────────────────────────────────────
+  // kg CO2eq / kg PV producido = emisiones totales / producción real de carne
+  // Este número ya captura la ineficiencia reproductiva implícitamente:
+  //   si la preñez baja, producís menos PV con las mismas emisiones → intensidad sube
+  const ternerosAnual  = Math.round(nVacas * prenez / 100);
+  const pvTernero      = Math.round(pvVaca * 0.45);
+  const kgPVProducido  = ternerosAnual * pvTernero;
+  const intensBase     = kgPVProducido > 0
+    ? +(totalCO2eqBase / kgPVProducido).toFixed(1) : null;
+  const intensSupl     = kgPVProducido > 0
+    ? +(totalCO2eqSupl / kgPVProducido).toFixed(1) : null;
+  const intensBase_star = kgPVProducido > 0
+    ? +(totalCO2eqBaseSTAR / kgPVProducido).toFixed(1) : null;
+
+  return {
+    catData,
+    inefi,
+    co2Pastizal,
+    digMensual,
+    totalCH4Base, totalCH4Supl,
+    totalCO2eqBase, totalCO2eqSupl,
+    totalCO2eqBaseSTAR, totalCO2eqSuplSTAR,
+    balanceNetoBase, balanceNetoSupl,
+    ternerosAnual, kgPVProducido,
+    intensBase, intensSupl, intensBase_star,
+    dig: digPromAnual, ndvi, supHa, cargaEV, precipAnual, t_media,
+    edadEntoreReal,
+    reduccionCO2eq: totalCO2eqBase - totalCO2eqSupl,
+    pctReduccion:   totalCO2eqBase > 0
+      ? +((1 - totalCO2eqSupl / totalCO2eqBase) * 100).toFixed(1) : 0,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// COMPONENTE VISUAL — Panel GEI
+// ══════════════════════════════════════════════════════════════════
+function PanelGEI({ form, motor, tray, sat }) {
+  const gei = React.useMemo(() => calcGEI(form, motor, tray, sat), [form, motor, tray, sat]);
+  const [vista, setVista] = React.useState("resumen"); // resumen | categorias | pastizal | inefi
+
+  if (!gei) return null;
+
+  // Colores específicos GEI
+  const G = {
+    ch4:    "#e8a030",   // naranja = metano (calor)
+    co2:    "#4a9fd4",   // azul = CO2/secuestro
+    inefi:  "#e05530",   // rojo = ineficiencia
+    mejor:  "#7ec850",   // verde = mejora
+    neutro: "#8aaa80",
+  };
+
+  // ── KPIs superiores ───────────────────────────────────────────
+  const KpiGEI = ({ label, valor, unit, color, sub, nota }) => (
+    <div style={{ background:T.card2, border:`1px solid ${color}25`, borderRadius:12, padding:"10px 12px" }}>
+      <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:3 }}>{label}</div>
+      <div style={{ fontFamily:T.font, fontSize:18, fontWeight:700, color, lineHeight:1 }}>
+        {typeof valor === "number" ? valor.toLocaleString() : valor}
+        <span style={{ fontSize:10, color:T.textFaint, marginLeft:4 }}>{unit}</span>
+      </div>
+      {sub  && <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>{sub}</div>}
+      {nota && <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:2 }}>{nota}</div>}
+    </div>
+  );
+
+  // ── Vista resumen ────────────────────────────────────────────
+  const VistaResumen = () => (
+    <div>
+      {/* Comparación clave: CH4/kg MS sin vs con */}
+      <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, padding:14, marginBottom:12 }}>
+        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:10 }}>
+          EFICIENCIA DE EMISIÓN — g CH₄ por kg MS consumida
+        </div>
+        {gei.catData.map(c => {
+          const mejora  = c.eficSupl < c.eficBase;
+          const deltaPct= c.eficBase > 0 ? ((c.eficSupl - c.eficBase) / c.eficBase * 100).toFixed(1) : 0;
+          return (
+            <div key={c.id} style={{ marginBottom:10 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3, alignItems:"center" }}>
+                <span style={{ fontFamily:T.font, fontSize:10, color:T.text }}>{c.label}</span>
+                <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                  <span style={{ fontFamily:T.font, fontSize:10, color:G.ch4 }}>{c.eficBase} g/kg MS</span>
+                  {c.suplDosis > 0 && (
+                    <>
+                      <span style={{ color:T.textFaint, fontSize:9 }}>→</span>
+                      <span style={{ fontFamily:T.font, fontSize:10, color:mejora ? G.mejor : G.inefi, fontWeight:700 }}>
+                        {c.eficSupl} g/kg MS
+                        <span style={{ fontSize:8, marginLeft:3 }}>({deltaPct > 0 ? "+" : ""}{deltaPct}%)</span>
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+              {/* Barra doble */}
+              <div style={{ position:"relative", height:8, borderRadius:4, background:`${T.border}` }}>
+                <div style={{
+                  position:"absolute", left:0, top:0, bottom:0,
+                  width:`${Math.min(100, c.eficBase / 30 * 100)}%`,
+                  background:G.ch4, borderRadius:4, opacity:0.6,
+                }} />
+                {c.suplDosis > 0 && (
+                  <div style={{
+                    position:"absolute", left:0, top:0, bottom:0,
+                    width:`${Math.min(100, c.eficSupl / 30 * 100)}%`,
+                    background:mejora ? G.mejor : G.inefi, borderRadius:4, opacity:0.85,
+                    border:`1px solid ${mejora ? G.mejor : G.inefi}`,
+                  }} />
+                )}
+              </div>
+              {c.suplDosis > 0 && (
+                <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:2 }}>
+                  Supl {c.suplDosis} kg/d · dig promedio anual {c.digPromAnual}% → {c.digConSProm.toFixed(1)}% con supl · CV {c.cvBaseProm} → {c.suplDosis + c.cvBaseProm} kg MS/d
+                  {c.suplPb > 0 && ` · ${SUPLEMENTOS[form["supl_"+c.id]]?.label || "supl."} PB ${c.suplPb}%`}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div style={{ marginTop:8, padding:"6px 10px", background:`rgba(255,255,255,.02)`, borderRadius:8, border:`1px solid ${T.border}`, fontFamily:T.font, fontSize:8, color:T.textFaint }}>
+          Digestibilidad actual del pasto: {gei.dig}% (fenología {form.fenologia || "10_25"}) · 
+          Mayor dig → menor Ym (fracción metanogénica) → menor CH₄/kg MS · Gere et al. 2024; IPCC Tier 2
+        </div>
+      </div>
+
+      {/* Balance neto */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+        <div style={{ background:T.card2, border:`1px solid ${G.ch4}25`, borderRadius:12, padding:12 }}>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>CH₄ RODEO/AÑO</div>
+          <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.ch4 }}>
+            {gei.totalCH4Base.toLocaleString()} kg
+          </div>
+          {/* FIX 3 en acción: mostrar GWP28 Y GWP* para que el usuario entienda la diferencia */}
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>
+            GWP100: {(gei.totalCO2eqBase / 1000).toFixed(0)} t CO₂eq
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>
+            GWP* (rodeo estable): {(gei.totalCO2eqBaseSTAR / 1000).toFixed(0)} t CO₂eq
+          </div>
+          {gei.totalCH4Supl < gei.totalCH4Base && (
+            <div style={{ fontFamily:T.font, fontSize:9, color:G.mejor, marginTop:4 }}>
+              Con supl: {gei.totalCH4Supl.toLocaleString()} kg (−{(gei.totalCH4Base - gei.totalCH4Supl).toLocaleString()} kg)
+            </div>
+          )}
+        </div>
+        <div style={{ background:T.card2, border:`1px solid ${gei.co2Pastizal.esFuente ? G.inefi : G.co2}25`, borderRadius:12, padding:12 }}>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>
+            CO₂ PASTIZAL/AÑO
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700,
+            color: gei.co2Pastizal.esFuente ? G.inefi : G.co2 }}>
+            {gei.co2Pastizal.CO2_total > 0 ? "+" : ""}
+            {(gei.co2Pastizal.CO2_total / 1000).toFixed(1)} t
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>
+            {gei.co2Pastizal.esFuente ? "fuente neta" : "secuestro neto"}
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:2 }}>
+            {gei.co2Pastizal.CO2_ha > 0 ? "+" : ""}{gei.co2Pastizal.CO2_ha} kgCO₂/ha/año
+          </div>
+        </div>
+      </div>
+
+      {/* Balance neto sistema */}
+      <div style={{
+        background: gei.balanceNetoBase > 0 ? `${G.ch4}08` : `${G.mejor}08`,
+        border:`1px solid ${gei.balanceNetoBase > 0 ? G.ch4 : G.mejor}30`,
+        borderRadius:12, padding:14, marginBottom:12,
+      }}>
+        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:8 }}>
+          BALANCE NETO SISTEMA (CH₄ rodeo − secuestro pastizal)
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
+          <div>
+            <div style={{ fontFamily:T.font, fontSize:24, fontWeight:700,
+              color: gei.balanceNetoBase > 0 ? G.ch4 : G.mejor }}>
+              {(gei.balanceNetoBase / 1000).toFixed(1)} t CO₂eq/año
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>
+              {gei.balanceNetoBase > 0 ? "emisor neto" : "sumidero neto"}
+            </div>
+          </div>
+          {gei.intensBase && (
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:T.text }}>
+                {gei.intensBase} kg CO₂eq
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>por kg PV producido</div>
+            </div>
+          )}
+        </div>
+        {gei.pctReduccion > 0 && (
+          <div style={{ marginTop:8, padding:"4px 8px", background:`${G.mejor}12`, borderRadius:6,
+            fontFamily:T.font, fontSize:9, color:G.mejor }}>
+            Con suplementación: −{gei.pctReduccion}% emisiones · {(gei.reduccionCO2eq/1000).toFixed(1)} t CO₂eq/año
+            {gei.intensSupl && ` · Intensidad: ${gei.intensSupl} kg CO₂eq/kg PV`}
+          </div>
+        )}
+      </div>
+
+      {/* Nota GWP — contexto para el ganadero */}
+      <div style={{ padding:"8px 12px", background:`${G.ch4}06`, border:`1px solid ${G.ch4}20`, borderRadius:8,
+        fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.6 }}>
+        <strong style={{ color:T.textDim }}>GWP100 vs GWP*:</strong> GWP100=28 es el estándar del inventario
+        nacional (Kioto/París). GWP* (Allen 2018) es más adecuado para rodeos estables: un rodeo que
+        no crece tiene calentamiento efectivo cercano a cero. Si tu rodeo es constante en número,
+        el impacto real es 5-6× menor que el que muestra el GWP100. ·
+        Wang et al. 2023 (Nature Comms): el secuestro por suelos no puede compensar emisiones a escala global;
+        el offset mostrado es potencial y sujeto a saturación en 20-50 años.
+      </div>
+    </div>
+  );
+
+  // ── Vista categorías: tabla detallada ─────────────────────────
+  const VistaCateg = () => (
+    <div>
+      <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:10 }}>
+        CH₄ ENTÉRICO POR CATEGORÍA — g CH₄/kg MS promedio anual · GWP100 y GWP*
+      </div>
+      {gei.catData.map(c => (
+        <div key={c.id} style={{ background:T.card2, border:`1px solid ${T.border}`,
+          borderRadius:12, padding:12, marginBottom:8 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.text, fontWeight:600 }}>
+              {c.label} <span style={{ color:T.textFaint, fontWeight:400 }}>({c.n} cab.)</span>
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>
+              {c.pv} kg PV · dig anual {c.digPromAnual}%{c.suplDosis > 0 ? ` → ${c.digConSProm.toFixed(1)}% con supl` : ""}
+            </div>
+          </div>
+          {/* Comparativa SIN / CON */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div style={{ background:`${G.ch4}08`, borderRadius:8, padding:"8px 10px", border:`1px solid ${G.ch4}20` }}>
+              <div style={{ fontFamily:T.font, fontSize:8, color:G.ch4, letterSpacing:1, marginBottom:4 }}>SIN RECOMENDACIÓN</div>
+              <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:G.ch4 }}>{c.eficBase} g CH₄/kg MS</div>
+              <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>{c.ch4DiaBase} g/cab/día</div>
+              <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>{c.ch4AnoBase.toLocaleString()} kg CH₄/año</div>
+              <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>{(c.co2eqBase/1000).toFixed(1)} t CO₂eq</div>
+            </div>
+            <div style={{
+              background: c.suplDosis > 0 ? `${c.mejora ? G.mejor : G.inefi}08` : `${T.card}`,
+              borderRadius:8, padding:"8px 10px",
+              border:`1px solid ${c.suplDosis > 0 ? (c.mejora ? G.mejor : G.inefi) : T.border}20`
+            }}>
+              <div style={{ fontFamily:T.font, fontSize:8,
+                color: c.suplDosis > 0 ? (c.mejora ? G.mejor : G.inefi) : T.textFaint,
+                letterSpacing:1, marginBottom:4 }}>
+                {c.suplDosis > 0 ? "CON SUPLEMENTACIÓN" : "SIN SUPL. CARGADO"}
+              </div>
+              {c.suplDosis > 0 ? (
+                <>
+                  <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700,
+                    color:c.mejora ? G.mejor : G.inefi }}>{c.eficSupl} g CH₄/kg MS</div>
+                  <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>{c.ch4DiaSupl} g/cab/día</div>
+                  <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>{c.ch4AnoSupl.toLocaleString()} kg CH₄/año</div>
+                  <div style={{ fontFamily:T.font, fontSize:9,
+                    color:c.mejora ? G.mejor : G.inefi, fontWeight:700 }}>
+                    {c.delta > 0 ? "+" : ""}{c.delta.toLocaleString()} kg ({c.mejora ? "↓ mejora" : "↑ aumenta"})
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontFamily:T.font, fontSize:10, color:T.textFaint, marginTop:8 }}>
+                  Cargá suplemento en el paso anterior para ver el impacto
+                </div>
+              )}
+            </div>
+          </div>
+          {c.suplDosis > 0 && (
+            <div style={{ marginTop:6, fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.5 }}>
+              Mecanismo: suplemento {SUPLEMENTOS[form["supl_"+c.id]]?.label || "proteico"} (PB {c.suplPb}%, dig {c.suplDosis > 0 ? "80" : "—"}%) 
+              diluyó la fibra indigestible → dig dieta promedio {c.digPromAnual}% → {c.digConSProm.toFixed(1)}% → 
+              Ym {GEI_YM(c.digPromAnual).toFixed(3)} → {GEI_YM(c.digConSProm).toFixed(3)} · Gere et al. 2024; Beauchemin et al. 2009
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  // ── Vista pastizal: CO₂ y factores ───────────────────────────
+  const VistaPastizal = () => {
+    const p = gei.co2Pastizal;
+    const ndviColor = gei.ndvi > 0.6 ? G.mejor : gei.ndvi > 0.4 ? G.ch4 : G.inefi;
+    return (
+      <div>
+        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:10 }}>
+          DEMANDA/SECUESTRO DE CO₂ — Pastizal · Pasturas · Bosque nativo
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+          <div style={{ background:T.card2, border:`1px solid ${ndviColor}25`, borderRadius:12, padding:12 }}>
+            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:3 }}>NDVI</div>
+            <div style={{ fontFamily:T.font, fontSize:22, fontWeight:700, color:ndviColor }}>{gei.ndvi.toFixed(2)}</div>
+            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>
+              {gei.ndvi > 0.6 ? "Alta biomasa — buen secuestro" : gei.ndvi > 0.4 ? "Biomasa moderada" : "Baja biomasa — secuestro reducido"}
+            </div>
+          </div>
+          <div style={{ background:T.card2, border:`1px solid ${T.border}`, borderRadius:12, padding:12 }}>
+            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:3 }}>PRECIPITACIÓN ANUAL</div>
+            <div style={{ fontFamily:T.font, fontSize:22, fontWeight:700, color:G.co2 }}>{Math.round(gei.precipAnual)} mm</div>
+            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>Temperatura media: {gei.t_media}°C</div>
+          </div>
+        </div>
+
+        <div style={{ background:T.card2, border:`1px solid ${T.border}`, borderRadius:12, padding:14, marginBottom:10 }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:8 }}>
+            PRODUCTIVIDAD PRIMARIA NETA (NPP)
+          </div>
+          {[
+            ["Vegetación", form.vegetacion || "Pastizal natural NEA/Chaco", T.text],
+            ["NPP real ajustada", p.NPP_real + " kgC/ha/año", G.co2],
+            ["NEP (secuestro neto)", p.NEP + " kgC/ha/año", p.NEP > 0 ? G.mejor : G.inefi],
+            ["Efecto carga animal", p.factCarga > 0 ? "+" + (p.factCarga * 100).toFixed(0) + "% (secuestro adicional)" : p.factCarga === 0 ? "Neutral" : (p.factCarga * 100).toFixed(0) + "% (degrada)", p.factCarga > 0 ? G.mejor : p.factCarga === 0 ? T.textFaint : G.inefi],
+            ["CO₂ total ha/año", (p.CO2_ha > 0 ? "+" : "") + p.CO2_ha + " kgCO₂eq", p.CO2_ha > 0 ? G.mejor : G.inefi],
+            ["CO₂ total establecimiento", (p.CO2_total > 0 ? "+" : "") + (p.CO2_total/1000).toFixed(1) + " t CO₂eq/año", p.CO2_total > 0 ? G.mejor : G.inefi],
+          ].map(([k, v, col]) => (
+            <div key={k} style={{ display:"flex", justifyContent:"space-between",
+              padding:"5px 0", borderBottom:`1px solid ${T.border}30` }}>
+              <span style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>{k}</span>
+              <span style={{ fontFamily:T.font, fontSize:10, color:col, fontWeight:600 }}>{v}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding:"8px 12px", background:`${G.co2}06`, border:`1px solid ${G.co2}20`,
+          borderRadius:8, fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.6 }}>
+          Modelo basado en: McGinn et al. 2014 · Soussana et al. (Agric.Ecosyst.) · Li et al. 2021 (Nature Comms).
+          NPP calibrada para NEA/Chaco húmedo. Respiración heterotrófica = f(T°, humedad).
+          Efecto de carga: sobrecarga &gt;1.2 EV/ha → pérdida de carbono del suelo (Li et al. 2021).
+          ⚠ Bosque nativo: mayor secuestro, pero la conversión a pasturas lo convierte en fuente neta permanente.
+        </div>
+      </div>
+    );
+  };
+
+  // ── Vista ineficiencias ───────────────────────────────────────
+  const VistaInefi = () => {
+    const inf = gei.inefi;
+    return (
+      <div>
+        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:10 }}>
+          INEFICIENCIAS PRODUCTIVAS — CH₄ emitido sin retorno económico
+        </div>
+
+        {/* Vacas vacías */}
+        <div style={{ background:`${G.inefi}08`, border:`1px solid ${G.inefi}30`, borderRadius:12, padding:14, marginBottom:10 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+            <div style={{ fontFamily:T.font, fontSize:11, color:G.inefi, fontWeight:700 }}>
+              🐄 Vacas vacías — CH₄ sin ternero
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>
+              Preñez actual: {inf.prenezPct}%
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.inefi }}>{inf.vacasVacias}</div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>vacas vacías</div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.ch4 }}>
+                {inf.ch4VacaVaciaAnual}kg
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>CH₄/vaca/año</div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.inefi }}>
+                {(inf.co2eqVacasVacias/1000).toFixed(1)}t
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>CO₂eq/año</div>
+            </div>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, lineHeight:1.5 }}>
+            Una vaca vacía emite ~55 kg CH₄/año (IPCC Tier 2, extensivo) = 1.540 kg CO₂eq sin producir ternero.
+            Mejorar preñez de {inf.prenezPct}% a 70%: −{Math.round(inf.vacasVacias * 0.3 * inf.ch4VacaVaciaAnual * GWP_CH4 / 1000)} t CO₂eq/año.
+            Wang et al. 2023: la ineficiencia reproductiva es la mayor fuente de emisiones "no productivas" en sistemas extensivos.
+          </div>
+        </div>
+
+        {/* Vaquillona con entore tardío */}
+        <div style={{ background:`${G.ch4}08`, border:`1px solid ${G.ch4}30`, borderRadius:12, padding:14, marginBottom:10 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+            <div style={{ fontFamily:T.font, fontSize:11, color:G.ch4, fontWeight:700 }}>
+              🐮 Vaquillona entore tardío — meses improductivos
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>
+              Edad entore proyectada: {gei.edadEntoreReal} meses
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700,
+                color: gei.edadEntoreReal > 24 ? G.inefi : G.mejor }}>
+                {gei.edadEntoreReal} m
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>edad real entore</div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.ch4 }}>{inf.demora}</div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>meses extra</div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700,
+                color: inf.co2eqVaqTarde > 0 ? G.ch4 : G.mejor }}>
+                {inf.co2eqVaqTarde > 0 ? (inf.co2eqVaqTarde/1000).toFixed(1) + "t" : "✓ 0"}
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>CO₂eq extra</div>
+            </div>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, lineHeight:1.5 }}>
+            Objetivo INTA: entore a los 24 meses. Cada mes de demora = ~2.9 kg CH₄ = 81 kg CO₂eq adicionales por vaquillona.
+            {inf.demora > 0
+              ? ` Con suplementación invernal y verdeo, la vaquillona puede llegar a entorarse a los 24 meses — eliminando ${(inf.co2eqVaqTarde/1000).toFixed(1)} t CO₂eq/año de emisiones improductivas.`
+              : " ✅ La vaquillona llega al peso para entore a los 24 meses con el plan actual."}
+          </div>
+        </div>
+
+        {/* Total ineficiencias */}
+        <div style={{ background:`${G.inefi}06`, border:`1px solid ${G.inefi}20`, borderRadius:10, padding:12 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+            <span style={{ fontFamily:T.font, fontSize:10, color:T.textDim }}>
+              Fracción improductiva del total
+            </span>
+            <span style={{ fontFamily:T.font, fontSize:18, fontWeight:700, color:G.inefi }}>
+              {inf.pctInefi}% = {(inf.totalCO2eqInefi / 1000).toFixed(1)} t CO₂eq/año
+            </span>
+          </div>
+          {/* Barra de composición: productivo vs improductivo */}
+          <div style={{ height:10, borderRadius:5, background:`${T.border}`, overflow:"hidden", marginBottom:6 }}>
+            <div style={{ height:"100%", width:`${100 - inf.pctInefi}%`, background:G.mejor, borderRadius:"5px 0 0 5px", display:"inline-block" }} />
+            <div style={{ height:"100%", width:`${inf.pctInefi}%`, background:G.inefi, display:"inline-block" }} />
+          </div>
+          <div style={{ display:"flex", gap:12, marginBottom:6 }}>
+            <span style={{ fontFamily:T.font, fontSize:8, color:G.mejor }}>● {(100 - inf.pctInefi).toFixed(1)}% productivo</span>
+            <span style={{ fontFamily:T.font, fontSize:8, color:G.inefi }}>● {inf.pctInefi}% sin retorno económico</span>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.6 }}>
+            ⚠ Estos {(inf.totalCO2eqInefi/1000).toFixed(1)} t CO₂eq son una <em>partición</em> del total de {(gei.totalCO2eqBase/1000).toFixed(0)} t —
+            no se suman al balance. Son la fracción que emite el rodeo sin producir ternero ni carne.
+            Reducirla con manejo (preñez, entore temprano) mejora la intensidad de emisión
+            sin cambiar el total de animales. Acuerdo de París / FAO-GLEAM: prioridad de reducción en sistemas extensivos.
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.text, fontWeight:700 }}>
+          🌿 BALANCE DE GASES DE EFECTO INVERNADERO
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>
+          CH₄ entérico · CO₂ pastizal · Ineficiencias productivas
+        </div>
+      </div>
+
+      {/* ── KPIs ────────────────────────────────────────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginBottom:12 }}>
+        <KpiGEI
+          label="CH₄ TOTAL RODEO"
+          valor={gei.totalCH4Base.toLocaleString()}
+          unit="kg/año"
+          color={G.ch4}
+          sub={`${(gei.totalCO2eqBase/1000).toFixed(0)} t CO₂eq (GWP28)`}
+          nota={gei.pctReduccion > 0 ? `Con supl: −${gei.pctReduccion}%` : null}
+        />
+        <KpiGEI
+          label="CO₂ PASTIZAL"
+          valor={`${gei.co2Pastizal.CO2_total > 0 ? "+" : ""}${(gei.co2Pastizal.CO2_total/1000).toFixed(1)}`}
+          unit="t/año"
+          color={gei.co2Pastizal.CO2_total > 0 ? G.co2 : G.inefi}
+          sub={gei.co2Pastizal.CO2_total > 0 ? "secuestro neto" : "fuente neta"}
+          nota={`NDVI ${gei.ndvi.toFixed(2)} · ${gei.supHa} ha`}
+        />
+      </div>
+
+      {/* ── Tabs ─────────────────────────────────────────────────── */}
+      <div style={{ display:"flex", gap:4, marginBottom:12 }}>
+        {[
+          ["resumen",     "📊 Resumen"],
+          ["categorias",  "🐄 Categorías"],
+          ["pastizal",    "🌿 Pastizal"],
+          ["inefi",       "⚠ Inefic."],
+        ].map(([k, l]) => (
+          <button key={k} onClick={() => setVista(k)} style={{
+            flex:1, padding:"7px 3px", borderRadius:8, cursor:"pointer",
+            fontFamily:T.font, fontSize:8,
+            background: vista === k ? `${G.ch4}20` : "transparent",
+            border:`1px solid ${vista === k ? G.ch4 : T.border}`,
+            color: vista === k ? G.ch4 : T.textDim,
+          }}>{l}</button>
+        ))}
+      </div>
+
+      {vista === "resumen"    && <VistaResumen />}
+      {vista === "categorias" && <VistaCateg />}
+      {vista === "pastizal"   && <VistaPastizal />}
+      {vista === "inefi"      && <VistaInefi />}
+
+      {/* ── Pie de referencia ───────────────────────────────────── */}
+      <div style={{ marginTop:10, padding:"6px 10px", background:`rgba(255,255,255,.02)`,
+        border:`1px solid ${T.border}`, borderRadius:8,
+        fontFamily:T.font, fontSize:7, color:T.textFaint, lineHeight:1.7 }}>
+        McGinn et al. 2014 (J.Env.Quality) · Wang et al. 2023 (Nature Comms) · Li et al. 2021 (Nature Comms) · 
+        Gere et al. 2024 (Animals) · Soussana et al. (Agric.Ecosyst.Env.) · IPCC 2019 Tier 2 · FAO-GLEAM 2.0 · 
+        GWP100 CH₄ = 28 (IPCC AR6, fossil methane equivalent)
+      </div>
+    </div>
+  );
+}
+
 
 function GraficoBalance({ form, sat, cadena, tray, motor }) {
   const [mes, setMes] = React.useState(null);         // mes seleccionado (null = año completo)
@@ -3815,6 +4743,8 @@ const FORM_DEF = {
   altPasto:"20", tipoPasto:"alto_denso",
   // Verdeos de invierno (nuevo v15)
   tieneVerdeo:"no", verdeoHa:"", verdeoTipo:"Avena/Cebadilla", verdeoDisp:"agosto",
+  diasSuplInv:"90",   // duración campaña de suplementación invernal (días)
+  diasDesdeCC:"hoy",  // antigüedad de la medición de CC
   verdeoDestinoVaq:"si",   // ¿se reserva para vaquillona?
   // ── Categorías ─────────────────────────────────────────────────
   v2sN:"", v2sPV:"", v2sTernero:"",
@@ -4570,14 +5500,14 @@ function AgroMindPro() {
           <div style={{ fontSize:22, marginBottom:4 }}>📍</div>
           {coords ? "GPS activo" : "Usar GPS"}
         </button>
-        <button onClick={() => { setTimeout(() => { const el = document.getElementById("campo-localidad"); if(el){ el.scrollIntoView({behavior:"smooth",block:"center"}); el.focus(); } }, 100); }} style={{
-          background:`${C.blue}10`, borderRadius:12, border:`1px solid ${C.blue}30`,
-          padding:"14px 10px", textAlign:"center", cursor:"pointer", width:"100%"
+        <div style={{
+          background:`${C.blue}08`, borderRadius:12, border:`1px solid ${C.blue}25`,
+          padding:"14px 10px", textAlign:"center"
         }}>
-          <div style={{ fontSize:22, marginBottom:4 }}>✏️</div>
-          <div style={{ fontFamily:C.sans, fontSize:12, color:C.blue, fontWeight:600 }}>Cargar manual</div>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:2 }}>Ingresá zona y localidad abajo</div>
-        </button>
+          <div style={{ fontSize:22, marginBottom:4 }}>🗺️</div>
+          <div style={{ fontFamily:C.sans, fontSize:12, color:C.blue, fontWeight:600 }}>Sin GPS</div>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:2 }}>Seleccioná provincia abajo</div>
+        </div>
       </div>
       {coords && (
         <Alerta tipo="ok">
@@ -4586,8 +5516,9 @@ function AgroMindPro() {
         </Alerta>
       )}
       {!coords && (
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginBottom:8, padding:"6px 10px", background:`${C.green}06`, border:`1px solid ${C.border}`, borderRadius:8 }}>
-          Sin GPS — seleccioná provincia y escribí la localidad para obtener datos climáticos
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:8, padding:"8px 12px", background:`${C.blue}06`, border:`1px solid ${C.blue}20`, borderRadius:8 }}>
+          ✅ <strong>Sin GPS funciona igual.</strong> Seleccioná <strong>Zona</strong> y <strong>Provincia</strong> abajo — el sistema usa datos climáticos históricos de esa región.
+          El GPS solo agrega temperatura y NDVI en tiempo real del satélite.
         </div>
       )}
       {sat && !sat.error && (
@@ -4689,39 +5620,42 @@ function AgroMindPro() {
     <div>
       <SelectF label="BIOTIPO" value={form.biotipo} onChange={v=>set("biotipo",v)}
         groups={[
-          { label:"── Cebú puro ──────────────────", opts:[
+          { label:"── Cebú puro (NEA tropical) ──", opts:[
+            ["Nelore",           "Nelore (Zebu)  ← base NEA/BR"],
             ["Brahman",          "Brahman puro"],
-            ["Nelore",           "Nelore"],
             ["Indobrasil",       "Indobrasil"],
+            ["Gyr / Guzerat",    "Gyr / Guzerat"],
+          ]},
+          { label:"── F1 — cruza comercial más común ──", opts:[
+            ["F1 Nelore × Angus",    "F1 Nelore × Angus  ← heterosis máxima"],
+            ["F1 Nelore × Hereford", "F1 Nelore × Hereford"],
           ]},
           { label:"── Brangus (Angus × Brahman) ──", opts:[
-            ["Brangus 3/8",      "Brangus 3/8 Cebú  ← más común NEA"],
+            ["Brangus 3/8",      "Brangus 3/8 Cebú  ← más común AR"],
             ["Brangus 5/8",      "Brangus 5/8 Cebú"],
           ]},
-          { label:"── Bradford / Braford (Hereford × Brahman) ──", opts:[
-            ["Bradford 3/8",     "Bradford 3/8 Cebú  ← Hereford×Brahman"],
-            ["Bradford 5/8",     "Bradford 5/8 Cebú"],
-            ["Braford 3/8",      "Braford 3/8 Cebú  (UY/BR)"],
-            ["Braford 5/8",      "Braford 5/8 Cebú  (UY/BR)"],
+          { label:"── Braford / Bradford (Hereford × Cebú) ──", opts:[
+            ["Braford 3/8",      "Braford 3/8  ← UY/BR/AR"],
+            ["Braford 5/8",      "Braford 5/8"],
+            ["Bradford 3/8",     "Bradford 3/8  (AR — Hereford×Brahman)"],
+            ["Bradford 5/8",     "Bradford 5/8"],
           ]},
-          { label:"── Hereford puro ───────────────", opts:[
+          { label:"── Británicas puras (sur, templado) ──", opts:[
+            ["Aberdeen Angus",   "Aberdeen Angus"],
             ["Hereford",         "Hereford"],
           ]},
-          { label:"── Aberdeen Angus puro ─────────", opts:[
-            ["Aberdeen Angus",   "Aberdeen Angus"],
-          ]},
-          { label:"── Otras europeas ─────────────", opts:[
+          { label:"── Europeas continentales ──────", opts:[
             ["Limousin",         "Limousin"],
             ["Charolais",        "Charolais"],
             ["Simmental",        "Simmental"],
-          ]},
-          { label:"── Razas tropicales adaptadas ──", opts:[
-            ["Bonsmara",         "Bonsmara"],
             ["Simbrah",          "Simbrah (Simmental×Brahman)"],
+          ]},
+          { label:"── Tropicales adaptadas ─────────", opts:[
+            ["Bonsmara",         "Bonsmara"],
             ["Senepol",          "Senepol"],
             ["Beefmaster",       "Beefmaster"],
           ]},
-          { label:"── General ──────────────────────", opts:[
+          { label:"── Sin dato / promedio ──────────", opts:[
             ["Cruza comercial",  "Cruza comercial (promedio)"],
           ]},
         ]}
@@ -4812,28 +5746,39 @@ function AgroMindPro() {
   // ── PASO 2: CC ────────────────────────────────────────────────
   const renderCC = () => (
     <div>
-      {/* Fecha de medición */}
+      {/* Antigüedad de la medición — selector simple */}
       <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:12, marginBottom:12 }}>
-        <Input label="FECHA DE MEDICIÓN DE CC" value={form.fechaCC||""} onChange={v=>set("fechaCC",v)} type="date"
-          sub="¿Cuándo midiste la CC? Si fue hace más de 30 días, la CC real hoy puede diferir."
-        />
-        {form.fechaCC && (() => {
-          const diasDesdeMed = Math.round((new Date() - new Date(form.fechaCC)) / 86400000);
-          if (diasDesdeMed < 0) return null;
-          const bt = getBiotipo(form.biotipo);
-          const caida = (diasDesdeMed / 30 * 0.40 * bt.movCC).toFixed(2); // aprox 0.4CC/mes en lactación
-          if (diasDesdeMed > 30) {
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
+          ¿CUÁNDO MEDISTE LA CC?
+        </div>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          {[["hoy","Esta semana","ok"],["15","Hace 15d","ok"],["30","Hace 30d","warn"],["60","Hace 60d","warn"],["90","3+ meses","error"]].map(([val,lbl,tipo]) => {
+            const sel = (form.diasDesdeCC||"hoy") === val;
+            const col = {ok:C.green,warn:C.amber,error:C.red}[tipo];
             return (
-              <Alerta tipo="warn">
-                Medición hace {diasDesdeMed} días — en lactación la CC puede haber caído hasta −{caida} unidades. 
-                Recomendamos reverificar CC actual para que el análisis sea preciso.
-              </Alerta>
+              <button key={val} onClick={() => set("diasDesdeCC", val)} style={{
+                padding:"6px 10px", borderRadius:8, cursor:"pointer",
+                fontFamily:C.font, fontSize:9, fontWeight:sel?700:400,
+                background: sel ? col+"18" : "transparent",
+                border:`1px solid ${sel ? col : C.border}`,
+                color: sel ? col : C.textDim,
+              }}>{lbl}</button>
             );
-          }
+          })}
+        </div>
+        {(() => {
+          const v = form.diasDesdeCC||"hoy";
+          const dias = v==="hoy"?3:parseInt(v)||0;
+          if (dias<=15) return (
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:6 }}>✓ CC considerada actual — análisis confiable</div>
+          );
+          const bt = getBiotipo(form.biotipo);
+          const caida = (dias/30 * 0.40 * bt.movCC).toFixed(1);
           return (
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:4 }}>
-              ✓ Medición reciente ({diasDesdeMed} días) — CC considerada actual
-            </div>
+            <Alerta tipo={dias>=60?"error":"warn"} style={{marginTop:6}}>
+              CC medida hace ~{dias} días. En lactación puede haber caído hasta −{caida} CC.
+              {dias>=60?" Medirla nuevamente da mayor precisión al análisis.":" Aceptable si el rodeo está seco o en gestación."}
+            </Alerta>
           );
         })()}
       </div>
@@ -5024,7 +5969,7 @@ function AgroMindPro() {
                 📊 GDP proyectado: <strong>{vaq1E.gdpReal} g/día</strong> · PV agosto: <strong>{vaq1E.pvSal} kg</strong>
               </div>
               <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>
-                El plan de suplementación detallado aparece en la sección Suplementación →
+                Proyección <em>solo con pasto</em> — sin suplemento cargado todavía
               </div>
             </div>
           )}
@@ -5039,7 +5984,7 @@ function AgroMindPro() {
               <div style={{ marginTop:8, padding:"10px 12px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}20` }}>
                 <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:4 }}>OBJETIVO AGOSTO</div>
                 <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginBottom:6 }}>
-                  PV objetivo: <strong style={{color:C.text}}>{">="} {obj220} kg</strong>
+                  PV objetivo: <strong style={{color:C.text}}>&ge; {obj220} kg</strong>
                   {llegaObj
                     ? <span style={{color:C.green}}> ✓ Proyectado {pvAgosto} kg</span>
                     : <span style={{color:C.amber}}> ⚠ Proyectado {pvAgosto} kg — ajustar suplementación</span>}
@@ -5087,11 +6032,13 @@ function AgroMindPro() {
                       : <span style={{color:C.red}}> ⚠ No llega a {vaq2E.pvMinEntore} kg</span>}
                   </div>
                   <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>
-                    El plan de suplementación detallado aparece en la sección Suplementación →
+                    Proyección <em>solo con pasto</em> — cargá suplemento en el paso siguiente
                   </div>
                 </div>
               )}
-                </div>
+            </div>
+          )}
+        </div>
       </details>
 
       {/* Vacas 2° servicio */}
@@ -5487,6 +6434,14 @@ function AgroMindPro() {
     // VACAS DE CRÍA: NO van aquí — su herramienta es el manejo del ternero (destete)
     // Suplementar vaca con ternero al pie es costoso e ineficiente: el ternero
     // consume 6–8 Mcal/día que ningún suplemento puede compensar (Wiltbank 1990)
+    // Selector duración suplementación invernal
+    const DURAC_SUPL = [
+      ["90",  "90 días — jun-ago (mínimo)"],
+      ["120", "120 días — may-ago (recomendado)"],
+      ["150", "150 días — may-sep (intensivo)"],
+      ["180", "180 días — abr-sep (completo)"],
+    ];
+
     const CATS = [
       { key:"v2s",     label:"Vaca 2° servicio",      icon:"⚡", pv:pvV2sS,   color:C.red,    supl1k:"supl_v2s",     dos1k:"dosis_v2s",     supl2k:"supl2_v2s",    dos2k:"dosis2_v2s",
         razon:"Triple estrés: crecimiento + lactación + preñez. SÍ necesita soporte nutricional adicional al pasto." },
@@ -5526,6 +6481,26 @@ function AgroMindPro() {
 
     return (
       <div>
+        {/* ── Duración campaña de suplementación — afecta balance y costos ── */}
+        <div style={{ background:T.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"10px 14px", marginBottom:12, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, flexShrink:0 }}>
+            DURACIÓN CAMPAÑA INVERNAL
+          </div>
+          <div style={{ display:"flex", gap:6, flex:1, flexWrap:"wrap" }}>
+            {DURAC_SUPL.map(([val, lbl]) => (
+              <button key={val} onClick={() => set("diasSuplInv", val)} style={{
+                padding:"5px 10px", borderRadius:8, cursor:"pointer",
+                fontFamily:C.font, fontSize:9,
+                background: (form.diasSuplInv||"90") === val ? `${C.green}20` : "transparent",
+                border:`1px solid ${(form.diasSuplInv||"90") === val ? C.green : C.border}`,
+                color: (form.diasSuplInv||"90") === val ? C.green : C.textDim,
+              }}>{val}d</button>
+            ))}
+          </div>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+            {DURAC_SUPL.find(([v]) => v === (form.diasSuplInv||"90"))?.[1] || "90 días — jun-ago"}
+          </div>
+        </div>
         {/* ══ PANEL 1: MANEJO DE LACTANCIA — herramienta principal para vacas ══ */}
         <div style={{ background:`${C.green}06`, border:`1px solid ${C.green}25`, borderRadius:14, padding:14, marginBottom:16 }}>
           <div style={{ fontFamily:C.font, fontSize:10, color:C.green, letterSpacing:1, marginBottom:4 }}>
@@ -6004,7 +6979,7 @@ function AgroMindPro() {
         <div>
           {/* 3 tabs simplificados */}
           <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-            {[["acciones","🎯 Acciones"],["balance","📊 Balance"],["campo","📅 Campo"]].map(([k,l]) => (
+            {[["acciones","🎯 Acciones"],["balance","📊 Balance"],["gei","🌿 GEI"],["seguimiento","📅 Campo"]].map(([k,l]) => (
               <button key={k} onClick={()=>setTab(k)} style={{
                 flex:1, padding:"10px 6px", borderRadius:10, cursor:"pointer",
                 background: tab===k ? C.green : "transparent",
@@ -6070,6 +7045,9 @@ function AgroMindPro() {
                 <SimuladorEscenarios form={form} cadena={cadena} baseParams={baseParams} sat={sat} />
               </div>
             </div>
+          )}
+          {tab === "gei" && (
+            <PanelGEI form={form} motor={motor} tray={tray} sat={sat} />
           )}
           {tab === "seguimiento" && (
             <div>
