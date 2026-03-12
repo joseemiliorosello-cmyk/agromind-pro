@@ -808,9 +808,11 @@ function calcVaq2(pvEntradaVaq1Sal, pvAdulta, ndvi, disponMS, fenologia, suplRea
   // PV agosto: usa GDP real (con o sin supl)
   const gdpInvReal    = sinSupl2 ? gdpPastoInv : gdpConSuplReal;
   const pvV2Agosto    = Math.round(pvMayo2Inv + gdpInvReal * diasInv / 1000);
-  const gdpPrimavera  = 450; // g/d post-agosto con pasto disponible
+  const gdpPrimavera  = sinSupl2 ? 280 : Math.min(450, gdpInvReal + 50); // g/d post-agosto: limitado por estado corporal acumulado
   const pvEntore      = Math.round(pvV2Agosto + gdpPrimavera * (diasHastaEntore - diasInv) / 1000);
-  const llegas        = pvEntore >= pvMinEntore;
+  // llegas = llega al objetivo de entore SIN contar recuperación de primavera como "salvavidas"
+  // El criterio real: GDP invernal ≥ GDP_MIN_VAQ2 Y pvEntore ≥ pvMinEntore
+  const llegas        = gdpInvReal >= GDP_MIN_VAQ2 && pvEntore >= pvMinEntore;
 
   // Suplementación necesaria para lograr GDP_MIN_VAQ2
   // Si hay poca cantidad → proteína + energía (no semilla algodón en Vaq1, SÍ en Vaq2)
@@ -840,9 +842,19 @@ function calcVaq2(pvEntradaVaq1Sal, pvAdulta, ndvi, disponMS, fenologia, suplRea
 
   const esc = gdpFaltante > 150 ? "C" : gdpFaltante > 80 ? "B" : "A";
 
+  // ── Entore anticipado ─────────────────────────────────────────
+  // Si en agosto ya supera el 65% del PV adulto, puede entrar al servicio general
+  // de ese mismo año (agosto–noviembre) en lugar de esperar al año siguiente.
+  // Criterio: pvV2Agosto ≥ 65% PV adulto (Bavera 2005 — umbral mínimo de ciclicidad)
+  // Beneficio: adelanta la producción un año completo
+  const pvMinEntoreAntic = Math.round(pva * 0.65);
+  const aptaEntoreAntic  = pvV2Agosto >= pvMinEntoreAntic;
+  const pctPVAgosto      = Math.round(pvV2Agosto / pva * 100);
+
   return {
     esc, pvMayo2Inv, pvV2Agosto, pvEntore, pvMinEntore,
     gdpInv: gdpInvReal, gdpPastoInv, gdpPrimavera, llegas,
+    aptaEntoreAntic, pvMinEntoreAntic, pctPVAgosto,
     protKg, energKg, fuenteEnerg, freq, freqDetalle, alertaAlgodon,
     nivelMS, gdpFaltante, sinSupl: sinSupl2, mcalSuplReal,
     mensajeBase: sinSupl2
@@ -1307,7 +1319,8 @@ async function fetchSat(lat, lon, zona, prov, enso, cb) {
     const cond    = ndviAdj > 0.60 ? "Excelente" : ndviAdj > 0.45 ? "Buena" : ndviAdj > 0.30 ? "Regular" : "Crítica";
 
     cb({ temp, tMax:Math.round(Math.max(...tMax.slice(-7))), tMin:Math.round(Math.min(...tMin.slice(-7))),
-         p7, p30, deficit:Math.round(p30 - et07*4.3), ndvi:ndviAdj, condForr:cond, et07 });
+         p7, p30, deficit:Math.round(p30 - et07*4.3), ndvi:ndviAdj, condForr:cond, et07,
+         prov, enso, zona }); // incluir provincia, enso y zona para que calcCerebro los use directamente
   } catch (e) {
     cb({ error:"No se pudieron obtener datos satelitales: " + e.message });
   }
@@ -3974,8 +3987,8 @@ function GraficoBalance({ form, sat, cadena, tray, motor }) {
       // Correctores
       supl:       CAT.reduce((s,c) => s + d[c.sKey], 0),
       verdeo:     d.verdeoTotal > 0 ? +(d.verdeoTotal / Math.max(1,nVacas+nToros+nV2s+nVaq2+nVaq1)).toFixed(1) : 0,
-      // CC movilizada — esto es el costo, no un recurso: lo mostramos diferente
-      ccCosto:    d.ccAporte > 0 ? +(d.ccAporte / Math.max(1,nVacas)).toFixed(1) : 0,
+      // CC movilizada — APILADA encima de la oferta, SOLO en meses de lactación (hasta servicio)
+      ccAporte:   d.enLact && d.ccAporte > 0 ? +(d.ccAporte / Math.max(1,nVacas)).toFixed(1) : 0,
       // Requerimiento promedio ponderado
       reqProm:    +(d.demanda / Math.max(1,nVacas+nToros+nV2s+nVaq2+nVaq1)).toFixed(1),
     }));
@@ -3986,7 +3999,7 @@ function GraficoBalance({ form, sat, cadena, tray, motor }) {
           MCAL/ANIMAL EQUIVALENTE/DÍA — pasto + correctores vs requerimiento
         </div>
         <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:10 }}>
-          La franja naranja es CC movilizada — la vaca financiando el déficit con sus reservas
+          La franja naranja es CC movilizada — solo aparece durante la lactación (hasta el servicio)
         </div>
         <ResponsiveContainer width="100%" height={190}>
           <ComposedChart data={dataChart} margin={{ top:4, right:8, left:-18, bottom:0 }}>
@@ -4008,11 +4021,11 @@ function GraficoBalance({ form, sat, cadena, tray, motor }) {
               <Area type="monotone" dataKey="verdeo" name="Verdeo" stackId="oferta"
                 fill="#a8e06a" fillOpacity={0.7} stroke="#a8e06a" strokeWidth={1} />
             )}
-            {/* CC movilizada — naranja, SEPARADA (no stackId) — es el costo, no la oferta */}
-            <Area type="monotone" dataKey="ccCosto" name="CC movilizada (costo)"
-              fill="#e8a030" fillOpacity={0.3} stroke="#e8a030" strokeWidth={1.5} strokeDasharray="4 2" />
+            {/* CC movilizada — naranja APILADA, solo lactación hasta servicio */}
+            <Area type="monotone" dataKey="ccAporte" name="CC movilizada (lactación)" stackId="oferta"
+              fill="#e8a030" fillOpacity={0.6} stroke="#e8a030" strokeWidth={1.5} />
             {/* Requerimiento — línea roja prominente */}
-            <Line type="monotone" dataKey="reqProm" name="Requerimiento" 
+            <Line type="monotone" dataKey="reqProm" name="Requerimiento"
               stroke={T.red} strokeWidth={2.5} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
@@ -4919,7 +4932,7 @@ function diagnosticarSistema(motor, form) {
 //   3. Conexiones entre problemas que en otros tabs están separados
 // ═══════════════════════════════════════════════════════════════
 
-function calcCerebro(motor, form) {
+function calcCerebro(motor, form, sat) {
   if (!motor) return null;
 
   const {
@@ -4927,6 +4940,14 @@ function calcCerebro(motor, form) {
     nVacas, nToros, nV2s, nVaq2, nVaq1,
     ccPondVal, pvEntVaq1, pvEntradaVaq2,
   } = motor;
+
+  // Variables climáticas reales (sat) vs históricas (fallback)
+  const tempHoy   = parseFloat(sat?.temp) || null;
+  const ndviHoy   = parseFloat(sat?.ndvi) || null;
+  const p30Hoy    = parseFloat(sat?.p30)  || null;
+  const ensoHoy   = sat?.enso || form.enso || "neutro";
+  const provincia = sat?.prov || form.provincia || "Corrientes";
+  const hist      = getClima(provincia);
 
   const pvVaca    = parseFloat(form.pvVacaAdulta) || 320;
   const nVacasN   = parseFloat(form.vacasN) || nVacas || 0;
@@ -5007,33 +5028,50 @@ function calcCerebro(motor, form) {
     ? Math.round(Math.abs(peorBalanceMcal) * 30 / 56 * 10) / 10
     : 0;
 
+  // ── CONTEXTO CLIMÁTICO HOY (usa sat si disponible) ───────────
+  const mesActual   = new Date().getMonth(); // 0=enero
+  const tempRef     = tempHoy !== null ? tempHoy : (hist[mesActual]?.t || 18);
+  const ndviRef     = ndviHoy !== null ? ndviHoy : 0.45;
+  const lluviaRef   = p30Hoy  !== null ? p30Hoy  : (hist[mesActual]?.p || 80);
+  const ensoTexto   = ensoHoy === "nino" ? "Niño (lluvias excedentes)" : ensoHoy === "nina" ? "Niña (seco)" : "neutro";
+  const pastoBajo   = ndviRef < 0.40;
+  const frio        = tempRef < 15;
+  const seco        = lluviaRef < 50;
+  const contextoClima = tempHoy !== null
+    ? `${tempRef}°C actuales · NDVI ${ndviRef.toFixed(2)} · lluvia 30d: ${lluviaRef}mm · ENSO ${ensoTexto} · ${provincia}`
+    : `Clima histórico ${provincia} (sin datos sat cargados)`;
+
   // ── PÁRRAFO — hilo conductor forraje → nutrición → CC → preñez → $ ──
-  // La estructura del texto sigue la cadena causal real del sistema,
-  // no categorías por separado. Todo termina en plata.
   const partes = [];
 
-  // BLOQUE 1: El pasto — punto de partida de toda la cadena
+  // BLOQUE 1: El pasto — punto de partida con contexto climático real
   if (mesesDeficit === 3) {
     partes.push(
       `El pasto es el punto de partida de todo. Este invierno el balance cierra en rojo los tres meses — junio, julio y agosto. ` +
       `El peor momento es ${peorMesNom || "julio"}: la demanda supera la oferta en ${Math.abs(peorBalanceMcal)} Mcal/día del rodeo. ` +
       `Traducido a CC: las vacas van a perder aproximadamente ${perdidaCCInv} puntos CC durante ese período. ` +
-      `Eso no se recupera solo — el animal no tiene de dónde sacar energía en C4 dormido con 13°C.`
+      (frio ? `Con ${tempRef}°C actuales el C4 está dormido — ` : "") +
+      (pastoBajo ? `NDVI ${ndviRef.toFixed(2)} confirma pasto escaso en este momento. ` : "") +
+      `Eso no se recupera solo sin intervención.`
     );
   } else if (mesesDeficit === 2) {
     partes.push(
       `El balance energético tiene dos meses negativos en invierno. ` +
       `En ${peorMesNom || "julio"} el déficit llega a ${Math.abs(peorBalanceMcal)} Mcal/día. ` +
+      (pastoBajo ? `NDVI actual ${ndviRef.toFixed(2)} — pasto bajo. ` : "") +
       `Las vacas van a movilizar CC — se estima una pérdida de ${perdidaCCInv} puntos en ese período.`
     );
   } else if (mesesDeficit === 1) {
     partes.push(
       `Un mes con balance negativo en invierno — ${peorMesNom || "julio"}: ${Math.abs(peorBalanceMcal)} Mcal/día de déficit. ` +
-      `Pérdida estimada de CC: ${perdidaCCInv} puntos. Controlable si se actúa antes con suplemento o destete adelantado.`
+      `Pérdida estimada de CC: ${perdidaCCInv} puntos. ` +
+      (seco ? `Lluvia 30d: ${lluviaRef}mm — condición seca. ` : "") +
+      `Controlable si se actúa antes con suplemento o destete adelantado.`
     );
   } else {
     partes.push(
       `El balance forrajero invernal cierra. La oferta de pasto cubre la demanda del rodeo los tres meses críticos. ` +
+      (ndviRef >= 0.50 ? `NDVI ${ndviRef.toFixed(2)} confirma buena cobertura actual. ` : "") +
       `Eso es el piso — la CC va a sostenerse sin intervención de emergencia.`
     );
   }
@@ -5291,6 +5329,7 @@ function calcCerebro(motor, form) {
   return {
     parrafo,
     tarjetas,
+    contextoClima,
     resumen: {
       ternerosBase,
       ternerosPot,
@@ -5313,35 +5352,48 @@ function TrayectoriaVaquillona({ motor, form }) {
 
   const pvVaca    = parseFloat(form.pvVacaAdulta) || 320;
   const pvV1ent   = pvEntVaq1 || Math.round(pvVaca * 0.40);
-  const pvV1sal   = vaq1E?.pvSal  || Math.round(pvV1ent + 90 * 0.060);
-  const pvV1conS  = vaq1E?.pvSalConSupl || pvV1sal;
-  const pvV2ent   = parseFloat(pvEntradaVaq2) || Math.round(pvVaca * 0.65);
-  const pvV2inv   = vaq2E?.pvV2Agosto || Math.round(pvV2ent + 0.060 * 122);
-  const pvV2invS  = vaq2E?.pvV2AgostoConSupl || pvV2inv;
-  const pvV2entore = vaq2E?.pvEntore || Math.round(pvV2inv + 0.450 * 148);
-  const pvV2entoreS = vaq2E?.pvEntoreConSupl || pvV2entore;
-  const pvMinEntore = vaq2E?.pvMinEntore || Math.round(pvVaca * 0.75);
+  const diasInv1  = 90; // mayo → agosto
+  const diasInv2  = 90;
 
-  // Puntos del eje X (etapas)
-  const etapas = ["Destete", "Mayo\n(1° inv.)", "Agosto\n(sal. inv.)", "Mayo\n(2° inv.)", "Agosto\n(sal. inv.)", "Entore"];
-  const pvSinSupl  = [pvV1ent, pvV1ent, pvV1sal,  pvV2ent, pvV2inv,  pvV2entore];
-  const pvConSupl  = [pvV1ent, pvV1ent, pvV1conS, pvV2ent, pvV2invS, pvV2entoreS];
+  // Vaq1: sin suplemento = GDP pasto solo (gdpPasto), con suplemento = gdpReal
+  const gdpV1sinSupl = vaq1E?.gdpPasto || 50;   // pasto solo invierno NEA
+  const gdpV1conSupl = vaq1E ? (vaq1E.sinSupl ? gdpV1sinSupl : (vaq1E.gdpReal || gdpV1sinSupl)) : gdpV1sinSupl;
+  const pvV1sal_sin  = Math.round(pvV1ent + gdpV1sinSupl * diasInv1 / 1000);
+  const pvV1sal_con  = Math.round(pvV1ent + gdpV1conSupl * diasInv1 / 1000);
+  // +60d primavera a 280g/d hasta entrada 2°inv
+  const pvV2ent_sin  = Math.round(pvV1sal_sin + 280 * 60 / 1000);
+  const pvV2ent_con  = parseFloat(pvEntradaVaq2) || Math.round(pvV1sal_con + 280 * 60 / 1000);
 
-  const pvMin = Math.min(...pvSinSupl, ...pvConSupl, pvMinEntore) - 20;
-  const pvMax = Math.max(...pvSinSupl, ...pvConSupl, pvMinEntore) + 20;
-  const W = 320, H = 160, padL = 38, padR = 12, padT = 10, padB = 38;
+  // Vaq2: sin suplemento = gdpPastoInv, con suplemento = gdpInv real
+  const gdpV2sinSupl = vaq2E?.gdpPastoInv || 50;
+  const gdpV2conSupl = vaq2E ? (vaq2E.sinSupl ? gdpV2sinSupl : (vaq2E.gdpInv || gdpV2sinSupl)) : gdpV2sinSupl;
+  const gdpPrimV_sin = 280; // g/d primavera sin suplemento previo — limitado por estado
+  const gdpPrimV_con = vaq2E?.gdpPrimavera || 350;
+  const pvV2inv_sin  = Math.round(pvV2ent_sin + gdpV2sinSupl * diasInv2 / 1000);
+  const pvV2inv_con  = vaq2E?.pvV2Agosto || Math.round(pvV2ent_con + gdpV2conSupl * diasInv2 / 1000);
+  const pvEntore_sin = Math.round(pvV2inv_sin + gdpPrimV_sin * 90 / 1000);
+  const pvEntore_con = vaq2E?.pvEntore    || Math.round(pvV2inv_con + gdpPrimV_con * 90 / 1000);
+  const pvMinEntore  = vaq2E?.pvMinEntore || Math.round(pvVaca * 0.75);
+
+  const etapas    = ["Destete", "Mayo\n(1° inv.)", "Agosto\n(sal.1°)", "Mayo\n(2° inv.)", "Agosto\n(sal.2°)", "Entore"];
+  const pvSinSupl = [pvV1ent, pvV1ent, pvV1sal_sin, pvV2ent_sin, pvV2inv_sin, pvEntore_sin];
+  const pvConSupl = [pvV1ent, pvV1ent, pvV1sal_con, pvV2ent_con, pvV2inv_con, pvEntore_con];
+
+  // Si sin suplemento = con suplemento en todos los puntos → no mostrar línea duplicada
+  const tieneSupl = pvSinSupl.some((v, i) => Math.abs(v - pvConSupl[i]) >= 5);
+
+  const pvMin = Math.min(...pvSinSupl, ...pvConSupl, pvMinEntore) - 15;
+  const pvMax = Math.max(...pvSinSupl, ...pvConSupl, pvMinEntore) + 15;
+  const W = 320, H = 160, padL = 38, padR = 12, padT = 14, padB = 38;
   const gW = W - padL - padR;
   const gH = H - padT - padB;
-  const n = etapas.length;
-
-  const xOf  = (i) => padL + (i / (n-1)) * gW;
-  const yOf  = (pv) => padT + (1 - (pv - pvMin) / (pvMax - pvMin)) * gH;
+  const n  = etapas.length;
+  const xOf = (i) => padL + (i / (n-1)) * gW;
+  const yOf = (pv) => padT + (1 - (pv - pvMin) / (pvMax - pvMin)) * gH;
 
   const pathSin = pvSinSupl.map((v,i) => `${i===0?"M":"L"}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(" ");
-  const pathCon = pvConSupl.map((v,i) => `${i===0?"M":"L"}${xOf(i).toFixed(1)}`+`,${yOf(v).toFixed(1)}`).join(" ");
+  const pathCon = pvConSupl.map((v,i) => `${i===0?"M":"L"}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(" ");
   const yEntore = yOf(pvMinEntore);
-
-  // C disponible en scope global (definido como const C = T arriba)
 
   return (
     <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
@@ -5365,24 +5417,22 @@ function TrayectoriaVaquillona({ motor, form }) {
         {/* Línea objetivo entore */}
         <line x1={padL} y1={yEntore} x2={W-padR} y2={yEntore}
           stroke="#e8a030" strokeWidth={1} strokeDasharray="4,3" />
-        <text x={W-padR+2} y={yEntore+3} fontSize={7} fill="#e8a030" fontFamily="monospace">
-          {pvMinEntore}
-        </text>
-        {/* Zonas Vaq1 / Vaq2 */}
-        <rect x={xOf(1)} y={padT} width={xOf(2)-xOf(1)} height={gH}
-          fill={C.green} fillOpacity={0.04} />
-        <rect x={xOf(3)} y={padT} width={xOf(4)-xOf(3)} height={gH}
-          fill={C.green} fillOpacity={0.04} />
-        <text x={(xOf(1)+xOf(2))/2} y={padT+8} textAnchor="middle" fontSize={7} fill={C.green} fillOpacity={0.5} fontFamily="monospace">INV 1</text>
-        <text x={(xOf(3)+xOf(4))/2} y={padT+8} textAnchor="middle" fontSize={7} fill={C.green} fillOpacity={0.5} fontFamily="monospace">INV 2</text>
-        {/* Línea SIN suplemento */}
-        <path d={pathSin} fill="none" stroke={C.textDim} strokeWidth={1.5} strokeDasharray="5,3" />
+        <text x={W-padR+2} y={yEntore+3} fontSize={7} fill="#e8a030" fontFamily="monospace">{pvMinEntore}kg</text>
+        {/* Zonas invierno */}
+        <rect x={xOf(1)} y={padT} width={xOf(2)-xOf(1)} height={gH} fill={C.blue} fillOpacity={0.04} />
+        <rect x={xOf(3)} y={padT} width={xOf(4)-xOf(3)} height={gH} fill={C.blue} fillOpacity={0.04} />
+        <text x={(xOf(1)+xOf(2))/2} y={padT+7} textAnchor="middle" fontSize={6.5} fill={C.blue} fillOpacity={0.5} fontFamily="monospace">INV 1</text>
+        <text x={(xOf(3)+xOf(4))/2} y={padT+7} textAnchor="middle" fontSize={6.5} fill={C.blue} fillOpacity={0.5} fontFamily="monospace">INV 2</text>
+        {/* Línea SIN suplemento — solo si hay diferencia real */}
+        {tieneSupl && (
+          <path d={pathSin} fill="none" stroke={C.red} strokeWidth={1.5} strokeDasharray="5,3" />
+        )}
         {/* Línea CON suplemento */}
         <path d={pathCon} fill="none" stroke={C.green} strokeWidth={2} />
-        {/* Puntos CON */}
+        {/* Puntos CON suplemento */}
         {pvConSupl.map((v,i) => (
           <circle key={i} cx={xOf(i)} cy={yOf(v)} r={3}
-            fill={v >= pvMinEntore && i === n-1 ? C.green : C.card2}
+            fill={i===n-1 && v>=pvMinEntore ? C.green : C.card2}
             stroke={C.green} strokeWidth={1.5} />
         ))}
         {/* Etiquetas eje X */}
@@ -5399,32 +5449,33 @@ function TrayectoriaVaquillona({ motor, form }) {
             </g>
           );
         })}
-        {/* Etiqueta PV entore */}
+        {/* Etiqueta PV en entore */}
         {(() => {
-          const i = n-1;
-          const pvFin = pvConSupl[i];
+          const pvFin = pvConSupl[n-1];
           const ok    = pvFin >= pvMinEntore;
           return (
-            <text x={xOf(i)} y={yOf(pvFin)-7} textAnchor="middle"
-              fontSize={8} fill={ok ? C.green : "#e05530"} fontFamily="monospace" fontWeight="bold">
-              {pvFin} kg {ok ? "✓" : "✗"}
+            <text x={xOf(n-1)} y={yOf(pvFin)-8} textAnchor="middle"
+              fontSize={8} fill={ok ? C.green : C.red} fontFamily="monospace" fontWeight="bold">
+              {pvFin}kg {ok ? "✓" : "✗"}
             </text>
           );
         })()}
       </svg>
-      {/* Leyenda */}
+      {/* Leyenda sin costos — limpia */}
       <div style={{ display:"flex", gap:14, marginTop:4 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:4, fontFamily:"monospace", fontSize:8, color:C.textDim }}>
-          <svg width={20} height={6}><line x1={0} y1={3} x2={20} y2={3} stroke={C.textDim} strokeWidth={1.5} strokeDasharray="4,2"/></svg>
-          Sin suplemento
-        </div>
+        {tieneSupl && (
+          <div style={{ display:"flex", alignItems:"center", gap:4, fontFamily:"monospace", fontSize:8, color:C.red }}>
+            <svg width={20} height={6}><line x1={0} y1={3} x2={20} y2={3} stroke={C.red} strokeWidth={1.5} strokeDasharray="4,2"/></svg>
+            Sin suplemento
+          </div>
+        )}
         <div style={{ display:"flex", alignItems:"center", gap:4, fontFamily:"monospace", fontSize:8, color:C.green }}>
           <svg width={20} height={6}><line x1={0} y1={3} x2={20} y2={3} stroke={C.green} strokeWidth={2}/></svg>
           Con suplemento
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:4, fontFamily:"monospace", fontSize:8, color:"#e8a030" }}>
           <svg width={20} height={6}><line x1={0} y1={3} x2={20} y2={3} stroke="#e8a030" strokeWidth={1} strokeDasharray="3,2"/></svg>
-          Mín. entore ({pvMinEntore} kg)
+          Mín. entore ({pvMinEntore}kg)
         </div>
       </div>
     </div>
@@ -5432,15 +5483,15 @@ function TrayectoriaVaquillona({ motor, form }) {
 }
 
 // ── COMPONENTE: Tab Cerebro ───────────────────────────────────────────
-function TabCerebro({ motor, form }) {
-  const cerebro = React.useMemo(() => calcCerebro(motor, form), [motor, form]);
+function TabCerebro({ motor, form, sat }) {
+  const cerebro = React.useMemo(() => calcCerebro(motor, form, sat), [motor, form, sat]);
   const [expandida, setExpandida] = React.useState(null);
   if (!cerebro) return null;
 
   // C disponible en scope global
 
   const colorPrio = { URGENTE:C.red, P1:C.amber, P2:C.blue, P3:C.textFaint };
-  const { parrafo, tarjetas, resumen } = cerebro;
+  const { parrafo, tarjetas, resumen, contextoClima } = cerebro;
 
   return (
     <div>
@@ -5458,6 +5509,15 @@ function TabCerebro({ motor, form }) {
           </div>
         ))}
       </div>
+
+      {/* ── CONTEXTO CLIMÁTICO ─────────────────────────────────── */}
+      {contextoClima && (
+        <div style={{ padding:"5px 10px", marginBottom:8, borderRadius:8,
+          background:`${C.blue}08`, border:`1px solid ${C.blue}18`,
+          fontFamily:C.font, fontSize:8, color:C.blue }}>
+          📡 {contextoClima}
+        </div>
+      )}
 
       {/* ── PÁRRAFO DEL ASESOR ─────────────────────────────────── */}
       <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
@@ -6263,6 +6323,7 @@ function AgroMindPro() {
         t += ` · PV entrada 2°inv: ${vaq2E.pvMayo2Inv||"—"}kg · GDP inv: ${vaq2E.gdpInv||300}g/d (pasto solo: ${vaq2E.gdpPastoInv||"—"}g/d)`;
         t += `\n  PV agosto: ${vaq2E.pvV2Agosto||"—"}kg · PV entore: ${vaq2E.pvEntore||"—"}kg (obj ${vaq2E.pvMinEntore||"—"}kg = 75% PV adulto) ${vaq2E.llegas ? "✅" : "⚠️ NO LLEGA AL OBJETIVO"}`;
         if (vaq2E.protKg) t += `\n  Supl. invernal mín.: ${vaq2E.protKg}kg/d proteína + ${vaq2E.energKg>0?vaq2E.energKg+"kg/d energía":vaq2E.fuenteEnerg||"S.Algodón ad lib"} · ${vaq2E.freq||"—"}`;
+        if (vaq2E.aptaEntoreAntic) t += `\n  🚀 ENTORE ANTICIPADO: ${vaq2E.pvV2Agosto}kg agosto = ${vaq2E.pctPVAgosto}% PV adulto ≥65% umbral → evaluar servicio agosto–nov este año. Ganancia: un ciclo productivo adelantado.`;
         if (!vaq2E.llegas) t += `\n  ⚠️ No llega al objetivo — aumentar suplementación o evaluar entore tardío`;
       }
       t += "\n";
@@ -6308,7 +6369,7 @@ function AgroMindPro() {
     }
 
     // ── DIAGNÓSTICO CEREBRO (cuellos de botella) ─────────────────
-    const cerebroData = calcCerebro(motor, form);
+    const cerebroData = calcCerebro(motor, form, sat);
     if (cerebroData) {
       t += `\nDIAGNÓSTICO INTEGRADO (calcCerebro):\n`;
       t += `  Score riesgo: ${cerebroData.resumen?.scoreRiesgo || "—"}/100 · Nivel: ${cerebroData.resumen?.nivelRiesgo || "—"}\n`;
@@ -6649,7 +6710,7 @@ function AgroMindPro() {
       })(),
       // ─ Diagnóstico motor ─
       ...(() => {
-        const cb = calcCerebro(motor, form);
+        const cb = calcCerebro(motor, form, sat);
         if (!cb) return [];
         const p1 = cb.tarjetas?.filter(c=>c.prioridad==="URGENTE"||c.prioridad==="P1").map(c=>c.titulo).join(" | ") || "";
         const p2 = cb.tarjetas?.filter(c=>c.prioridad==="P2").map(c=>c.titulo).join(" | ") || "";
@@ -7043,18 +7104,18 @@ function AgroMindPro() {
               value={tray.ccParto}
               color={smf(parseFloat(tray.ccParto),4.5,5.0)}
               sub={parseFloat(tray.ccParto)<4.5?"⚠ Riesgo anestro prolongado":parseFloat(tray.ccParto)>=5.0?"✓ Óptimo (escala 1-9)":"Aceptable"} />
-            <MetricCard label="CC MÍN. LACTACIÓN"
+            <MetricCard label="CC MÍN. EN LACTACIÓN"
               value={tray.ccMinLact}
               color={smf(parseFloat(tray.ccMinLact),3.5,4.0)}
-              sub={`Caída: −${tray.caidaLact} unidades CC`} />
+              sub={`Piso al que cae en lactación (−${tray.caidaLact} CC)`} />
             <MetricCard label="CC AL SERVICIO"
               value={tray.ccServ}
               color={smf(parseFloat(tray.ccServ),4.5,5.0)}
               sub={parseFloat(tray.ccServ)>=5.0?"→ Preñez ≥88%":parseFloat(tray.ccServ)>=4.5?"→ Preñez 80–87%":parseFloat(tray.ccServ)>=4.0?"→ Preñez ~70%":parseFloat(tray.ccServ)>=3.5?"→ Preñez ~50% ⚠":""+"→ Preñez <30% 🔴"} />
-            <MetricCard label="PREÑEZ ESTIMADA"
+            <MetricCard label="PREÑEZ RODEO (CC PROM.)"
               value={tray.pr+"%"}
               color={smf(tray.pr,35,55)}
-              sub={`Anestro posparto: ${tray.anestro?.dias}d`} />
+              sub={dist?.grupos?.length > 1 ? "CC promedio — preñez real por grupo ↓" : `Anestro posparto: ${tray.anestro?.dias}d`} />
           </div>
 
           {/* Alerta anestro */}
@@ -7088,12 +7149,19 @@ function AgroMindPro() {
                       </div>
                     </div>
                     {/* Trayectoria */}
-                    <div style={{ padding:"8px 12px", display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
-                      {[["PARTO",g.ccParto,4.5,5.0],["MÍN.",g.ccMinLact,3.5,4.0],["SERV.",g.ccServ,4.5,5.0]].map(([l,v,b,a])=>(
-                        <div key={l} style={{ textAlign:"center" }}>
-                          <div style={{ fontFamily:C.font, fontSize:15, fontWeight:700, color:smf(parseFloat(v),b,a) }}>{v}</div>
-                          <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>{l}</div>
-                        </div>
+                    <div style={{ padding:"8px 12px", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+                      {[
+                        ["CC PARTO", g.ccParto, 4.5, 5.0, "CC hoy → parto"],
+                        ["CC MÍN. LACTACIÓN", g.ccMinLact, 3.5, 4.0, "piso durante la lactación"],
+                        ["CC SERVICIO", g.ccServ, 4.5, 5.0, "al entrar al servicio"],
+                      ].map(([l,v,b,a,tooltip], idx) => (
+                        <React.Fragment key={l}>
+                          {idx > 0 && <div style={{ color:C.textFaint, fontSize:12 }}>→</div>}
+                          <div style={{ textAlign:"center" }}>
+                            <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:smf(parseFloat(v),b,a) }}>{v}</div>
+                            <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, maxWidth:60 }}>{l}</div>
+                          </div>
+                        </React.Fragment>
                       ))}
                       <div style={{ flex:1, fontFamily:C.font, fontSize:9, color:C.textFaint, textAlign:"right" }}>
                         {g.recDestete}
@@ -7322,6 +7390,24 @@ function AgroMindPro() {
                     ✅ Con esta suplementación llega al entore a los {form.edadPrimerEntore||24} meses
                   </div>
                 )}
+                {/* Entore anticipado — si supera 65% PV adulto en agosto */}
+                {vaq2E.aptaEntoreAntic && (
+                  <div style={{ marginTop:8, padding:"10px 12px", background:"rgba(126,200,80,.08)",
+                    border:"1px solid rgba(126,200,80,.30)", borderRadius:10 }}>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.green, fontWeight:700, marginBottom:4 }}>
+                      🚀 OPORTUNIDAD: ENTORE ANTICIPADO POSIBLE
+                    </div>
+                    <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim, lineHeight:1.5, marginBottom:6 }}>
+                      En agosto proyecta <strong style={{color:C.green}}>{vaq2E.pvV2Agosto} kg</strong> ({vaq2E.pctPVAgosto}% PV adulto) — supera el umbral del 65% ({vaq2E.pvMinEntoreAntic} kg) necesario para ciclar y quedar preñada ese mismo año.
+                    </div>
+                    <div style={{ fontFamily:C.sans, fontSize:10, color:C.text, lineHeight:1.5, marginBottom:4 }}>
+                      <strong>Recomendación:</strong> integrarlas al servicio general de <strong>agosto–noviembre</strong> de este año en lugar de esperar al ciclo del año siguiente. Ganás <strong>un ciclo productivo completo</strong> — una ternera más sin aumentar la carga animal.
+                    </div>
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+                      Bavera 2005 · umbral ciclicidad: ≥65% PV adulto al servicio
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -7438,10 +7524,10 @@ function AgroMindPro() {
                         value={(r.reqMcal || "—") + " Mcal/d"}
                         color={C.amber}
                         sub="NRC 2000 — triple estrés" />
-                      <MetricCard label={deficit > 0 ? "DÉFICIT ACTUAL" : "BALANCE"}
-                        value={deficit > 0 ? "−"+deficit.toFixed(1)+" Mcal" : "✓ OK"}
-                        color={deficit > 0 ? C.red : C.green}
-                        sub={deficit > 0 ? `Oferta pasto: ${oferta.toFixed(1)} Mcal` : "Sin déficit"} />
+                      <MetricCard label={deficit > 0 ? "DÉFICIT PASTO HOY" : "PASTO HOY"}
+                        value={deficit > 0 ? "−"+deficit.toFixed(1)+" Mcal" : "Cubre req."}
+                        color={deficit > 0 ? C.red : r.prenez < 55 ? C.amber : C.green}
+                        sub={deficit > 0 ? `Oferta: ${oferta.toFixed(1)} Mcal · req: ${(r.reqMcal||0).toFixed(1)}` : r.prenez < 55 ? "Pasto OK · CC baja el riesgo" : "Sin déficit energético"} />
                     </div>
                     {/* Recomendaciones específicas por grupo */}
                     {r.critico && (
@@ -8358,7 +8444,7 @@ function AgroMindPro() {
 
           {/* TAB CEREBRO — diagnóstico integrado */}
           {tab === "cerebro" && (
-            <TabCerebro motor={motor} form={form} />
+            <TabCerebro motor={motor} form={form} sat={sat} />
           )}
 
           {/* TAB ACCIONES — recomendaciones + informe expandible */}
