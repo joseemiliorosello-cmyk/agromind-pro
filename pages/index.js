@@ -8221,7 +8221,64 @@ function AgroMindPro() {
     );
   };
 
-  // ── PASO 7: ANÁLISIS ──────────────────────────────────────────
+  // ── PASO 7: SANIDAD ───────────────────────────────────────────
+  const renderSanidad = () => (
+    <div>
+      <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, letterSpacing:1, marginBottom:4 }}>🩺 SANIDAD REPRODUCTIVA</div>
+      <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginBottom:16 }}>
+        La sanidad es el techo del sistema. Sin ella, cualquier mejora nutricional tiene rendimiento marginal.
+      </div>
+
+      {/* Vacunas obligatorias */}
+      <Toggle label="💉 ¿Vacunación Aftosa al día?"        value={form.sanAftosa     === "si"} onChange={v => set("sanAftosa",     v ? "si" : "no")} />
+      {form.sanAftosa === "no" && <Alerta tipo="error">Aftosa sin vacunar — obligatoria (SENASA). Dos dosis anuales mínimo. Riesgo de brote y clausura comercial.</Alerta>}
+
+      <Toggle label="💉 ¿Vacunación Brucelosis al día?"    value={form.sanBrucelosis === "si"} onChange={v => set("sanBrucelosis", v ? "si" : "no")} />
+      {form.sanBrucelosis === "no" && <Alerta tipo="error">Brucelosis sin vacunar — obligatoria en terneras 3–8 meses (SENASA RES.114/21). Zoonosis. Riesgo de aborto masivo al 7° mes.</Alerta>}
+
+      <Toggle label="💉 ¿Vacunación IBR/DVB al día?"       value={form.sanVacunas  === "si"} onChange={v => set("sanVacunas",   v ? "si" : "no")} />
+      {form.sanVacunas === "no" && <Alerta tipo="error">IBR/DVB sin vacunar: riesgo de reducción de preñez hasta −15 pp.</Alerta>}
+
+      {/* Parásitos */}
+      <SelectF label="PARÁSITOS EXTERNOS (garrapatas)" value={form.sanParasitoExt||""} onChange={v=>set("sanParasitoExt",v)} options={[
+        { value:"", label:"— seleccionar —" },
+        { value:"controlado", label:"Controlado (baños / pour-on al día)" },
+        { value:"parcial",    label:"Control parcial (irregular)" },
+        { value:"no",         label:"Sin control" },
+      ]} />
+      <SelectF label="PARÁSITOS INTERNOS" value={form.sanParasitoInt||""} onChange={v=>set("sanParasitoInt",v)} options={[
+        { value:"", label:"— seleccionar —" },
+        { value:"controlado", label:"Controlado (dosificación estratégica)" },
+        { value:"parcial",    label:"Control parcial" },
+        { value:"no",         label:"Sin control" },
+      ]} />
+      {(form.sanParasitoExt==="no" || form.sanParasitoInt==="no") && (
+        <Alerta tipo="warn">Parásitos sin control: pérdida de GDP y supresión inmune. En NEA, garrapata transmite Babesia/Anaplasma — riesgo de mortalidad en animales no inmunizados.</Alerta>
+      )}
+
+      {/* Toros y programa */}
+      <Toggle label="🐂 ¿Toros con evaluación ESAN?"       value={form.sanToros    === "con_control"} onChange={v => set("sanToros",     v ? "con_control" : "sin_control")} />
+      {form.sanToros === "sin_control" && <Alerta tipo="error">Toros sin ESAN: tricomoniasis/campylobacteriosis no detectadas. Infecta 15–40% del rodeo silenciosamente.</Alerta>}
+
+      <Toggle label="📋 ¿Historia de abortos en el rodeo?" value={form.sanAbortos  === "si"} onChange={v => set("sanAbortos",   v ? "si" : "no")} />
+      {form.sanAbortos === "si" && <Alerta tipo="warn">Historia de abortos: diagnóstico diferencial IBR/DVB/Leptospira/Brucelosis/Neospora prioritario.</Alerta>}
+
+      <Toggle label="📋 ¿Programa sanitario estructurado?" value={form.sanPrograma === "si"} onChange={v => set("sanPrograma",  v ? "si" : "no")} />
+      {form.sanPrograma === "no" && <Alerta tipo="warn">Sin programa sanitario estructurado. La sanidad es el techo del sistema — ninguna mejora nutricional compensa enfermedades activas.</Alerta>}
+
+      {/* Resumen alertas si hay motor */}
+      {motor && sanidad?.alertas?.length > 0 && (
+        <div style={{ marginTop:16 }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>ALERTAS SANITARIAS</div>
+          {sanidad.alertas.map((a,i) => (
+            <Alerta key={i} tipo={a.nivel==="rojo"?"error":"warn"}>{a.msg}</Alerta>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── PASO 8: ANÁLISIS ──────────────────────────────────────────
   const renderAnalisis = () => (
     <div>
       {/* ── SEMÁFORO DIAGNÓSTICO — simple y directo ── */}
