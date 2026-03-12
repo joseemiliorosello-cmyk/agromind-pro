@@ -5871,63 +5871,6 @@ function PanelRecomendaciones({ motor, form }) {
 
 
 
-// ═══════════════════════════════════════════════════════════════════
-// BIBLIOGRAFÍA — referencias científicas usadas en el motor
-// Cada entrada tiene: id, cita_corta (para texto), referencia_completa
-// ═══════════════════════════════════════════════════════════════════
-const BIBLIOGRAFIA = [
-  // ── Energía y requerimientos ──────────────────────────────────
-  { id:"NRC2000",       corta:"NRC (2000)",
-    completa:"National Research Council (2000). Nutrient Requirements of Beef Cattle (7th ed.). National Academies Press, Washington D.C." },
-  { id:"Lippke1980",    corta:"Lippke (1980)",
-    completa:"Lippke, H. (1980). Forage characteristics related to intake, digestibility and gain by steers on warm-season perennial grasses. Journal of Animal Science, 51(4):861-867." },
-  { id:"Minson1990",    corta:"Minson (1990)",
-    completa:"Minson, D.J. (1990). Forage in Ruminant Nutrition. Academic Press, San Diego." },
-  { id:"DetmannNASSEM2010", corta:"Detmann et al. (2010)",
-    completa:"Detmann, E. et al. (2010). Métodos para análise de alimentos — INCT-CA. Universidade Federal de Viçosa. ISBN: 978-85-8179-091-0." },
-  // ── Condición corporal y reproducción ────────────────────────
-  { id:"Peruchena2003",  corta:"Peruchena (2003)",
-    completa:"Peruchena, C.O. (2003). Nutrición y manejo de vacas de cría en el subtrópico. INTA EEA Mercedes, Corrientes." },
-  { id:"Short1990",      corta:"Short et al. (1990)",
-    completa:"Short, R.E., Bellows, R.A., Staigmiller, R.B., Berardinelli, J.G. & Custer, E.E. (1990). Physiological mechanisms controlling anestrus and infertility in postpartum beef cattle. Journal of Animal Science, 68(3):799-816." },
-  { id:"Neel2007",       corta:"Neel et al. (2007)",
-    completa:"Neel, J.B., Hammett, H.D., Choat, W.T. & Humes, P.E. (2007). Body condition scoring of beef cattle. Louisiana State University AgCenter." },
-  { id:"RoselloBrajovich2025", corta:"Rosello Brajovich et al. (2025)",
-    completa:"Rosello Brajovich, J.E. et al. (2025). Tabla de probabilidad de supervivencia y preñez según condición corporal en rodeos de cría NEA. INTA EEA Colonia Benítez, Chaco. [Datos inéditos, comunicación personal]." },
-  // ── Agua ─────────────────────────────────────────────────────
-  { id:"WinchesterMorris1956", corta:"Winchester & Morris (1956)",
-    completa:"Winchester, C.F. & Morris, M.J. (1956). Water intake rates of cattle. Journal of Animal Science, 15(3):722-740." },
-  { id:"Beede1992",      corta:"Beede (1992)",
-    completa:"Beede, D.K. (1992). Water for dairy cattle. W.B. Sanders Co., Philadelphia." },
-  { id:"Lopez2021",      corta:"López et al. (2021)",
-    completa:"López, A. et al. (2021). Impacts of heat stress and water quality on intake and performance of beef cattle. Journal of Animal Science, 99(8):skab215. DOI:10.1093/jas/skab215." },
-  // ── Suplementación ───────────────────────────────────────────
-  { id:"Balbuena2003",   corta:"Balbuena (2003)",
-    completa:"Balbuena, O. (2003). Suplementación de bovinos en pastizales naturales del NEA. INTA EEA Colonia Benítez, Chaco." },
-  { id:"Beauchemin2009", corta:"Beauchemin et al. (2009)",
-    completa:"Beauchemin, K.A., Kreuzer, M., O'Kelly, P. & McAllister, T.A. (2009). Nutritional management for enteric methane abatement: a review. Australian Journal of Experimental Agriculture, 48(2):21-27." },
-  { id:"Benchaar2020",   corta:"Benchaar (2020)",
-    completa:"Benchaar, C. (2020). Diet-induced changes in short-chain fatty acid, ammonium and methane emissions and microbiota composition in the rumen of growing beef cattle. Animal, 14(7):1410-1420." },
-  // ── GEI / Metano entérico ─────────────────────────────────────
-  { id:"IPCC2019",       corta:"IPCC (2019)",
-    completa:"IPCC (2019). 2019 Refinement to the 2006 IPCC Guidelines for National Greenhouse Gas Inventories. Volume 4: Agriculture, Forestry and Other Land Use. Chapter 10: Emissions from Livestock and Manure Management. IPCC, Geneva, Switzerland." },
-  { id:"IPCC_AR6_2021",  corta:"IPCC AR6 (2021)",
-    completa:"Masson-Delmotte, V. et al. (Eds.) (2021). Climate Change 2021: The Physical Science Basis. Contribution of Working Group I to the Sixth Assessment Report of the IPCC. Cambridge University Press." },
-  { id:"Gere2019",       corta:"Gere et al. (2019)",
-    completa:"Gere, J.I., Gratton, R., Piñeiro, G., Wirth, R. & Barrientos, A. (2019). Methane emissions by cattle grazing native grasslands of different qualities in South America. New Zealand Journal of Agricultural Research, 62(3):407-422. DOI:10.1080/00288233.2018.1551619." },
-  { id:"Gere2024",       corta:"Gere et al. (2024)",
-    completa:"Gere, J.I. et al. (2024). Enteric methane emissions and nutritional indices in beef cattle under extensive grazing systems in subtropical regions. Animals, 14(7):1058. DOI:10.3390/ani14071058." },
-  { id:"McSherry2013",   corta:"McSherry & Ritchie (2013)",
-    completa:"McSherry, M.E. & Ritchie, M.E. (2013). Effects of grazing on grassland soil carbon: a global review. Global Change Biology, 19(5):1347-1357. DOI:10.1111/gcb.12144." },
-  { id:"Soussana2010",   corta:"Soussana et al. (2010)",
-    completa:"Soussana, J.F. et al. (2010). Matching policy and science: rationale for the '4 per 1000 — soils for food security and climate' initiative. Soil & Tillage Research, 188:3-15." },
-  { id:"Allen2018",      corta:"Allen et al. (2018)",
-    completa:"Allen, M.R., Shine, K.P., Fuglestvedt, J.S., Millar, R.J., Cain, M., Frame, D.J. & Macey, A.H. (2018). A solution to the misrepresentations of CO₂-equivalent emissions of short-lived climate pollutants under ambitious mitigation. npj Climate and Atmospheric Science, 1:16. DOI:10.1038/s41612-018-0026-8." },
-];
-
-// Helper: obtener cita corta por id
-const cita = (id) => BIBLIOGRAFIA.find(b => b.id === id)?.corta || id;
-
 const FORM_DEF = {
   // ── Ubicación ──────────────────────────────────────────────────
   nombreProductor:"", zona:"NEA", provincia:"Corrientes", localidad:"",
