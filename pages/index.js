@@ -5293,7 +5293,7 @@ function calcCerebro(motor, form) {
       cuando: "Mayo–Agosto (90–120 días)",
       que: `0.5–0.8 kg expeller/cabeza/día. Si hay pasto escaso, agregar 1–1.5 kg sorgo/maíz diario. Puede ser 2–3 veces por semana si la cantidad de pasto es buena.`,
       conexion: `Sin suplemento entra al entore con ${vaq2E?.pvEntore || 0} kg — ${pvVaq2Falta} kg por debajo del mínimo (${vaq2E?.pvMinEntore || 0} kg = 75% PV adulto). ` +
-        `Una vaquillona con bajo peso al primer entore tarda ${anosRecupVaq2} paricion${anosRecupVaq2>1?"es":"} en alcanzar su potencial pleno (Bavera & Peñafort 2006). ` +
+        `Una vaquillona con bajo peso al primer entore tarda ${anosRecupVaq2} ${anosRecupVaq2 > 1 ? "pariciones" : "parición"} en alcanzar su potencial pleno (Bavera & Peñafort 2006). ` +
         `El costo del suplemento invernal es una fracción de lo que se pierde en producción diferida.`,
     });
   }
