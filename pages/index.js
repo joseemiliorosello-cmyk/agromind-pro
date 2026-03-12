@@ -2350,63 +2350,6 @@ function PanelAgua({ form, set, sat }) {
         </div>
       )}
 
-      {/* Sanidad */}
-      <div style={{ marginTop:20 }}>
-        <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, letterSpacing:1, marginBottom:12 }}>🩺 SANIDAD — ASPECTOS REPRODUCTIVOS</div>
-        <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginBottom:12, lineHeight:1.6 }}>
-          La sanidad es el techo del sistema. Sin ella, cualquier mejora nutricional tiene rendimiento marginal.
-        </div>
-
-        <Toggle label="💉 ¿Vacunación Aftosa al día?"        value={form.sanAftosa     === "si"}           onChange={v => set("sanAftosa",     v ? "si" : "no")} />
-        {form.sanAftosa === "no" && <Alerta tipo="error">Aftosa sin vacunar — obligatoria (SENASA). Dos dosis anuales mínimo. Riesgo de brote y clausura comercial.</Alerta>}
-
-        <Toggle label="💉 ¿Vacunación Brucelosis al día?"    value={form.sanBrucelosis === "si"}           onChange={v => set("sanBrucelosis", v ? "si" : "no")} />
-        {form.sanBrucelosis === "no" && <Alerta tipo="error">Brucelosis sin vacunar — obligatoria en terneras 3–8 meses (SENASA RES.114/21). Zoonosis. Riesgo de aborto masivo al 7° mes.</Alerta>}
-
-        <Toggle label="💉 ¿Vacunación IBR/DVB al día?"       value={form.sanVacunas  === "si"}           onChange={v => set("sanVacunas",   v ? "si" : "no")} />
-        <div style={{ marginTop:12 }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, letterSpacing:1, marginBottom:8 }}>🦟 CONTROL PARASITARIO</div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <SelectF label="PARÁSITOS EXTERNOS (garrapatas)" value={form.sanParasitoExt||""} onChange={v=>set("sanParasitoExt",v)} options={[
-              ["no","No realiza control"],
-              ["si_1","1 tratamiento/año"],
-              ["si_2","2–3 tratamientos/año"],
-              ["si_completo","Control completo (baño + pour-on)"],
-            ]} />
-            <SelectF label="PARÁSITOS INTERNOS" value={form.sanParasitoInt||""} onChange={v=>set("sanParasitoInt",v)} options={[
-              ["no","No realiza control"],
-              ["si_1","1 tratamiento/año (destete)"],
-              ["si_2","2 tratamientos/año"],
-              ["si_rotacion","Rotación de principios activos"],
-            ]} />
-          </div>
-          {(form.sanParasitoExt==="no" || form.sanParasitoInt==="no") && (
-            <Alerta tipo="warn" style={{marginTop:8}}>
-              Sin control parasitario: reducción GDP 15-25% · mayor susceptibilidad invierno (INTA EEA Colonia Benítez 2025)
-            </Alerta>
-          )}
-        </div>
-        {form.sanVacunas === "no" && <Alerta tipo="error">IBR/DVB sin vacunar: riesgo de reducción de preñez hasta −15 pp.</Alerta>}
-
-        <Toggle label="🐂 ¿Toros con evaluación ESAN?"       value={form.sanToros    === "con_control"}   onChange={v => set("sanToros",     v ? "con_control" : "sin_control")} />
-        {form.sanToros === "sin_control" && <Alerta tipo="error">Toros sin ESAN: tricomoniasis/campylobacteriosis no detectadas.</Alerta>}
-
-        <Toggle label="📋 ¿Historia de abortos en el rodeo?" value={form.sanAbortos  === "si"}            onChange={v => set("sanAbortos",   v ? "si" : "no")} />
-        {form.sanAbortos === "si" && <Alerta tipo="warn">Historia de abortos: diagnóstico diferencial IBR/DVB/Leptospira/Brucelosis/Neospora prioritario.</Alerta>}
-
-        <Toggle label="📋 ¿Programa sanitario estructurado?" value={form.sanPrograma === "si"}            onChange={v => set("sanPrograma",  v ? "si" : "no")} />
-
-        {/* Tabla de enfermedades */}
-        <div style={{ background:C.card2, borderRadius:12, padding:12, border:`1px solid ${C.border}`, marginTop:12 }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>ENFERMEDADES REPRODUCTIVAS — REFERENCIA</div>
-          {ENFERMEDADES_REPROD.map((e, i) => (
-            <div key={i} style={{ borderBottom: i < ENFERMEDADES_REPROD.length-1 ? `1px solid ${C.border}` : "none", padding:"8px 0" }}>
-              <div style={{ fontFamily:C.sans, fontSize:12, color: e.alerta === "alta" ? C.red : C.amber, fontWeight:600 }}>{e.nombre}</div>
-              <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginTop:2 }}>{e.impacto}</div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -8241,16 +8184,16 @@ function AgroMindPro() {
 
       {/* Parásitos */}
       <SelectF label="PARÁSITOS EXTERNOS (garrapatas)" value={form.sanParasitoExt||""} onChange={v=>set("sanParasitoExt",v)} options={[
-        { value:"", label:"— seleccionar —" },
-        { value:"controlado", label:"Controlado (baños / pour-on al día)" },
-        { value:"parcial",    label:"Control parcial (irregular)" },
-        { value:"no",         label:"Sin control" },
+        ["", "— seleccionar —"],
+        ["controlado", "Controlado (baños / pour-on al día)"],
+        ["parcial",    "Control parcial (irregular)"],
+        ["no",         "Sin control"],
       ]} />
       <SelectF label="PARÁSITOS INTERNOS" value={form.sanParasitoInt||""} onChange={v=>set("sanParasitoInt",v)} options={[
-        { value:"", label:"— seleccionar —" },
-        { value:"controlado", label:"Controlado (dosificación estratégica)" },
-        { value:"parcial",    label:"Control parcial" },
-        { value:"no",         label:"Sin control" },
+        ["", "— seleccionar —"],
+        ["controlado", "Controlado (dosificación estratégica)"],
+        ["parcial",    "Control parcial"],
+        ["no",         "Sin control"],
       ]} />
       {(form.sanParasitoExt==="no" || form.sanParasitoInt==="no") && (
         <Alerta tipo="warn">Parásitos sin control: pérdida de GDP y supresión inmune. En NEA, garrapata transmite Babesia/Anaplasma — riesgo de mortalidad en animales no inmunizados.</Alerta>
