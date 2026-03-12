@@ -3744,11 +3744,14 @@ function GraficoBalance({ form, sat, cadena, tray, motor }) {
     const gVaq1  = nVaq1  > 0 ? +(ofVaq1  - rqVaq1).toFixed(1)  : 0;
 
     // Suplemento por categoría (Mcal/animal/día)
+    // Suplemento solo aplica en los meses activos configurados por el usuario
+    const suplMesesSet = new Set((form?.suplMeses || ["5","6","7"]).map(Number));
+    const enMesSupl    = suplMesesSet.has(i);
     const sVaca  = 0; // vacas: herramienta = destete
-    const sToro  = nToros > 0 ? +(mcalSuplemento(form?.supl_toros, parseFloat(form?.dosis_toros)||0)).toFixed(1) : 0;
-    const sV2s   = nV2s   > 0 ? +(mcalSuplemento(form?.supl_v2s,   parseFloat(form?.dosis_v2s)  ||0)).toFixed(1) : 0;
-    const sVaq2  = nVaq2  > 0 ? +(mcalSuplemento(form?.supl_vaq2,  parseFloat(form?.dosis_vaq2) ||0)).toFixed(1) : 0;
-    const sVaq1  = nVaq1  > 0 ? +(mcalSuplemento(form?.supl_vaq1,  parseFloat(form?.dosis_vaq1) ||0)).toFixed(1) : 0;
+    const sToro  = enMesSupl && nToros > 0 ? +(mcalSuplemento(form?.supl_toros, parseFloat(form?.dosis_toros)||0)).toFixed(1) : 0;
+    const sV2s   = enMesSupl && nV2s   > 0 ? +(mcalSuplemento(form?.supl_v2s,   parseFloat(form?.dosis_v2s)  ||0)).toFixed(1) : 0;
+    const sVaq2  = enMesSupl && nVaq2  > 0 ? +(mcalSuplemento(form?.supl_vaq2,  parseFloat(form?.dosis_vaq2) ||0)).toFixed(1) : 0;
+    const sVaq1  = enMesSupl && nVaq1  > 0 ? +(mcalSuplemento(form?.supl_vaq1,  parseFloat(form?.dosis_vaq1) ||0)).toFixed(1) : 0;
 
     // Verdeo: aplica en los meses definidos, a la categoría destino
     const hayVerdeo = tieneVerdeo && i >= verdeoMesI && i <= verdeoMesI + 2;
@@ -6289,6 +6292,41 @@ function AgroMindPro() {
     }
     if (form.consultaEspecifica) t += `\nCONSULTA: ${form.consultaEspecifica}\n`;
 
+    // ── GEI ──────────────────────────────────────────────────────
+    const geiData = calcGEI(form, motor, tray, sat);
+    if (geiData) {
+      t += `\nGEI (IPCC 2019 Tier 2 + Gere et al. 2019/2024):\n`;
+      t += `  CH₄ total base: ${geiData.totalCH4Base?.toLocaleString()} kg/año · Intensidad: ${geiData.intensBase} kg CO₂eq/kg PV\n`;
+      t += `  GWP100: ${(geiData.totalCO2eqBase/1000)?.toFixed(0)} t CO₂eq/año · GWP* (rodeo estable): ${(geiData.totalCO2eqBaseSTAR/1000)?.toFixed(0)} t CO₂eq/año\n`;
+      if (geiData.intensSupl && geiData.intensSupl < geiData.intensBase) {
+        t += `  Con suplementación: ${geiData.intensSupl} kg CO₂eq/kg PV (↓${((1-geiData.intensSupl/geiData.intensBase)*100).toFixed(1)}% — mejora digestibilidad ↓Ym)\n`;
+      }
+      if (geiData.co2Pastizal?.CO2_total !== 0) {
+        t += `  Captura CO₂ pastizal: ${geiData.co2Pastizal?.CO2_total > 0 ? "+" : ""}${(geiData.co2Pastizal?.CO2_total/1000)?.toFixed(1)} t CO₂/año (McSherry & Ritchie 2013 — incertidumbre ±40%)\n`;
+      }
+      t += `  Ym calibrado: ${geiData.dig}% digestibilidad · Referencia promedio nacional: ~25 kg CO₂eq/kg PV\n`;
+    }
+
+    // ── DIAGNÓSTICO CEREBRO (cuellos de botella) ─────────────────
+    const cerebroData = calcCerebro(motor, form);
+    if (cerebroData) {
+      t += `\nDIAGNÓSTICO INTEGRADO (calcCerebro):\n`;
+      t += `  Score riesgo: ${cerebroData.resumen?.scoreRiesgo || "—"}/100 · Nivel: ${cerebroData.resumen?.nivelRiesgo || "—"}\n`;
+      t += `  Preñez actual: ${cerebroData.resumen?.prenez || "—"}% · Potencial con correcciones: ${cerebroData.resumen?.prenezPot || "—"}%\n`;
+      if (cerebroData.resumen?.ternerosDif > 0) {
+        t += `  Terneros adicionales posibles: ${cerebroData.resumen.ternerosDif} cab · Valor: $${cerebroData.resumen.valorDif?.toLocaleString("es-AR")}\n`;
+      }
+      if (cerebroData.tarjetas?.length > 0) {
+        t += `  CUELLOS DE BOTELLA (${cerebroData.tarjetas.length} acciones):\n`;
+        cerebroData.tarjetas.slice(0, 8).forEach(c => {
+          t += `    [${c.prioridad}] ${c.titulo}: ${c.descripcion?.slice(0,100)}\n`;
+        });
+      }
+      if (cerebroData.parrafo) {
+        t += `  SITUACIÓN DEL SISTEMA: ${cerebroData.parrafo.slice(0, 300)}\n`;
+      }
+    }
+
     return t;
   }
 
@@ -6595,6 +6633,43 @@ function AgroMindPro() {
       // ─ Informe ─
       ["Consulta_especifica",       form.consultaEspecifica || ""],
       ["Tiene_informe_IA",          result ? "Si" : "No"],
+      // ─ GEI ─
+      ...(() => {
+        const g = calcGEI(form, motor, tray, sat);
+        if (!g) return [];
+        return [
+          ["GEI_CH4_total_kg_anio",   g.totalCH4Base || ""],
+          ["GEI_intensidad_base",      g.intensBase || ""],
+          ["GEI_intensidad_con_supl",  g.intensSupl || ""],
+          ["GEI_GWP100_tCO2eq",        g.totalCO2eqBase ? (g.totalCO2eqBase/1000).toFixed(0) : ""],
+          ["GEI_GWP_star_tCO2eq",      g.totalCO2eqBaseSTAR ? (g.totalCO2eqBaseSTAR/1000).toFixed(0) : ""],
+          ["GEI_captura_CO2_t",        g.co2Pastizal?.CO2_total ? (g.co2Pastizal.CO2_total/1000).toFixed(1) : ""],
+          ["GEI_dig_pct",              g.dig || ""],
+        ];
+      })(),
+      // ─ Diagnóstico motor ─
+      ...(() => {
+        const cb = calcCerebro(motor, form);
+        if (!cb) return [];
+        const p1 = cb.tarjetas?.filter(c=>c.prioridad==="URGENTE"||c.prioridad==="P1").map(c=>c.titulo).join(" | ") || "";
+        const p2 = cb.tarjetas?.filter(c=>c.prioridad==="P2").map(c=>c.titulo).join(" | ") || "";
+        return [
+          ["Score_riesgo",             cb.resumen?.scoreRiesgo || ""],
+          ["Nivel_riesgo",             cb.resumen?.nivelRiesgo || ""],
+          ["Prenez_potencial_pct",     cb.resumen?.prenezPot || ""],
+          ["Terneros_adicionales",     cb.resumen?.ternerosDif || ""],
+          ["Valor_adicional_ARS",      cb.resumen?.valorDif || ""],
+          ["Cuellos_P1",               p1],
+          ["Cuellos_P2",               p2],
+          ["Anos_recup_vaq1",          cb.anosRecupVaq1 || ""],
+          ["Anos_recup_vaq2",          cb.anosRecupVaq2 || ""],
+        ];
+      })(),
+      // ─ Balance invernal ─
+      ["Balance_jun_mcal",           motor?.balanceMensual?.[5]?.balance || ""],
+      ["Balance_jul_mcal",           motor?.balanceMensual?.[6]?.balance || ""],
+      ["Balance_ago_mcal",           motor?.balanceMensual?.[7]?.balance || ""],
+      ["Deficit_meses_invierno",     motor?.balanceMensual ? motor.balanceMensual.filter(m=>[5,6,7].includes(m.i)&&m.deficit).length : ""],
     ];
 
     const headers = campos.map(([h]) => h);
