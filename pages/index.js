@@ -1142,7 +1142,7 @@ function evaluarSanidad(vacunas, brucelosis, aftosa, toros, historiaAbortos, pro
       urgencia: diasHastaServ !== null && diasHastaServ < 60 ? "URGENTE" : "PROGRAMAR",
       fecha: fmtTarget(diasVacIBR),
       diasRestantes: diasVacIBR,
-      instruccion: `Vacunar ${diasHastaServ !== null ? `antes del ${fmtTarget(diasVacIBR)} (45d previos al servicio)` : "45–60 días antes del servicio"}. Refuerzo anual.`,
+      instruccion: `Vacunar ${diasHastaServ !== null ? "antes del " + fmtTarget(diasVacIBR) + " (45d previos al servicio)" : "45–60 días antes del servicio"}. Refuerzo anual.`,
       porque: "IBR/DVB causa abortos y falla reproductiva silenciosa. La inmunidad activa tarda 3–4 semanas.",
     });
   } else {
@@ -1193,7 +1193,7 @@ function evaluarSanidad(vacunas, brucelosis, aftosa, toros, historiaAbortos, pro
     urgencia: diasHastaServ !== null && diasHastaServ < 50 ? "PROGRAMAR" : "CALENDARIO",
     fecha: fmtTarget(diasVacLepto),
     diasRestantes: diasVacLepto,
-    instruccion: `Vacunar ${diasHastaServ !== null ? `antes del ${fmtTarget(diasVacLepto)}` : "30–45 días antes del servicio"} con bacterina polivalente. Alta prevalencia en inundaciones NEA.`,
+    instruccion: `Vacunar ${diasHastaServ !== null ? "antes del " + fmtTarget(diasVacLepto) : "30–45 días antes del servicio"} con bacterina polivalente. Alta prevalencia en inundaciones NEA.`,
     porque: "Leptospira causa abortos tardíos y mortinatos. Serovares Pomona e Icterohaemorrhagiae prevalentes en NEA.",
   });
 
