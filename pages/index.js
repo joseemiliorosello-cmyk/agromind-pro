@@ -61,8 +61,28 @@ const PROD_BASE = {
   "Verdeo de invierno":                            20,
 };
 
-// ─── FACTORES AMBIENTALES ─────────────────────────────────────────
-const UTIL        = 0.40;
+// ─── CURVA NDVI ESTACIONAL POR ZONA ───────────────────────────────
+// Índice relativo mensual (1.0 = valor de referencia del satélite)
+// NEA/Chaco: C4 activo en verano, dormante en invierno → ratio jul/ene ≈ 0.45
+// Fuente: series MODIS MOD13Q1 2000-2023 promedio para cada zona
+const NDVI_ESTAC = {
+  "NEA":           [1.00,0.98,0.92,0.80,0.68,0.55,0.48,0.52,0.65,0.80,0.92,0.98],
+  "NOA":           [0.95,0.98,1.00,0.88,0.72,0.58,0.50,0.55,0.68,0.82,0.90,0.93],
+  "Pampa Húmeda":  [1.00,0.97,0.90,0.82,0.78,0.72,0.70,0.75,0.82,0.90,0.96,1.00],
+  "Paraguay Oriental": [1.00,0.98,0.93,0.82,0.70,0.58,0.50,0.55,0.67,0.80,0.92,0.98],
+  "Chaco Paraguayo":   [1.00,0.97,0.90,0.78,0.65,0.52,0.45,0.50,0.63,0.78,0.90,0.97],
+  "Brasil (Cerrado)":  [0.85,0.82,0.80,0.75,0.68,0.58,0.52,0.55,0.65,0.78,0.85,0.87],
+  "Bolivia (Llanos)":  [0.90,0.92,0.95,0.88,0.75,0.60,0.52,0.55,0.65,0.78,0.86,0.90],
+};
+const NDVI_ESTAC_DEF = [1.00,0.97,0.90,0.78,0.65,0.52,0.45,0.50,0.63,0.80,0.92,0.97];
+// ndviMes(i, ndviHoy, zona): escala el NDVI del satélite a cada mes
+// Si el satélite da 0.55 en marzo, julio será 0.55 * (0.48/0.92) ≈ 0.29
+const ndviMes = (i, ndviHoy, zona) => {
+  const curva  = NDVI_ESTAC[zona] || NDVI_ESTAC_DEF;
+  const mesHoy = new Date().getMonth();
+  const refHoy = curva[mesHoy] || 1.0;
+  return Math.min(0.95, Math.max(0.10, (parseFloat(ndviHoy) || 0.45) * (curva[i] / refHoy)));
+};
 const factorT     = (t) => t>=25?1.0 : t>=20?0.80 : t>=15?0.45 : t>=10?0.15 : 0.05;
 const factorP     = (p) => p>=100?1.0 : p>=50?0.85 : p>=20?0.60 : 0.30;
 const factorN     = (ndvi) => Math.min(1.5, Math.max(0.5, 0.5 + parseFloat(ndvi||0.45)*1.2));
@@ -71,22 +91,24 @@ const modENSO     = (e) => e==="nino"?1.25 : e==="nina"?0.75 : 1.0;
 // ─── CLIMA HISTÓRICO POR PROVINCIA (T°C media, Precip mm/mes) ────
 // ─── OFERTA MENSUAL CON VARIACIÓN ESTACIONAL ──────────────────────
 // La oferta NO es plana: colapsa en invierno (T<15°C en gramíneas C4)
-function calcOfertaMensualArray(veg, ndvi, provincia, enso, fenolActual) {
+// zona: clave de NDVI_ESTAC — permite escalar el NDVI del satélite mes a mes
+function calcOfertaMensualArray(veg, ndviHoy, provincia, enso, fenolActual, zona) {
   const hist  = getClima(provincia || "Corrientes");
   const pb    = PROD_BASE[veg] || 8;
-  const ndviN = parseFloat(ndvi) || 0.45;
   const modE  = modENSO(enso);
+  const zonaK = zona || "NEA";
   const fenolMes = [
     "menor_10","menor_10","10_25","10_25",
     "25_50","mayor_50","mayor_50","mayor_50",
     "25_50","10_25","menor_10","menor_10"
   ];
   return hist.map((m, i) => {
-    const t    = m.t || 20;
-    const p    = (m.p || 60) * modE;
-    const fenol= fenolMes[i];
-    const kgMs = Math.max(0,
-      pb * factorN(ndviN) * factorT(t) * factorP(p) * UTIL * fAprovFenol(fenol)
+    const t     = m.t || 20;
+    const p     = (m.p || 60) * modE;
+    const fenol = fenolMes[i];
+    const ndviI = ndviMes(i, ndviHoy, zonaK); // NDVI real para este mes
+    const kgMs  = Math.max(0,
+      pb * factorN(ndviI) * factorT(t) * factorP(p) * UTIL * fAprovFenol(fenol)
     );
     return +(kgMs * mcalKgAdj(t, fenol)).toFixed(2);
   });
@@ -1504,7 +1526,8 @@ function correrMotor(form, sat, potreros, usaPotreros) {
   // ── 1.4 Oferta mensual con variación estacional ──────────────
   const ofertaMensual = calcOfertaMensualArray(
     form.vegetacion || "Pastizal natural NEA/Chaco",
-    ndviN, form.provincia || "Corrientes", enso, form.fenologia
+    ndviN, form.provincia || "Corrientes", enso, form.fenologia,
+    form.zona || "NEA"
   ).map(v => +(v * factorAgua).toFixed(2)); // agua reduce oferta real
 
   // ── 1.5 Carga ganadera real en EV/ha ─────────────────────────
@@ -1520,11 +1543,23 @@ function correrMotor(form, sat, potreros, usaPotreros) {
   const cargaEV_ha = supHa > 0 ? +(totalEV / supHa).toFixed(2) : null;
 
   // Efecto de la carga sobre la oferta: sobrecarga degrada el pasto
-  const factorCarga = cargaEV_ha === null ? 1.0
-    : cargaEV_ha > 1.2 ? 0.70   // sobrecarga severa
-    : cargaEV_ha > 0.8 ? 0.88   // sobrecarga moderada
-    : cargaEV_ha > 0.5 ? 0.97   // carga óptima alta
-    : 1.0;                        // subganadera o sin dato
+  // factorCarga base (sin suplemento)
+  const factorCargaBase = cargaEV_ha === null ? 1.0
+    : cargaEV_ha > 1.2 ? 0.70
+    : cargaEV_ha > 0.8 ? 0.88
+    : cargaEV_ha > 0.5 ? 0.97
+    : 1.0;
+  // En meses con suplemento activo, la fracción del requerimiento que viene del pasto
+  // es menor → la presión sobre la pastura se reduce. Estimamos qué % del req total
+  // cubre el suplemento y escalamos la carga efectiva proporcionalmente.
+  // Referencia: Lippke 1980 — "substitution rate" suplemento-pastoreo
+  const suplMcalTotalDia = suplRodeoMcalDia; // Mcal/día que aporta el suplemento al rodeo
+  // requerimiento medio del rodeo sin suplemento (estimado como promedio anual)
+  const reqRodeoEstim = (nVacas*14 + nToros*20 + nV2s*16 + nVaq2*10 + nVaq1*7) || 1;
+  const fracSuplReq = Math.min(0.35, suplMcalTotalDia / reqRodeoEstim); // máx 35% sustitución
+  // factorCarga efectivo para meses sin/con suplemento
+  const factorCargaSusp = Math.min(1.0, factorCargaBase + fracSuplReq * 0.3); // suplemento alivia presión
+  const factorCarga = factorCargaBase; // base (para meses sin suplemento)
 
   if (cargaEV_ha && cargaEV_ha > 1.2) {
     addAlerta("carga_alta", "P1",
@@ -1742,14 +1777,18 @@ function correrMotor(form, sat, potreros, usaPotreros) {
                        : mesesDesdeP <= 2 ? "Gestación temprana (1–4 meses)"
                        : "Gestación media (5–7 meses)";
 
-    // Requerimientos reales por estado fisiológico
-    // V2S: mismo estado que las vacas adultas pero con factor NRC +10% (crecimiento propio)
-    // No está en lactación los 12 meses — usar mismo estado fisiológico que vacas adultas
-    const reqVacaI = reqEM(pvVaca,       estadoVaca,   form.biotipo) || 14;
-    const reqToroI = reqEM(pvVaca*1.3,   "Vaca seca sin ternero", form.biotipo) || 14;
-    // V2S: estado fisiológico igual al rodeo general × 1.10 (NRC 2000: requerimiento adicional por crecimiento)
-    const reqV2sI  = +((reqEM(pvVaca*0.88, estadoVaca, form.biotipo) || 14) * 1.10).toFixed(1);
-    const pvVaq2p  = parseFloat(pvEntradaVaq2) || Math.round(pvVaca*0.65);
+    // V2S: estado fisiológico propio — primer parto, mayor anestro posparto
+    // NRC 2000: V2S tiene +10% req base por crecimiento propio además del estado reproductivo
+    // Bavera 2006: anestro posparto en V2S ≈ 25% mayor que vacas adultas
+    // → lactación efectiva más prolongada en términos de requerimiento (ternero + propio)
+    const mesesLactV2s = Math.min(mesesLactN + 1, 7); // lactación +1 mes vs vaca adulta (primer parto)
+    const enLactV2s    = (i - mesParto + 12) % 12 < mesesLactV2s;
+    const estadoV2s    = enLactV2s ? "Lactación con ternero al pie"
+                       : ((i - mesParto + 12) % 12 >= 9) ? "Preparto (último mes)"
+                       : "Gestación media (5–7 meses)";
+    const reqV2sI  = +((reqEM(pvVaca*0.88, estadoV2s, form.biotipo) || 14) * 1.10).toFixed(1);
+    const reqVacaI = reqEM(pvVaca,     estadoVaca, form.biotipo) || 14;
+    const reqToroI = reqEM(pvVaca*1.3, "Vaca seca sin ternero", form.biotipo) || 14;
     const pvVaq1p  = pvEntVaq1 || Math.round(pvVaca*0.40);
     const reqVaq2I = reqEM(pvVaq2p, "vaq2inv", form.biotipo) || 10;
     const reqVaq1I = reqEM(pvVaq1p, "vaq1inv", form.biotipo) || 7;
@@ -1787,6 +1826,31 @@ function correrMotor(form, sat, potreros, usaPotreros) {
     const ofPastoVaca = +(kgMsVaca * mcalKg).toFixed(1);
     const ofPastoTotal = +((ofPastoVacas + ofPastoToros + ofPastoV2s + ofPastoVaq2 + ofPastoVaq1) * factorCarga).toFixed(0);
 
+    // ── GDP vaquillona mensual (este mes, no el promedio invernal fijo) ──
+    // Usa NDVI estacional del mes i para reflejar calidad real del pasto
+    const ndviI   = ndviMes(i, ndviN, form.zona || "NEA");
+    const pbPasI  = pbPasto(fenol);
+    // GDP pasto: limitado por PB (<7% → colapso microbiano), temperatura y NDVI
+    const factPbI = pbPasI >= 8 ? 1.0 : pbPasI >= 6 ? 0.55 : 0.20;
+    const factTI  = t >= 20 ? 1.0 : t >= 15 ? 0.60 : t >= 10 ? 0.25 : 0.05;
+    const factNI  = Math.min(1.3, Math.max(0.3, ndviI / 0.45));
+    // Base NEA pastizal natural invierno: 80 g/d máximo con buena fenología
+    const gdpPastoMesVaq = Math.round(80 * factPbI * factTI * factNI);
+    // Con suplemento proteico activo este mes: boost sobre GDP pasto
+    const suplActivo = MESES_SUPL.has(i);
+    const mcalSuplVaq1 = suplActivo && form.supl_vaq1
+      ? (SUPLEMENTOS[form.supl_vaq1]?.em || 0) * (parseFloat(form.dosis_vaq1) || 0) : 0;
+    const mcalSuplVaq2 = suplActivo && form.supl_vaq2
+      ? (SUPLEMENTOS[form.supl_vaq2]?.em || 0) * (parseFloat(form.dosis_vaq2) || 0) : 0;
+    const pbSuplV1 = SUPLEMENTOS[form.supl_vaq1]?.pb || 0;
+    const pbSuplV2 = SUPLEMENTOS[form.supl_vaq2]?.pb || 0;
+    const eficV1 = pbPasI < 7 ? 0.55 : 0.42;
+    const eficV2 = pbPasI < 7 ? 0.55 : 0.42;
+    const boostVaq1 = mcalSuplVaq1 > 0 ? Math.min(400, Math.round(mcalSuplVaq1 * eficV1 / 0.005)) : 0;
+    const boostVaq2 = mcalSuplVaq2 > 0 ? Math.min(400, Math.round(mcalSuplVaq2 * eficV2 / 0.005)) : 0;
+    const gdpVaq1Mes = gdpPastoMesVaq + boostVaq1;
+    const gdpVaq2Mes = gdpPastoMesVaq + boostVaq2;
+
     // CC movilizada en lactación
     const ccAporte = enLact
       ? Math.round(caidaCC * MCAL_CC * nVacas / Math.max(1, mesesLactN*30)) : 0;
@@ -1797,7 +1861,10 @@ function correrMotor(form, sat, potreros, usaPotreros) {
 
     // Suplemento: solo aplica en los meses de invierno configurados
     const suplAp = MESES_SUPL.has(i) ? suplRodeoMcalDia : 0;
-    const ofertaTotal = ofPastoTotal + ccAporte + suplAp + verdeoAp;
+    // Carga efectiva: en meses con suplemento el pasto tiene menos presión
+    const factCargaMes = MESES_SUPL.has(i) ? factorCargaSusp : factorCarga;
+    const ofPastoTotalMes = +((ofPastoVacas + ofPastoToros + ofPastoV2s + ofPastoVaq2 + ofPastoVaq1) * factCargaMes).toFixed(0);
+    const ofertaTotal = ofPastoTotalMes + ccAporte + suplAp + verdeoAp;
     const balance     = ofertaTotal - demanda;
 
     // Cuánto suplemento resolvería el déficit (Mcal/animal/día)
@@ -1809,7 +1876,7 @@ function correrMotor(form, sat, potreros, usaPotreros) {
     return {
       mes, i,
       // Oferta
-      ofPastoTotal:+ofPastoTotal, ofPastoVaca, ccAporte,
+      ofPastoTotal:+ofPastoTotalMes, ofPastoVaca, ccAporte,
       suplAporte:+suplAp.toFixed(0),
       verdeoAporte:+verdeoAp,
       ofertaTotal:+ofertaTotal.toFixed(0),
@@ -1831,6 +1898,8 @@ function correrMotor(form, sat, potreros, usaPotreros) {
       esParto:   i===mesParto,
       esServIni: i===mesServIni,
       esDestete: i===mesDestete,
+      // GDP vaquillona real este mes (NDVI estacional + fenología + suplemento)
+      gdpVaq1Mes, gdpVaq2Mes, gdpPastoMesVaq,
     };
   });
 
@@ -4628,7 +4697,7 @@ function diagnosticarSistema(motor, form) {
       let cuelloCausa, descripcionCuello;
       if (!esCalidadBaja && !esCantidadBaja) {
         cuelloCausa = "gp_pasto_ok";
-        descripcionCuella = "Pasto suficiente y buena calidad — revisar PV entrada";
+        descripcionCuello = "Pasto suficiente y buena calidad — revisar PV entrada";
       } else if (!esCantidadBaja && esCalidadBaja) {
         cuelloCausa = "calidad_baja";
         descripcionCuello = `Buena cantidad (${DISP_MS} kgMS/ha) pero calidad baja (PB ${PB_PASTO}%) — pasto encañado`;
@@ -4932,6 +5001,353 @@ function diagnosticarSistema(motor, form) {
 //   3. Conexiones entre problemas que en otros tabs están separados
 // ═══════════════════════════════════════════════════════════════
 
+// ── FASE DEL CICLO REPRODUCTIVO ──────────────────────────────────────
+// Determina en qué momento del año ganadero está el rodeo HOY,
+// basado en las fechas reales cargadas por el usuario.
+// Fuente: INTA EEA Corrientes — Calendario NEA (Verdoljak et al.);
+//         Veneciano & Frasinelli (2014) Cría y recría de bovinos.
+//
+// Retorna un objeto con:
+//   fase       : clave de la fase actual
+//   label      : nombre legible
+//   icono      : emoji
+//   color      : color para UI
+//   diasEnFase : cuántos días lleva en esta fase (negativo = cuántos faltan)
+//   descripcion: qué está pasando en el campo ahora mismo
+//   acciones   : 2-3 acciones concretas para este momento
+//   siguiente  : { label, diasFaltan } — próxima fase y cuándo arranca
+// ctx = { tempHoy, ndviHoy, p30Hoy, ccServ, ccToros, prenez, mesesDeficit,
+//         peorBalanceMcal, pvVaca, nVacas, vaq1SinCorr, vaq2Llega, pvVaq2Falta,
+//         balanceMesActual }
+function calcFaseCiclo(cadena, form, ctx) {
+  const hoy = new Date();
+  hoy.setHours(12, 0, 0, 0);
+
+  // Sin fechas cargadas → fase indefinida
+  if (!cadena?.ini || !cadena?.fin) {
+    return {
+      fase: "SIN_FECHA",
+      label: "Sin fechas de servicio",
+      icono: "📅",
+      color: "#888",
+      diasEnFase: 0,
+      descripcion: "Cargá las fechas de inicio y fin de servicio para activar el diagnóstico contextual.",
+      acciones: ["Ir al paso Ubicación y cargar las fechas de servicio"],
+      siguiente: null,
+    };
+  }
+
+  // Contexto del rodeo — valores reales si están, defaults si no
+  const {
+    tempHoy        = null,
+    ndviHoy        = null,
+    p30Hoy         = null,
+    ccServ         = 0,
+    ccToros        = 0,
+    prenez         = 0,
+    mesesDeficit   = 0,
+    peorBalanceMcal= 0,
+    pvVaca         = 320,
+    nVacas         = 0,
+    vaq1SinCorr    = false,
+    vaq2Llega      = true,
+    pvVaq2Falta    = 0,
+    balanceMesActual = 0,
+  } = ctx || {};
+
+  const frio     = tempHoy !== null && tempHoy < 15;
+  const calor    = tempHoy !== null && tempHoy >= 28;
+  const pastoB   = ndviHoy !== null && ndviHoy < 0.40;
+  const seco     = p30Hoy  !== null && p30Hoy  < 50;
+  const deficit  = balanceMesActual < 0;
+  const ccBaja   = ccServ > 0 && ccServ < 4.5;
+  const torosBajos = ccToros > 0 && ccToros < 5.0;
+
+  // Helpers de texto climático reutilizables
+  const climaStr = () => {
+    const parts = [];
+    if (frio)   parts.push(`${tempHoy}°C — C4 dormido`);
+    if (pastoB) parts.push(`NDVI ${ndviHoy?.toFixed(2)} — pasto escaso`);
+    if (seco)   parts.push(`lluvia 30d: ${p30Hoy}mm — seco`);
+    if (deficit) parts.push(`déficit ${Math.abs(balanceMesActual)} Mcal/día hoy`);
+    return parts.length ? ` (${parts.join(" · ")})` : "";
+  };
+
+  const ini       = new Date(cadena.ini);
+  const fin       = new Date(cadena.fin);
+  const partoIni  = new Date(cadena.partoTemp);
+  const partoFin  = new Date(cadena.partoTard);
+  const tactoIni  = new Date(fin); tactoIni.setDate(tactoIni.getDate() + 58);
+  const tactoFin  = new Date(fin); tactoFin.setDate(tactoFin.getDate() + 80);
+  const preServIni= new Date(ini); preServIni.setDate(preServIni.getDate() - 45);
+  const prePartoIni = new Date(partoIni); prePartoIni.setDate(prePartoIni.getDate() - 35);
+  const postPartoFin= new Date(partoFin); postPartoFin.setDate(postPartoFin.getDate() + 30);
+  const iniProx   = new Date(ini); iniProx.setFullYear(iniProx.getFullYear() + 1);
+  const preServProxIni = new Date(iniProx); preServProxIni.setDate(preServProxIni.getDate() - 45);
+
+  const dias = (a, b) => Math.round((b - a) / 86400000);
+  const fmtD = (d) => d.toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit" });
+
+  let fase, label, icono, color, diasEnFase, descripcion, acciones, siguiente;
+
+  if (hoy >= ini && hoy <= fin) {
+    fase        = "SERVICIO";
+    label       = "Servicio activo";
+    icono       = "🐂";
+    color       = "#4a9fd4";
+    diasEnFase  = dias(ini, hoy);
+    const diasRestServ = dias(hoy, fin);
+    const pctServ = Math.round(diasEnFase / Math.max(1, dias(ini, fin)) * 100);
+    // Descripción con datos reales del rodeo
+    const cabeza = pctServ < 35
+      ? `Las vacas de \"cabeza\" (las que ciclaron en los primeros 21 días) ya deberían estar preñadas.`
+      : pctServ < 70
+      ? `Se completaron aproximadamente ${pctServ}% de los ciclos — \"cabeza\" preñada, \"cuerpo\" en curso.`
+      : `Últimos días de servicio — quedan ${diasRestServ} días. Solo quedan los ciclos de \"cola\".`;
+    descripcion =
+      `Servicio en curso — día ${diasEnFase + 1} de ${dias(ini, fin)} días (${pctServ}% completado)${climaStr()}. ` +
+      cabeza +
+      (ccBaja ? ` CC al servicio ${ccServ} — por debajo de 4.5: vacas con ternero al pie están en desventaja reproductiva.` : "") +
+      (torosBajos ? ` Toros con CC ${ccToros} — rendimiento reducido (libido y eyaculado comprometidos).` : "");
+    acciones = [
+      `Controlar que los toros están trabajando — pintura de lomo o collares detectores de celo`,
+      ccBaja
+        ? `CC ${ccServ}: aplicar destete precoz a vacas con ternero al pie — cada día cuenta`
+        : `Vacas en servicio con buen estado (CC ${ccServ}) — mantener el manejo actual`,
+      torosBajos
+        ? `Toros CC ${ccToros}: suplementar ahora — libido recupera con la CC en 3–4 semanas`
+        : `Confirmar relación toro/vaca — máximo 25 vacas por toro en campo abierto`,
+      diasRestServ < 30
+        ? `Preparar retiro de toros: ${fmtD(fin)} — anunciar el cierre del servicio al personal`
+        : `Planificar reserva de potreros para invierno — cerrar en febrero antes del pisoteo otoñal`,
+    ].filter(Boolean);
+    siguiente = { label: "Retiro toros", diasFaltan: diasRestServ };
+
+  } else if (hoy > fin && hoy < tactoIni) {
+    fase        = "POST_SERVICIO";
+    label       = "Post-servicio";
+    icono       = "📋";
+    color       = "#888";
+    diasEnFase  = dias(fin, hoy);
+    const diasAlTacto = dias(hoy, tactoIni);
+    descripcion =
+      `Toros retirados hace ${diasEnFase} días. Las vacas están en gestación temprana — el embrión se está implantando. ` +
+      `En ${diasAlTacto} días se puede hacer el tacto rectal (mínimo 58 días post-retiro). ` +
+      (pastoB ? `NDVI ${ndviHoy?.toFixed(2)} — pasto limitado: las vacías van a competir con las preñadas. Anticipar el descarte.` :
+       `Es momento de reservar potreros y preparar el balance forrajero para el invierno.`);
+    acciones = [
+      `Control sanitario de toros antes de la seca — ESAN, Trichomoniasis, Campylobacter`,
+      `Reservar potreros: cerrar los mejores para el invierno antes de que se pisooteen en otoño`,
+      `Calcular cuántas vacas vacías entran al invierno — cada vaca vacía gasta pasto que necesita una preñada`,
+      diasAlTacto < 20
+        ? `Tacto en ${diasAlTacto} días — coordinar veterinario y manga YA`
+        : `Preparar manga para tacto en ${fmtD(tactoIni)}`,
+    ];
+    siguiente = { label: "Tacto rectal", diasFaltan: diasAlTacto };
+
+  } else if (hoy >= tactoIni && hoy <= tactoFin) {
+    fase        = "TACTO";
+    label       = "Período de tacto";
+    icono       = "🔬";
+    color       = "#e8a030";
+    diasEnFase  = dias(tactoIni, hoy);
+    const diasRestTacto = dias(hoy, tactoFin);
+    descripcion =
+      `Momento más importante del año para la gestión del rodeo. ` +
+      `Diagnóstico de preñez a todo el vientre — sin excepciones. ` +
+      `Las vacas vacías que coman pasto este invierno no producen un ternero y le quitan energía a las preñadas que la necesitan para llegar bien al parto. ` +
+      (mesesDeficit > 0
+        ? `Con ${mesesDeficit} mes${mesesDeficit > 1 ? "es" : ""} de déficit forrajero proyectado, cada vaca vacía que quede es pasto que falta.`
+        : `El balance forrajero cierra — pero el objetivo sigue siendo no cargar vacas improductivas en invierno.`);
+    acciones = [
+      `Diagnosticar preñez a TODO el rodeo — sin excepciones`,
+      `Vacas vacías gordas → venta inmediata (precio alto otoño, antes que baje)`,
+      `Vacas vacías flacas → analizar invernada si el precio del suplemento lo justifica`,
+      `Boqueo simultáneo — CUT a preñadas con dentición límite; descarte a vacías`,
+      mesesDeficit > 1
+        ? `Déficit invernal proyectado — calcular cuántas cabezas descartar para no suplementar`
+        : `Calcular cuántas vaquillonas de reposición entran al próximo servicio`,
+    ];
+    siguiente = { label: "Gestación media", diasFaltan: diasRestTacto };
+
+  } else if (hoy > tactoFin && hoy < prePartoIni) {
+    fase        = "GESTACION_MEDIA";
+    label       = "Gestación media";
+    icono       = "🌿";
+    color       = "#7ec850";
+    diasEnFase  = dias(tactoFin, hoy);
+    const diasAlPreparto = dias(hoy, prePartoIni);
+    const mesActual = hoy.getMonth();
+    const esInviernoAhora = mesActual >= 4 && mesActual <= 7;
+    descripcion =
+      `Las vacas preñadas están en gestación ${Math.round(dias(fin, hoy) / 30) + 2}–${Math.round(dias(fin, hoy) / 30) + 3} meses. ` +
+      (esInviernoAhora
+        ? `Es el período de menor requerimiento nutricional de la vaca preñada seca — tolera restricción planificada${climaStr()}. `
+        : `Período de relativa tranquilidad del rodeo. `) +
+      (vaq1SinCorr
+        ? `Atención: la vaquillona de primer invierno está ganando por debajo del mínimo — esta es la ventana para suplementar. `
+        : "") +
+      (!vaq2Llega
+        ? `La vaquillona de segundo invierno no llega al peso de entore — le faltan ${pvVaq2Falta} kg. Suplementar ahora. `
+        : "") +
+      `En ${diasAlPreparto} días empieza el preparto — la única ventana donde el suplemento en vacas adultas tiene retorno real.`;
+    acciones = [
+      esInviernoAhora
+        ? `Suplemento en vacas adultas ahora NO es eficiente — reservar el recurso para el preparto (${fmtD(prePartoIni)})`
+        : `Mantener el monitoreo del estado corporal del rodeo`,
+      vaq1SinCorr
+        ? `Vaquillona 1° invierno — suplementar AHORA: 0.3–0.5 kg expeller/día (PB <8% → colapso microbiano)`
+        : `Pesar vaquillona de reposición — confirmar que va a llegar al peso de entore`,
+      !vaq2Llega
+        ? `Vaquillona 2° invierno — le faltan ${pvVaq2Falta} kg para el entore: suplementar con proteína + energía`
+        : `Vaquillona 2° invierno en camino — confirmar peso al inicio del servicio`,
+      `Preparar suelos y siembra de verdeos de invierno si corresponde`,
+    ];
+    siguiente = { label: "Preparto", diasFaltan: diasAlPreparto };
+
+  } else if (hoy >= prePartoIni && hoy < partoIni) {
+    fase        = "PRE_PARTO";
+    label       = "Preparto";
+    icono       = "⚡";
+    color       = "#e8a030";
+    diasEnFase  = dias(prePartoIni, hoy);
+    const diasAlParto = dias(hoy, partoIni);
+    descripcion =
+      `Últimas semanas antes del primer parto esperado (${fmtD(partoIni)}) — ${diasAlParto} días. ` +
+      `ÚNICA ventana del año donde el suplemento en vacas adultas tiene retorno real: ` +
+      `sin ternero al pie, cada Mcal extra va a CC, calostro y arranque del ternero. ` +
+      (frio
+        ? "Con " + tempHoy + "°C el pasto no aporta energía suficiente" + (deficit ? " — hay un déficit de " + Math.abs(balanceMesActual) + " Mcal/día" : "") + ". El suplemento preparto es indispensable."
+        : ccBaja
+        ? `CC al servicio fue ${ccServ} — si las vacas llegaron al parto con CC <4.5 el anestro posparto va a ser más largo.`
+        : `Las vacas preñadas tienen la oportunidad de llegar bien al parto con suplemento ahora.`);
+    acciones = [
+      `Suplementar vacas preñadas: 0.5–0.8 kg expeller/vaca/día — única ventana eficiente en adultas`,
+      `Separar \"cabeza de parición\" a potrero de parición — parirán en ~${diasAlParto} días`,
+      torosBajos
+        ? `Toros CC ${ccToros}: suplementar YA — tienen ${diasAlParto + dias(partoIni, ini)} días hasta el servicio`
+        : `Confirmar CC de toros — objetivo ≥5.5 al inicio del servicio`,
+      `Tener disponibles: oxitocina, antibiótico, yodo ombligos, guantes de parto`,
+    ];
+    siguiente = { label: "Inicio de parición", diasFaltan: diasAlParto };
+
+  } else if (hoy >= partoIni && hoy <= postPartoFin) {
+    fase        = "PARTO";
+    label       = "Parición en curso";
+    icono       = "🐄";
+    color       = "#e05530";
+    diasEnFase  = dias(partoIni, hoy);
+    const pctParto = Math.min(100, Math.round(diasEnFase / Math.max(1, dias(partoIni, partoFin)) * 100));
+    const diasRestParto = dias(hoy, partoFin);
+    descripcion =
+      `Parición activa — ${pctParto < 35 ? "\"cabeza\" de parición" : pctParto < 70 ? "cuerpo de parición" : "\"cola\" de parición"}` +
+      ` (día ${diasEnFase + 1}, ~${pctParto}% del total esperado)${climaStr()}. ` +
+      `Máximo requerimiento del año: lactación temprana + gestación nueva entrando. ` +
+      (frio
+        ? `El frío (${tempHoy}°C) aumenta el requerimiento de mantenimiento — las vacas necesitan más energía que en un invierno suave. `
+        : "") +
+      (deficit
+        ? `Hay déficit forrajero de ${Math.abs(balanceMesActual)} Mcal/día — las vacas están movilizando CC para producir leche. `
+        : "") +
+      `Cada ternero perdido o vaca que sale del parto con CC <3.5 es una preñez en riesgo para el próximo servicio.`;
+    acciones = [
+      `Recorrer potreros de parición 1–2 veces/día — terneros abandonados, distocias, hipotermia`,
+      `Curar ombligos con yodo al nacimiento — onfalitis es la causa #1 de mortalidad neonatal`,
+      pctParto > 50
+        ? `\"Cola de parición\" (últimas ${diasRestParto} días): marcar para destete precoz — tienen menos tiempo para recuperar CC`
+        : `Registrar fecha de parto por vaca — la cabeza tiene más tiempo para recuperar antes del servicio`,
+      frio
+        ? `Frío y recién nacidos: revisar hipotermia en las primeras 2 horas — calostro en la primera hora es crítico`
+        : `Confirmar que todos los terneros mamaron calostro en la primera hora de vida`,
+      deficit
+        ? `Déficit forrajero ahora: considerar suplemento proteico a vacas paridas — recuperan CC más rápido`
+        : `Monitorear CC de vacas paridas — marcar las que bajan de 3.5`,
+    ];
+    siguiente = { label: "Post-parto", diasFaltan: diasRestParto };
+
+  } else if (hoy > postPartoFin && hoy < preServIni) {
+    fase        = "POST_PARTO";
+    label       = "Post-parto";
+    icono       = "🍼";
+    color       = "#7ec850";
+    diasEnFase  = dias(postPartoFin, hoy);
+    const diasAlPreServ = dias(hoy, preServIni);
+    const diasAlServ    = dias(hoy, ini);
+    descripcion =
+      `Parición terminada. Las vacas están en lactación tardía${climaStr()}. ` +
+      `Tienen ${diasAlServ} días para recuperar CC antes del servicio (${fmtD(ini)}). ` +
+      (ccBaja
+        ? `CC al servicio proyectada: ${ccServ} — por debajo de 4.5. ` +
+          `Este es el período donde el destete precoz tiene mayor impacto: sin ternero al pie la vaca recupera CC en 45–60 días. `
+        : `CC proyectada al servicio: ${ccServ > 0 ? ccServ : "—"} — ` +
+          (ccServ >= 4.5 ? `dentro del rango óptimo. Mantener el manejo.` : `monitorear semanalmente.`));
+    acciones = [
+      `Evaluar CC de todo el rodeo — base para decidir intensidad del destete`,
+      ccBaja
+        ? `Vacas CC <4.0: destete hiperprecoz AHORA — quedan ${diasAlPreServ} días de margen`
+        : `Vacas CC 4.0–4.5: destete anticipado si quedan <60 días para el servicio`,
+      torosBajos
+        ? `Toros CC ${ccToros}: iniciar preparo YA — ${diasAlServ} días hasta el servicio`
+        : `Confirmar CC de toros ≥5.0 para inicio de preparo`,
+      vaq1SinCorr || !vaq2Llega
+        ? `Pesar vaquillonas — confirmar estado antes del servicio`
+        : `Preparar lotes para el inicio del servicio`,
+    ];
+    siguiente = { label: "Pre-servicio", diasFaltan: diasAlPreServ };
+
+  } else if (hoy >= preServIni && hoy < ini) {
+    fase        = "PRE_SERVICIO";
+    label       = "Pre-servicio";
+    icono       = "🎯";
+    color       = "#4a9fd4";
+    diasEnFase  = dias(preServIni, hoy);
+    const diasAlServ = dias(hoy, ini);
+    descripcion =
+      `Faltan ${diasAlServ} días para el inicio del servicio (${fmtD(ini)})${climaStr()}. ` +
+      `La CC que tienen las vacas HOY es prácticamente la CC con la que van a entrar al servicio. ` +
+      (ccBaja
+        ? `CC proyectada: ${ccServ} — por debajo de 4.5. Con ${diasAlServ} días queda una ventana estrecha para el destete hiperprecoz. `
+        : `CC proyectada: ${ccServ > 0 ? ccServ : "—"} — ` + (ccServ >= 4.5 ? `buena posición para el servicio.` : `monitorear.`)) +
+      (torosBajos
+        ? ` Toros CC ${ccToros} — el preparo necesita empezar YA para llegar a 5.5 al inicio del servicio.`
+        : "");
+    acciones = [
+      `ESAN completo de toros — aptitud reproductiva + frotis Trichomonas/Campylobacter`,
+      torosBajos
+        ? `Toros CC ${ccToros}: suplementar ${diasAlServ < 30 ? "URGENTE" : "ahora"} — ${Math.round(diasAlServ * 0.5 * 1.3 / 1000)} kg expeller total por toro`
+        : `CC de toros ≥5.0 — confirmar antes del ingreso al servicio`,
+      ccBaja && diasAlServ > 14
+        ? `Última oportunidad: destete hiperprecoz en vacas CC <4.5 — ${diasAlServ} días para recuperar`
+        : `Organizar los lotes para el inicio del servicio — separar categorías`,
+      `Pesar vaquillonas — confirmar que llegan al 75% PV adulto (${Math.round(pvVaca * 0.75)} kg)`,
+    ];
+    siguiente = { label: "Inicio de servicio", diasFaltan: diasAlServ };
+
+  } else {
+    fase        = "CICLO_CERRADO";
+    label       = "Ciclo anterior cerrado";
+    icono       = "🔄";
+    color       = "#888";
+    diasEnFase  = 0;
+    descripcion = "Las fechas de servicio cargadas corresponden a un ciclo ya cerrado. Actualizalas para el próximo ciclo.";
+    acciones    = ["Actualizar las fechas de servicio al próximo ciclo"];
+    siguiente   = null;
+  }
+
+  const mesHoy = hoy.getMonth();
+  const esInviernoCritico = mesHoy >= 5 && mesHoy <= 7;
+  const esParicion = fase === "PARTO";
+  const esServicio = fase === "SERVICIO";
+
+  return {
+    fase, label, icono, color, diasEnFase, descripcion, acciones, siguiente,
+    esInviernoCritico, esParicion, esServicio,
+    fechaServIni: ini.toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit" }),
+    fechaServFin: fin.toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit" }),
+    fechaParto:   partoIni.toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit" }),
+  };
+}
+
 function calcCerebro(motor, form, sat) {
   if (!motor) return null;
 
@@ -4940,6 +5356,10 @@ function calcCerebro(motor, form, sat) {
     nVacas, nToros, nV2s, nVaq2, nVaq1,
     ccPondVal, pvEntVaq1, pvEntradaVaq2,
   } = motor;
+
+  // ── FASE DEL CICLO HOY — se calcula después de tener las variables del motor ──
+  // (se llena abajo, después de calcular ccServ, ccToros, etc.)
+  let faseCiclo = null; // se asigna más abajo
 
   // Variables climáticas reales (sat) vs históricas (fallback)
   const tempHoy   = parseFloat(sat?.temp) || null;
@@ -5041,10 +5461,53 @@ function calcCerebro(motor, form, sat) {
     ? `${tempRef}°C actuales · NDVI ${ndviRef.toFixed(2)} · lluvia 30d: ${lluviaRef}mm · ENSO ${ensoTexto} · ${provincia}`
     : `Clima histórico ${provincia} (sin datos sat cargados)`;
 
-  // ── PÁRRAFO — hilo conductor forraje → nutrición → CC → preñez → $ ──
+  // ── FASE DEL CICLO — ahora con todas las variables del rodeo disponibles ──
+  const balanceMesActual = (() => {
+    const mes = new Date().getMonth();
+    return balanceMensual.find(m => m.i === mes)?.balance ?? 0;
+  })();
+  faseCiclo = calcFaseCiclo(cadena, form, {
+    tempHoy:      tempHoy !== null ? tempRef : null,
+    ndviHoy:      ndviHoy !== null ? ndviRef : null,
+    p30Hoy:       p30Hoy  !== null ? lluviaRef : null,
+    ccServ, ccToros, prenez,
+    mesesDeficit, peorBalanceMcal,
+    pvVaca, nVacas: nVacasN,
+    vaq1SinCorr, vaq2Llega, pvVaq2Falta,
+    balanceMesActual,
+  });
+
+  // ── PÁRRAFO — hilo conductor: fase del ciclo → forraje → CC → preñez ──
   const partes = [];
 
-  // BLOQUE 1: El pasto — punto de partida con contexto climático real
+  // BLOQUE 0: Ancla al momento del ciclo — el técnico sabe dónde está parado
+  if (faseCiclo && faseCiclo.fase !== "SIN_FECHA" && faseCiclo.fase !== "CICLO_CERRADO") {
+    const faseLab = faseCiclo.label.toLowerCase();
+    const ctxFase =
+      faseCiclo.fase === "PARTO"
+        ? `Las vacas están pariendo ahora — es el momento de mayor requerimiento del año y el de mayor riesgo para la preñez del próximo ciclo.`
+        : faseCiclo.fase === "SERVICIO"
+        ? `El servicio está activo — cada día que pasa sin que una vaca cicle es un ciclo estral menos disponible.`
+        : faseCiclo.fase === "PRE_SERVICIO"
+        ? `Faltan ${faseCiclo.siguiente?.diasFaltan ?? "pocos"} días para el servicio — la CC que tienen hoy las vacas es prácticamente la CC con la que van a entrar.`
+        : faseCiclo.fase === "PRE_PARTO"
+        ? `Las vacas están en los últimos días de gestación antes del parto. Es la única ventana del año donde el suplemento en adultas tiene retorno real.`
+        : faseCiclo.fase === "TACTO"
+        ? `Es el momento del tacto rectal — las decisiones de descarte que se toman ahora definen cuánto pasto queda disponible para el invierno.`
+        : faseCiclo.fase === "POST_PARTO"
+        ? `La parición terminó. Las vacas están en lactación tardía con ${faseCiclo.siguiente?.diasFaltan ?? "—"} días para recuperar CC antes del servicio.`
+        : faseCiclo.fase === "GESTACION_MEDIA"
+        ? `Las vacas preñadas están en gestación media — el momento de menor requerimiento del ciclo. La energía invertida ahora rinde más en vaquillona que en vaca adulta.`
+        : `El rodeo está en ${faseLab}.`;
+    partes.push(
+      `Hoy el rodeo está en ${faseLab}. ${ctxFase} ` +
+      (faseCiclo.esInviernoCritico
+        ? `Es invierno crítico en NEA — el pasto C4 está en dormancia y los requerimientos de lactación y gestación se cruzan en el peor momento.`
+        : "")
+    );
+  }
+
+  // BLOQUE 1: El pasto — lo que hay disponible ahora y lo que viene en invierno
   if (mesesDeficit === 3) {
     partes.push(
       `El pasto es el punto de partida de todo. Este invierno el balance cierra en rojo los tres meses — junio, julio y agosto. ` +
@@ -5104,16 +5567,24 @@ function calcCerebro(motor, form, sat) {
   // BLOQUE 3: La herramienta — destete o suplemento, cuál y por qué
   if (ccServ > 0 && ccServ < 4.5) {
     const pctHiper = parseFloat(form.destHiper) || 0;
+    // Contexto climático: si es invierno y frío, urgencia mayor
+    const textoClimaDest = frio
+      ? `Con ${tempRef}°C el C4 está dormido — el pasto no va a aportar energía extra esta semana. `
+      : seco
+      ? `Con ${lluviaRef}mm en 30 días el pasto está estresado — aporta menos de lo que indica el mapa. `
+      : "";
     if (pctHiper < 30) {
       partes.push(
         `La herramienta principal para recuperar esa CC no es el suplemento — es el destete. ` +
         `Con el ternero al pie, la vaca gasta 6–8 Mcal/día en leche. Ningún suplemento cubre ese costo de manera rentable. ` +
+        textoClimaDest +
         `El destete corta ese gasto y la vaca retoma ciclos en 7–14 días (Wiltbank 1990). ` +
         `El suplemento entra después, en preparto, cuando ya no tiene ternero al pie y cada Mcal va directo a CC y al feto.`
       );
     } else {
       partes.push(
         `El destete hiperprecoz ya está siendo usado — eso libera la energía que la vaca necesita para recuperar CC. ` +
+        textoClimaDest +
         `El paso siguiente es la suplementación en preparto: los últimos 60 días sin ternero al pie es la única ventana ` +
         `donde el suplemento en vacas adultas tiene retorno real.`
       );
@@ -5122,32 +5593,42 @@ function calcCerebro(motor, form, sat) {
 
   // BLOQUE 4: Vaquillona — cuántos años tarda en recuperar
   if (hayVaq2 && !vaq2Llega) {
+    // El NDVI real del mes actual dice cuánto pasto hay disponible para compensar
+    const textoPastoVaq = pastoBajo
+      ? `Con NDVI ${ndviRef.toFixed(2)} el pasto actual no alcanza para compensar sin suplemento. `
+      : ndviRef >= 0.55
+      ? `NDVI ${ndviRef.toFixed(2)} — buen pasto ahora, pero si estamos en primavera el próximo invierno va a volver a ser el cuello. `
+      : "";
     partes.push(
       `La vaquillona de segundo invierno no llega al peso de entore — le faltan ${pvVaq2Falta} kg para los ${vaq2E?.pvMinEntore || 0} kg mínimos (75% PV adulto). ` +
+      textoPastoVaq +
       `Si entra así al servicio, va a tener menor preñez y mayor intervalo entre partos. ` +
-      `Se estima que tarda ${anosRecupVaq2} parición${anosRecupVaq2 > 1 ? "es" : ""} en alcanzar su potencial productivo pleno (Bavera & Peñafort 2006). ` +
-      `Por ${nVaq2} vaquillonas, eso es una pérdida acumulada de $${costoPerdVaq2.toLocaleString("es-AR")} — ` +
-      `comparado con el costo del suplemento invernal que es una fracción de eso.`
+      `Se estima que tarda ${anosRecupVaq2} parición${anosRecupVaq2 > 1 ? "es" : ""} en alcanzar su potencial productivo pleno (Bavera & Peñafort 2006). `
     );
   }
   if (vaq1SinCorr) {
     partes.push(
       `La vaquillona de primer invierno está ganando solo ${vaq1E?.gdpReal || 0} g/día — insuficiente. ` +
+      (frio ? `El frío actual (${tempRef}°C) agrava el problema: el C4 está en dormancia y la PB del pasto cae por debajo de 7%. ` : ``) +
       `En pastizal C4 encañado (PB <8%), el problema no es la cantidad de pasto sino la proteína: ` +
       `sin ella la microflora ruminal no funciona y la digestión de la fibra cae (Detmann/NASSEM 2010). ` +
-      `Sin corrección, no llega al peso de entore: entore postergado un año = un ternero perdido por animal = ` +
-      `$${costoPerdVaq1.toLocaleString("es-AR")} por vaquillona que no entra. 0.3–0.5 kg de expeller resuelve esto.`
+      `Sin corrección, no llega al peso de entore: entore postergado un año = un ternero perdido por animal. ` +
+      `0.3–0.5 kg de expeller resuelve esto.`
     );
   }
 
   // BLOQUE 5: Toros — eslabón final de la cadena antes del servicio
   if (ccToros > 0 && ccToros < 5.0) {
     const urgToro = diasHastaServ !== null && diasHastaServ < 75;
+    // Si hace frío → el toro también está bajo presión forrajera
+    const textoClimaToro = frio && pastoBajo
+      ? `Con ${tempRef}°C y NDVI ${ndviRef.toFixed(2)}, el pasto no compensa solo — el preparo necesita suplemento ahora. `
+      : urgToro
+      ? `El servicio arranca en ${diasHastaServ} días — es el momento justo para empezar el preparo. `
+      : `Hay tiempo para preparlos antes del servicio. `;
     partes.push(
       `Los toros tienen CC ${ccToros}. ` +
-      (urgToro
-        ? `El servicio arranca en ${diasHastaServ} días — es el momento justo para empezar el preparo. `
-        : `Hay tiempo para preparlos antes del servicio. `) +
+      textoClimaToro +
       `Un toro en CC <5.0 trabaja menos: libido reducida, eyaculados de menor volumen, menos celos cubiertos por día (Chenoweth 1994). ` +
       `Ese efecto es silencioso — no se ve, pero se cuenta en la preñez final.`
     );
@@ -5326,10 +5807,69 @@ function calcCerebro(motor, form, sat) {
   const ordTarj = { URGENTE:0, P1:1, P2:2, P3:3 };
   tarjetas.sort((a,b) => (ordTarj[a.prioridad]??9) - (ordTarj[b.prioridad]??9));
 
+  // ── CALENDARIO DE ACCIONES ─────────────────────────────────────
+  // Convierte cada tarjeta en evento con mes inicio y fin reales
+  // Ancla todo al servicio, parto y destete del rodeo
+  const mesServR  = cadena?.ini  ? cadena.ini.getMonth()        : 11; // dic default
+  const mesParto  = cadena?.partoTemp ? cadena.partoTemp.getMonth() : (mesServR + 9) % 12;
+  const mesesLactN = parseFloat(form.destTrad||"100") > 50 ? 6 : parseFloat(form.destHiper||"0") > 30 ? 2 : 4;
+  const mesDestR  = (mesParto + Math.round(mesesLactN)) % 12;
+  const mesPrepToro = (mesServR - 3 + 12) % 12;
+  const mesPreparto = (mesParto - 2 + 12) % 12;
+
+  // Hitos del rodeo — se muestran siempre como marcadores en la línea de tiempo
+  const hitos = [
+    { mes: mesParto,    label:"Parto",    icono:"🐄", color:"#7ec850" },
+    { mes: mesDestR,    label:"Destete",  icono:"🍼", color:"#e8a030" },
+    { mes: mesServR,    label:"Servicio", icono:"🐂", color:"#4a9fd4" },
+  ];
+
+  // Eventos del calendario: {id, label, icono, mesIni, mesFin, prioridad, color}
+  const eventos = [];
+  const cp = { URGENTE:"#e05530", P1:"#e8a030", P2:"#4a9fd4", P3:"#888" };
+
+  tarjetas.forEach(t => {
+    let mesIni, mesFin;
+    if (t.id === "destete_cc") {
+      // Destete hiperprecoz: desde hoy o desde mesDestR-4 hasta mesServR-45d
+      mesIni = (mesDestR - 3 + 12) % 12;
+      mesFin = (mesServR - 2 + 12) % 12;
+    } else if (t.id === "supl_preparto") {
+      mesIni = mesPreparto;
+      mesFin = (mesParto - 1 + 12) % 12;
+    } else if (t.id === "toros_prep" || t.id === "esan_toros") {
+      mesIni = mesPrepToro;
+      mesFin = (mesServR - 1 + 12) % 12;
+    } else if (t.id === "vaq1_prot") {
+      mesIni = 4; mesFin = 7; // mayo–agosto siempre
+    } else if (t.id === "vaq2_supl") {
+      mesIni = 4; mesFin = 7;
+    } else if (t.id.startsWith("san_")) {
+      // Sanidad: intentar parsear el mes del campo "cuando"
+      const mMap = { ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11 };
+      const cuando = (t.cuando||"").toLowerCase();
+      const found = Object.entries(mMap).find(([k]) => cuando.includes(k));
+      mesIni = found ? found[1] : mesServR;
+      mesFin = mesIni;
+    } else if (t.id === "agua_sal") {
+      mesIni = new Date().getMonth(); mesFin = (mesIni + 2) % 12;
+    } else {
+      mesIni = mesServR; mesFin = mesServR;
+    }
+    eventos.push({
+      id: t.id, label: t.titulo, icono: t.icono,
+      mesIni, mesFin,
+      prioridad: t.prioridad, color: cp[t.prioridad] || "#888",
+      que: t.que, conexion: t.conexion, impacto: t.impacto,
+    });
+  });
+
   return {
     parrafo,
     tarjetas,
     contextoClima,
+    calendarioAcciones: { eventos, hitos, mesServR, mesParto, mesDestR },
+    faseCiclo,
     resumen: {
       ternerosBase,
       ternerosPot,
@@ -5345,6 +5885,124 @@ function calcCerebro(motor, form, sat) {
 }
 
 // ── COMPONENTE: Trayectoria visual continua Vaq1 → Vaq2 ──────────────
+// ── COMPONENTE: Panel de fase del ciclo reproductivo ──────────────────
+// Muestra en qué momento del año ganadero está el rodeo HOY.
+// Es la primera cosa que ve el asesor — ancla todo el diagnóstico.
+function PanelFaseCiclo({ faseCiclo }) {
+  const [abierto, setAbierto] = React.useState(true);
+  if (!faseCiclo || faseCiclo.fase === "SIN_FECHA") {
+    return (
+      <div style={{ background:`${C.textFaint}08`, border:`1px dashed ${C.border}`,
+        borderRadius:12, padding:12, marginBottom:12,
+        fontFamily:C.font, fontSize:10, color:C.textFaint, textAlign:"center" }}>
+        📅 Cargá las fechas de servicio para activar el diagnóstico contextual
+      </div>
+    );
+  }
+
+  const { label, icono, color, diasEnFase, descripcion, acciones, siguiente,
+          fechaServIni, fechaServFin, fechaParto } = faseCiclo;
+
+  // Las 8 fases como línea de tiempo circular
+  const FASES_ORD = [
+    { id:"PRE_SERVICIO",  short:"Pre-serv.", ico:"🎯" },
+    { id:"SERVICIO",      short:"Servicio",  ico:"🐂" },
+    { id:"POST_SERVICIO", short:"Post-serv.",ico:"📋" },
+    { id:"TACTO",         short:"Tacto",     ico:"🔬" },
+    { id:"GESTACION_MEDIA",short:"Gestación",ico:"🌿" },
+    { id:"PRE_PARTO",     short:"Preparto",  ico:"⚡" },
+    { id:"PARTO",         short:"Parición",  ico:"🐄" },
+    { id:"POST_PARTO",    short:"Post-parto",ico:"🍼" },
+  ];
+  const idxActual = FASES_ORD.findIndex(f => f.id === faseCiclo.fase);
+
+  return (
+    <div style={{ background:`${color}0a`, border:`1px solid ${color}35`,
+      borderRadius:14, marginBottom:12, overflow:"hidden" }}>
+
+      {/* ── Header clickeable ── */}
+      <div onClick={() => setAbierto(!abierto)}
+        style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px",
+          cursor:"pointer" }}>
+        <span style={{ fontSize:22 }}>{icono}</span>
+        <div style={{ flex:1 }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color, letterSpacing:1, marginBottom:2 }}>
+            FASE ACTUAL DEL CICLO
+          </div>
+          <div style={{ fontFamily:C.font, fontSize:14, color:C.text, fontWeight:700 }}>
+            {label}
+          </div>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:2 }}>
+            {diasEnFase > 0 ? `Día ${diasEnFase} de esta fase` : "Comienza hoy"}
+            {siguiente ? ` · Próximo: ${siguiente.label} en ${siguiente.diasFaltan}d` : ""}
+          </div>
+        </div>
+        <div style={{ textAlign:"right", flexShrink:0 }}>
+          <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+            Serv. {fechaServIni}–{fechaServFin}
+          </div>
+          <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+            Parto ~{fechaParto}
+          </div>
+          <div style={{ fontFamily:C.font, fontSize:12, color:C.textFaint, marginTop:4 }}>
+            {abierto ? "▲" : "▼"}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Línea de tiempo de fases ── */}
+      <div style={{ display:"flex", overflowX:"auto", gap:2, padding:"0 14px 10px",
+        scrollbarWidth:"none" }}>
+        {FASES_ORD.map((f, idx) => {
+          const esCurrent = f.id === faseCiclo.fase;
+          const esPasada  = idxActual >= 0 && idx < idxActual;
+          return (
+            <div key={f.id} style={{ flex:"0 0 auto", textAlign:"center",
+              padding:"5px 7px", borderRadius:8, minWidth:52,
+              background: esCurrent ? `${color}20` : "transparent",
+              border: esCurrent ? `1px solid ${color}60` : "1px solid transparent",
+              opacity: esPasada ? 0.4 : 1 }}>
+              <div style={{ fontSize:12 }}>{f.ico}</div>
+              <div style={{ fontFamily:C.font, fontSize:7,
+                color: esCurrent ? color : C.textFaint,
+                fontWeight: esCurrent ? 700 : 400, marginTop:2 }}>
+                {f.short}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Descripción y acciones expandibles ── */}
+      {abierto && (
+        <div style={{ borderTop:`1px solid ${color}20`, padding:"12px 14px" }}>
+          <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim,
+            lineHeight:1.7, marginBottom:10 }}>
+            {descripcion}
+          </div>
+          <div style={{ fontFamily:C.font, fontSize:9, color, letterSpacing:1, marginBottom:6 }}>
+            QUÉ HACER AHORA
+          </div>
+          {acciones.map((a, i) => (
+            <div key={i} style={{ display:"flex", gap:8, marginBottom:6,
+              alignItems:"flex-start" }}>
+              <div style={{ width:18, height:18, borderRadius:"50%", flexShrink:0,
+                background:`${color}20`, border:`1px solid ${color}40`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontFamily:C.font, fontSize:9, color, fontWeight:700 }}>
+                {i + 1}
+              </div>
+              <div style={{ fontFamily:C.font, fontSize:11, color:C.text, lineHeight:1.5 }}>
+                {a}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TrayectoriaVaquillona({ motor, form }) {
   if (!motor) return null;
   const { vaq1E, vaq2E, pvEntVaq1, pvEntradaVaq2 } = motor;
@@ -5491,16 +6149,27 @@ function TabCerebro({ motor, form, sat }) {
   // C disponible en scope global
 
   const colorPrio = { URGENTE:C.red, P1:C.amber, P2:C.blue, P3:C.textFaint };
-  const { parrafo, tarjetas, resumen, contextoClima } = cerebro;
+  const { parrafo, tarjetas, resumen, contextoClima, calendarioAcciones, faseCiclo } = cerebro;
+  const [eventoSel, setEventoSel] = React.useState(null);
+  const mesHoy = new Date().getMonth();
+  const MESES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
   return (
     <div>
-      {/* ── RESUMEN 3 NÚMEROS ──────────────────────────────────── */}
+      {/* ── FASE DEL CICLO — ANCLA TEMPORAL ────────────────────── */}
+      <PanelFaseCiclo faseCiclo={faseCiclo} />
+
+      {/* ── RESUMEN 3 NÚMEROS — contextual según fase ──────────── */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:12 }}>
         {[
           { label:"PREÑEZ HOY", val:`${resumen.prenez}%`, sub: resumen.prenez >= 75 ? "✓ dentro del rango" : "↑ potencial: "+resumen.prenezPot+"%", color: resumen.prenez >= 75 ? C.green : C.amber },
           { label:"CC AL SERVICIO", val: resumen.ccServ > 0 ? resumen.ccServ : "—", sub: resumen.ccServ >= 4.5 ? "✓ óptima" : resumen.ccServ > 0 ? "↑ necesita ≥4.5" : "Sin datos", color: resumen.ccServ >= 4.5 ? C.green : resumen.ccServ > 0 ? C.amber : C.textFaint },
-          { label:"SERVICIO EN", val: resumen.diasHastaServ !== null ? `${resumen.diasHastaServ}d` : "—", sub: resumen.iniServDate ? resumen.iniServDate : "Cargar fecha", color: resumen.diasHastaServ !== null && resumen.diasHastaServ < 45 ? C.red : C.textDim },
+          // Tercer número cambia según la fase: días al servicio, días al parto, o días al tacto
+          faseCiclo?.fase === "PARTO" || faseCiclo?.fase === "PRE_PARTO"
+            ? { label:"PARTO EN", val: faseCiclo.fase === "PARTO" ? "Ahora" : `${faseCiclo.siguiente?.diasFaltan ?? "—"}d`, sub: faseCiclo.fase === "PARTO" ? "Parición activa" : "Primeras pariciones", color: C.red }
+            : faseCiclo?.fase === "TACTO" || faseCiclo?.fase === "POST_SERVICIO"
+            ? { label:"TACTO EN", val: `${faseCiclo.siguiente?.diasFaltan ?? "—"}d`, sub: "Diagnóstico preñez", color: C.amber }
+            : { label:"SERVICIO EN", val: resumen.diasHastaServ !== null ? `${resumen.diasHastaServ}d` : "—", sub: resumen.iniServDate ? resumen.iniServDate : "Cargar fecha", color: resumen.diasHastaServ !== null && resumen.diasHastaServ < 45 ? C.red : C.textDim },
         ].map((k,i) => (
           <div key={i} style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, padding:10, textAlign:"center" }}>
             <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, letterSpacing:1, marginBottom:4 }}>{k.label}</div>
@@ -5544,59 +6213,243 @@ function TabCerebro({ motor, form, sat }) {
         <TrayectoriaVaquillona motor={motor} form={form} />
       )}
 
-      {/* ── TARJETAS DE ACCIÓN ─────────────────────────────────── */}
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
-        {tarjetas.length > 0 ? `${tarjetas.length} ACCIONES — ordenadas por urgencia` : "SIN ALERTAS ACTIVAS"}
-      </div>
-      {tarjetas.map((t) => {
-        const abierta = expandida === t.id;
-        const cp = colorPrio[t.prioridad] || C.textDim;
+      {/* ── CALENDARIO DE ACCIONES DEL AÑO ────────────────────── */}
+      {calendarioAcciones && (() => {
+        const { eventos, hitos, mesServR, mesParto, mesDestR } = calendarioAcciones;
+        const ev = eventos;
         return (
-          <div key={t.id}
-            onClick={() => setExpandida(abierta ? null : t.id)}
-            style={{ background:C.card2, border:`1px solid ${abierta ? cp : C.border}`,
-              borderRadius:12, padding:"12px 14px", marginBottom:8, cursor:"pointer",
-              transition:"border-color 0.2s" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontFamily:C.font, fontSize:16 }}>{t.icono}</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontFamily:C.font, fontSize:11, color:"#c8e0c0", fontWeight:700 }}>
-                  {t.titulo}
-                </div>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:2 }}>
-                  📅 {t.cuando}
-                </div>
-              </div>
-              <div style={{ textAlign:"right" }}>
-                <div style={{ fontFamily:C.font, fontSize:8, color:cp, fontWeight:700, letterSpacing:1 }}>
-                  {t.prioridad}
-                </div>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:2 }}>
-                  {abierta ? "▲" : "▼"}
-                </div>
-              </div>
+          <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12,
+            padding:14, marginBottom:12 }}>
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
+              📅 CALENDARIO — QUÉ HACER CADA MES
             </div>
-            {abierta && (
-              <div style={{ marginTop:12, borderTop:`1px solid ${C.border}`, paddingTop:10 }}>
-                <div style={{ fontFamily:C.font, fontSize:10, color:"#c8e0c0", lineHeight:1.6, marginBottom:8 }}>
-                  <strong>Qué hacer:</strong> {t.que}
+
+            {/* Grilla de meses */}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(12,1fr)", gap:2 }}>
+              {MESES_C.map((m, i) => {
+                const esHoy    = i === mesHoy;
+                const hitosMes = hitos.filter(h => h.mes === i);
+                const evMes    = ev.filter(e => {
+                  // el evento cubre este mes (circular)
+                  if (e.mesIni <= e.mesFin) return i >= e.mesIni && i <= e.mesFin;
+                  return i >= e.mesIni || i <= e.mesFin; // cruza fin de año
+                });
+                const maxPrio  = evMes.reduce((best, e) => {
+                  const ord = { URGENTE:0, P1:1, P2:2, P3:3 };
+                  return (ord[e.prioridad]??9) < (ord[best]??9) ? e.prioridad : best;
+                }, null);
+                const bg = maxPrio === "URGENTE" ? "rgba(224,85,48,.18)"
+                         : maxPrio === "P1"      ? "rgba(232,160,48,.14)"
+                         : maxPrio === "P2"      ? "rgba(74,159,212,.12)"
+                         : maxPrio === "P3"      ? "rgba(136,136,136,.08)"
+                         : "transparent";
+                const borderCol = esHoy ? C.green : maxPrio ? (
+                  maxPrio==="URGENTE"?C.red : maxPrio==="P1"?C.amber : maxPrio==="P2"?C.blue : C.border
+                ) : C.border;
+                return (
+                  <div key={i} style={{
+                    borderRadius:6, padding:"5px 2px", textAlign:"center",
+                    background:bg, border:`1px solid ${borderCol}`,
+                    opacity: evMes.length === 0 && !hitosMes.length ? 0.45 : 1,
+                  }}>
+                    {/* Nombre mes */}
+                    <div style={{ fontFamily:C.font, fontSize:7,
+                      color: esHoy ? C.green : C.textFaint,
+                      fontWeight: esHoy ? 700 : 400 }}>
+                      {m}{esHoy ? " ◉" : ""}
+                    </div>
+                    {/* Hitos del rodeo */}
+                    {hitosMes.map(h => (
+                      <div key={h.label} title={h.label}
+                        style={{ fontSize:10, lineHeight:1.2 }}>{h.icono}</div>
+                    ))}
+                    {/* Puntos de acción */}
+                    <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:1, marginTop:2 }}>
+                      {evMes.slice(0,4).map(e => (
+                        <div key={e.id}
+                          onClick={() => setEventoSel(eventoSel?.id===e.id ? null : e)}
+                          title={e.label}
+                          style={{ width:7, height:7, borderRadius:"50%",
+                            background:e.color, cursor:"pointer", flexShrink:0 }} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Leyenda hitos */}
+            <div style={{ display:"flex", gap:10, marginTop:8, flexWrap:"wrap" }}>
+              {hitos.map(h => (
+                <span key={h.label} style={{ fontFamily:C.font, fontSize:8, color:h.color }}>
+                  {h.icono} {h.label} ({MESES_C[h.mes]})
+                </span>
+              ))}
+              <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginLeft:"auto" }}>
+                ● Urgente &nbsp;● P1 &nbsp;● P2
+              </span>
+            </div>
+
+            {/* Detalle del evento seleccionado */}
+            {eventoSel && (
+              <div style={{ marginTop:10, padding:"10px 12px",
+                background:`${eventoSel.color}12`,
+                border:`1px solid ${eventoSel.color}40`, borderRadius:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                  <div style={{ fontFamily:C.font, fontSize:11, color:"#c8e0c0", fontWeight:700, marginBottom:4 }}>
+                    {eventoSel.icono} {eventoSel.label}
+                  </div>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:eventoSel.color, fontWeight:700 }}>
+                    {MESES_C[eventoSel.mesIni]}{eventoSel.mesFin!==eventoSel.mesIni?`–${MESES_C[eventoSel.mesFin]}`:""}
+                  </div>
                 </div>
-                {t.conexion && (
-                  <div style={{ background:`${cp}10`, border:`1px solid ${cp}25`, borderRadius:8, padding:"8px 10px" }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:cp, marginBottom:3, letterSpacing:1 }}>POR QUÉ IMPORTA EN ESTE RODEO</div>
-                    <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, lineHeight:1.5 }}>{t.conexion}</div>
+                <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, lineHeight:1.6, marginBottom:6 }}>
+                  {eventoSel.que}
+                </div>
+                {eventoSel.conexion && (
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, lineHeight:1.5,
+                    borderTop:`1px solid ${C.border}`, paddingTop:6 }}>
+                    {eventoSel.conexion}
                   </div>
                 )}
-                {t.impacto && (
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:8 }}>
-                    💰 {t.impacto}
+                {eventoSel.impacto && (
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:6 }}>
+                    💰 {eventoSel.impacto}
                   </div>
                 )}
               </div>
             )}
           </div>
         );
-      })}
+      })()}
+
+      {/* ── TARJETAS DE ACCIÓN ─────────────────────────────────── */}
+      {(() => {
+        // Tarjetas "AHORA" — calculadas desde el estado real del rodeo + fase del ciclo
+        // No es una lista fija: si los toros ya tienen CC ≥5.5, toros_prep no es urgente
+        const fase = faseCiclo?.fase || "";
+        const ccTorHoy  = parseFloat(cerebro?.resumen?.ccServ || 0); // proxy — ccServ del resumen
+        const faseTarjIds = (() => {
+          const ids = [];
+          // Agua salada — siempre urgente si hay problema
+          if (tarjetas.find(t => t.id === "agua_sal")) ids.push("agua_sal");
+          // Sanidad urgente — siempre
+          tarjetas.filter(t => t.id.startsWith("san_") && t.prioridad === "URGENTE")
+            .forEach(t => ids.push(t.id));
+
+          // Por fase:
+          if (fase === "SERVICIO" || fase === "PRE_SERVICIO") {
+            // Toros: solo si CC <5.0 o sin ESAN
+            if (tarjetas.find(t => t.id === "toros_prep"))  ids.push("toros_prep");
+            if (tarjetas.find(t => t.id === "esan_toros"))  ids.push("esan_toros");
+            // Destete: solo si CC al servicio baja
+            if (tarjetas.find(t => t.id === "destete_cc"))  ids.push("destete_cc");
+          }
+          if (fase === "POST_PARTO") {
+            if (tarjetas.find(t => t.id === "destete_cc"))  ids.push("destete_cc");
+          }
+          if (fase === "GESTACION_MEDIA" || fase === "POST_SERVICIO") {
+            // Vaquillona: solo si hay problema real
+            if (tarjetas.find(t => t.id === "vaq1_prot"))   ids.push("vaq1_prot");
+            if (tarjetas.find(t => t.id === "vaq2_supl"))   ids.push("vaq2_supl");
+          }
+          if (fase === "PRE_PARTO") {
+            if (tarjetas.find(t => t.id === "supl_preparto")) ids.push("supl_preparto");
+            // Toros también — van a entrar al servicio en ~4 meses
+            if (tarjetas.find(t => t.id === "toros_prep"))   ids.push("toros_prep");
+          }
+          if (fase === "PARTO") {
+            // En parición: solo los urgentes y sanidad — no abrumar con todo
+            // las tarjetas de suplemento/destete son para después del parto
+          }
+          if (fase === "TACTO") {
+            // En tacto el foco es la decisión de descarte — ninguna tarjeta de suplemento es urgente ahora
+            tarjetas.filter(t => t.id.startsWith("san_prog_")).forEach(t => ids.push(t.id));
+          }
+          return [...new Set(ids)]; // deduplicar
+        })();
+        const mesHoyLocal = new Date().getMonth();
+
+        // Ordenar: las "ahora" primero, luego por prioridad original
+        const tarjetasOrdenadas = [...tarjetas].sort((a, b) => {
+          const aAhora = faseTarjIds.includes(a.id) ? 0 : 1;
+          const bAhora = faseTarjIds.includes(b.id) ? 0 : 1;
+          if (aAhora !== bAhora) return aAhora - bAhora;
+          const ordP = { URGENTE:0, P1:1, P2:2, P3:3 };
+          return (ordP[a.prioridad]??9) - (ordP[b.prioridad]??9);
+        });
+
+        return (
+          <div>
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
+              {tarjetasOrdenadas.length > 0
+                ? `${tarjetasOrdenadas.length} ACCIONES — ${faseTarjIds.length > 0 ? faseTarjIds.filter(id => tarjetasOrdenadas.find(t=>t.id===id)).length + " urgentes ahora · " : ""}ordenadas por momento del ciclo`
+                : "SIN ALERTAS ACTIVAS"}
+            </div>
+            {tarjetasOrdenadas.map((t) => {
+              const abierta   = expandida === t.id;
+              const cp        = colorPrio[t.prioridad] || C.textDim;
+              const esAhora   = faseTarjIds.includes(t.id);
+              const borderBase = esAhora ? (faseCiclo?.color || C.amber) : (abierta ? cp : C.border);
+              return (
+                <div key={t.id}
+                  onClick={() => setExpandida(abierta ? null : t.id)}
+                  style={{ background: esAhora ? `${faseCiclo?.color || C.amber}08` : C.card2,
+                    border:`1px solid ${borderBase}`,
+                    borderRadius:12, padding:"12px 14px", marginBottom:8, cursor:"pointer",
+                    transition:"border-color 0.2s" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontFamily:C.font, fontSize:16 }}>{t.icono}</span>
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginBottom:2 }}>
+                        <span style={{ fontFamily:C.font, fontSize:11, color:"#c8e0c0", fontWeight:700 }}>
+                          {t.titulo}
+                        </span>
+                        {esAhora && (
+                          <span style={{ fontFamily:C.font, fontSize:7, color:faseCiclo?.color || C.amber,
+                            background:`${faseCiclo?.color || C.amber}18`, borderRadius:4,
+                            padding:"1px 5px", letterSpacing:.5, fontWeight:700 }}>
+                            AHORA
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+                        📅 {t.cuando}
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontFamily:C.font, fontSize:8, color:esAhora ? (faseCiclo?.color || C.amber) : cp, fontWeight:700, letterSpacing:1 }}>
+                        {esAhora ? faseCiclo?.label?.toUpperCase().split(" ")[0] || t.prioridad : t.prioridad}
+                      </div>
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:2 }}>
+                        {abierta ? "▲" : "▼"}
+                      </div>
+                    </div>
+                  </div>
+                  {abierta && (
+                    <div style={{ marginTop:12, borderTop:`1px solid ${C.border}`, paddingTop:10 }}>
+                      <div style={{ fontFamily:C.font, fontSize:10, color:"#c8e0c0", lineHeight:1.6, marginBottom:8 }}>
+                        <strong>Qué hacer:</strong> {t.que}
+                      </div>
+                      {t.conexion && (
+                        <div style={{ background:`${cp}10`, border:`1px solid ${cp}25`, borderRadius:8, padding:"8px 10px" }}>
+                          <div style={{ fontFamily:C.font, fontSize:9, color:cp, marginBottom:3, letterSpacing:1 }}>POR QUÉ IMPORTA EN ESTE RODEO</div>
+                          <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, lineHeight:1.5 }}>{t.conexion}</div>
+                        </div>
+                      )}
+                      {t.impacto && (
+                        <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:8 }}>
+                          💰 {t.impacto}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {tarjetas.length === 0 && (
         <div style={{ background:C.card2, border:`1px solid ${C.green}40`, borderRadius:12, padding:20, textAlign:"center" }}>
@@ -8447,32 +9300,88 @@ function AgroMindPro() {
             <TabCerebro motor={motor} form={form} sat={sat} />
           )}
 
-          {/* TAB ACCIONES — recomendaciones + informe expandible */}
+          {/* TAB ACCIONES — informe IA como protagonista */}
           {tab === "acciones" && (
             <div>
-              <PanelRecomendaciones motor={motor} form={form} />
-              {/* Informe IA — expandible si existe, botón generarlo si no */}
-              {result ? (
-                <details style={{ marginTop:12 }}>
-                  <summary style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, cursor:"pointer", padding:"8px 12px", background:C.card2, borderRadius:8, border:`1px solid ${C.border}`, listStyle:"none" }}>
-                    📄 Ver informe completo del asesor IA ▼
-                  </summary>
-                  <div style={{ marginTop:8 }}>
-                    <RenderInforme texto={result} />
+              {/* ── Sin informe: CTA principal + preview de cuellos ── */}
+              {!result && !loading && (() => {
+                const dx = diagnosticarSistema(motor, form);
+                const P1 = (dx?.cuellos||[]).filter(c=>c.prioridad==="P1");
+                const P2 = (dx?.cuellos||[]).filter(c=>c.prioridad==="P2");
+                return (
+                  <div>
+                    {/* Preview cuellos detectados */}
+                    {(P1.length > 0 || P2.length > 0) && (
+                      <div style={{ marginBottom:14 }}>
+                        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
+                          🔍 {P1.length + P2.length} LIMITANTES DETECTADOS
+                        </div>
+                        {[...P1,...P2].map(c => (
+                          <div key={c.id} style={{
+                            display:"flex", alignItems:"center", gap:10, padding:"10px 12px",
+                            background: c.prioridad==="P1" ? `${C.red}08` : `${C.amber}07`,
+                            border:`1px solid ${c.prioridad==="P1"?C.red:C.amber}25`,
+                            borderRadius:10, marginBottom:6,
+                          }}>
+                            <span style={{ fontSize:16 }}>{c.icono}</span>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontFamily:C.font, fontSize:8, color:c.prioridad==="P1"?C.red:C.amber, letterSpacing:.5, marginBottom:2 }}>
+                                {c.prioridad} · {c.categoria}
+                              </div>
+                              <div style={{ fontFamily:C.fontSans||C.font, fontSize:12, color:C.text, fontWeight:500 }}>
+                                {c.titulo}
+                              </div>
+                              <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:2 }}>
+                                📈 {c.impacto}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <button onClick={runAnalysis} style={{ width:"100%", background:C.green, color:"#0b1a0c", padding:16, borderRadius:14, border:"none", fontFamily:C.font, fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:1, marginBottom:10 }}>
+                      ⚡ GENERAR INFORME TÉCNICO
+                    </button>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, textAlign:"center" }}>
+                      El informe incluye diagnóstico completo, planes de acción con dosis y fundamento científico
+                    </div>
                   </div>
-                </details>
-              ) : (
-                <button onClick={runAnalysis} style={{ width:"100%", background:`${C.green}15`, border:`1px solid ${C.green}40`, borderRadius:10, color:C.green, padding:13, fontFamily:C.font, fontSize:12, cursor:"pointer", marginTop:12, fontWeight:700, letterSpacing:1 }}>
-                  ⚡ GENERAR INFORME IA
-                </button>
-              )}
-              {/* PDF y CSV siempre disponibles */}
-              <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                <button onClick={descargarPDF} style={{ flex:2, background:`${C.blue}12`, border:`1px solid ${C.blue}35`, borderRadius:10, color:C.blue, padding:13, fontFamily:C.sans, fontSize:13, cursor:"pointer" }}>⬇ PDF</button>
-                <button onClick={descargarCSV} style={{ flex:1, background:`${C.green}10`, border:`1px solid ${C.green}35`, borderRadius:10, color:C.green, padding:13, fontFamily:C.sans, fontSize:13, cursor:"pointer" }}>📊 CSV</button>
-              </div>
-              {result && (
-                <button onClick={runAnalysis} style={{ width:"100%", background:`${C.green}06`, border:`1px solid ${C.border}`, borderRadius:10, color:C.textDim, padding:11, fontFamily:C.sans, fontSize:12, cursor:"pointer", marginTop:8 }}>🔄 Regenerar informe</button>
+                );
+              })()}
+
+              {loading && <LoadingPanel msg={loadMsg} />}
+
+              {/* ── Con informe: estructura clara en 3 bloques ── */}
+              {result && !loading && (
+                <div>
+                  {/* BLOQUE 1: Informe IA — protagonista */}
+                  <RenderInforme texto={result} />
+
+                  {/* BLOQUE 2: Planes detallados — accordion secundario */}
+                  <details style={{ marginTop:14 }}>
+                    <summary style={{
+                      fontFamily:C.font, fontSize:10, color:C.textDim, cursor:"pointer",
+                      padding:"10px 14px", background:C.card2, borderRadius:10,
+                      border:`1px solid ${C.border}`, listStyle:"none",
+                      display:"flex", alignItems:"center", justifyContent:"space-between",
+                    }}>
+                      <span>🎯 Planes de acción detallados — dosis, frecuencia y fundamento</span>
+                      <span>▼</span>
+                    </summary>
+                    <div style={{ marginTop:6 }}>
+                      <PanelRecomendaciones motor={motor} form={form} />
+                    </div>
+                  </details>
+
+                  {/* BLOQUE 3: Acciones de exportación */}
+                  <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                    <button onClick={descargarPDF} style={{ flex:2, background:`${C.blue}12`, border:`1px solid ${C.blue}35`, borderRadius:10, color:C.blue, padding:13, fontFamily:C.sans||C.font, fontSize:13, cursor:"pointer" }}>⬇ Exportar PDF</button>
+                    <button onClick={descargarCSV} style={{ flex:1, background:`${C.green}10`, border:`1px solid ${C.green}35`, borderRadius:10, color:C.green, padding:13, fontFamily:C.sans||C.font, fontSize:13, cursor:"pointer" }}>📊 CSV</button>
+                  </div>
+                  <button onClick={runAnalysis} style={{ width:"100%", background:`${C.green}06`, border:`1px solid ${C.border}`, borderRadius:10, color:C.textDim, padding:10, fontFamily:C.sans||C.font, fontSize:12, cursor:"pointer", marginTop:8 }}>
+                    🔄 Regenerar informe
+                  </button>
+                </div>
               )}
             </div>
           )}
