@@ -7429,12 +7429,12 @@ Referencias disponibles:
 export default function Page() {
   return (
     <SessionProvider>
-      <Calf AIPro />
+      <CalfAIPro />
     </SessionProvider>
   );
 }
 
-function Calf AIPro() {
+function CalfAIPro() {
   const { data: session } = useSession();
 
   // Estado principal
