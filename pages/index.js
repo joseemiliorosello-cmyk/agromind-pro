@@ -23,11 +23,11 @@ const BIOTIPOS = {
 
   // ── Braford (Hereford × Cebú) ─────────────────────────────────
   "Braford 3/8":  { movCC:0.83, recCC:0.91, umbralAnestro:3.1, factReq:0.94, nombre:"Braford 3/8 Cebú" },
-  "Braford 5/8":  { movCC:0.87, recCC:0.95, umbralAnestro:3.3, factReq:0.97, nombre:"Braford 5/8 Cebú" },
+  "Braford 5/8":  { movCC:0.87, recCC:0.95, umbralAnestro:3.3, factReq:0.97, nombre:"Braford 5/8" },
 
   // ── Brangus (Angus × Brahman) ─────────────────────────────────
-  "Brangus 3/8":  { movCC:0.82, recCC:0.92, umbralAnestro:3.2, factReq:0.95, nombre:"Brangus 3/8 Cebú" },
-  "Brangus 5/8":  { movCC:0.88, recCC:0.96, umbralAnestro:3.4, factReq:0.98, nombre:"Brangus 5/8 Cebú" },
+  "Brangus 3/8":  { movCC:0.82, recCC:0.92, umbralAnestro:3.2, factReq:0.95, nombre:"Brangus 3/8" },
+  "Brangus 5/8":  { movCC:0.88, recCC:0.96, umbralAnestro:3.4, factReq:0.98, nombre:"Brangus 5/8" },
 
   // ── Británicas puras ───────────────────────────────────────────
   "Hereford":       { movCC:0.98, recCC:0.98, umbralAnestro:3.7, factReq:1.00, nombre:"Hereford" },
@@ -6040,7 +6040,7 @@ function calcCerebro(motor, form, sat) {
       que: `0.3–0.5 kg expeller de girasol/cabeza/día, 2–3 veces por semana. No hace falta diario cuando hay volumen de pasto — la proteína activa el rumen, no reemplaza el forraje.`,
       conexion: `GDP proyectado: ${vaq1E.gdpReal || 0} g/día → con proteína: 300–400 g/día. Sin corrección no llega al entore en agosto — entore postergado 1 año. ` +
         `En C4 encañado (PB <8%) la microflora ruminal falla y arrastra toda la digestión (Detmann/NASSEM 2010).`,
-      impacto: `Entore postergado = 1 ternero perdido por animal = $${Math.round(valorTern * 0.9).toLocaleString("es-AR")} · el expeller cuesta $${Math.round(0.4 * 90 * (form.precioProt || 180)).toLocaleString("es-AR")} por vaquillona en los 90 días`,
+      impacto: "Entore postergado 1 año → 1 ternero menos por vaquillona · con suplemento llega al entore en 24 meses en lugar de 36",
     });
   }
 
@@ -6053,9 +6053,9 @@ function calcCerebro(motor, form, sat) {
       titulo: `Suplementar Vaq2 — le faltan ${pvVaq2Falta} kg para el entore`,
       cuando: "Mayo–Agosto (90–120 días)",
       que: `0.5–0.8 kg expeller/cabeza/día. Si hay pasto escaso, agregar 1–1.5 kg sorgo/maíz diario. Puede ser 2–3 veces por semana si la cantidad de pasto es buena.`,
-      conexion: `Sin suplemento entra al entore con ${vaq2E?.pvEntore || 0} kg — ${pvVaq2Falta} kg por debajo del mínimo (${vaq2E?.pvMinEntore || 0} kg = 75% PV adulto). ` +
-        `Una vaquillona con bajo peso al primer entore tarda ${anosRecupVaq2} ${anosRecupVaq2 > 1 ? "pariciones" : "parición"} en alcanzar su potencial pleno (Bavera & Peñafort 2006). ` +
-        `El costo del suplemento invernal es una fracción de lo que se pierde en producción diferida.`,
+      conexion: "Sin suplemento entra al entore con " + (vaq2E?.pvEntore || 0) + " kg — " + pvVaq2Falta + " kg por debajo del mínimo (" + (vaq2E?.pvMinEntore || 0) + " kg = 75% PV adulto). " +
+        "Una vaquillona con bajo peso al primer entore tarda " + anosRecupVaq2 + " " + (anosRecupVaq2 > 1 ? "pariciones" : "parición") + " en alcanzar su potencial pleno (Bavera & Peñafort 2006).",
+      impacto: "Llega al entore " + anosRecupVaq2 + " año" + (anosRecupVaq2 > 1 ? "s" : "") + " tarde → " + Math.round((motor?.nVaq2 || 0) * anosRecupVaq2 * 0.85) + " terneros diferidos en el rodeo",
     });
   }
 
@@ -7369,12 +7369,52 @@ function AgroMindPro() {
   const [result,      setResult]      = useState("");
   const [tab,         setTab]         = useState("resumen");
   const [modoForraje, setModoForraje] = useState("general");
-  const [usaPotreros, setUsaPotreros] = useState(true); // siempre potreros
+  const [usaPotreros, setUsaPotreros] = useState(true);
   const [potreros,    setPotreros]    = useState([{ ha:"", veg:"Pastizal natural NEA/Chaco", fenol:"menor_10" }]);
-  const [vistaSupl,   setVistaSupl]   = useState("cuadrantes"); // cuadrantes | resumen
+  const [vistaSupl,   setVistaSupl]   = useState("cuadrantes");
+  const [bannerProductor, setBannerProductor] = useState(null); // datos autocargados del productor
 
   const set     = (k, v) => setForm(f => ({ ...f, [k]:v }));
   const setDist = (k, v) => setForm(f => ({ ...f, [k]:v }));
+
+  // ── LEER DATOS DEL PRODUCTOR DESDE URL ───────────────────────
+  // El formulario del productor genera: /?productor=BASE64
+  // Al abrir AgroMind con ese link, los datos se autocargan
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const enc = params.get("productor");
+      if (!enc) return;
+      const datos = JSON.parse(decodeURIComponent(escape(atob(enc))));
+      if (!datos || typeof datos !== "object") return;
+
+      // Mapear los campos del formulario del productor al form completo
+      const campos = [
+        "nombreProductor","localidad","provincia","biotipo",
+        "vacasN","torosN","iniServ","finServ","prenez",
+        "vegetacion","supHa","sanAftosa","sanBrucelosis",
+        "sanToros","sanAbortos","aguaFuente","consultaEspecifica",
+      ];
+      const updates = {};
+      campos.forEach(k => { if (datos[k] !== undefined && datos[k] !== "") updates[k] = datos[k]; });
+
+      if (Object.keys(updates).length > 0) {
+        setForm(f => ({ ...f, ...updates }));
+        setBannerProductor({
+          nombre: datos.nombreProductor || "productor",
+          campos: Object.keys(updates).length,
+        });
+        // Saltar al paso análisis si hay datos suficientes
+        if (datos.vacasN && datos.provincia) setStep(7);
+        // Limpiar el parámetro de la URL sin recargar
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+      }
+    } catch (e) {
+      console.warn("Error leyendo datos del productor:", e);
+    }
+  }, []);
 
   // ── MOTOR DE INFERENCIA v16 ──────────────────────────────────
   // Un único hook que propaga todos los cambios en cascada
@@ -7407,12 +7447,36 @@ function AgroMindPro() {
   const dispar     = sat && form.provincia ? calcDisp(form.provincia, sat.ndvi, sat.temp) : null;
   const nVaqRepos  = motor?.nVaq1 ?? Math.round((parseInt(form.vacasN)||0) * (parseFloat(form.pctReposicion)||20) / 100);
 
-  // ── EFECTO: fetch satelital al cambiar coords / enso ──────────
+  // Coordenadas de referencia por provincia — permite traer clima sin GPS
+  const COORDS_PROV = {
+    "Corrientes":               { lat:-28.5, lon:-58.8 },
+    "Chaco":                    { lat:-26.9, lon:-60.0 },
+    "Formosa":                  { lat:-24.9, lon:-59.4 },
+    "Entre Ríos":               { lat:-31.7, lon:-60.5 },
+    "Santa Fe":                 { lat:-31.0, lon:-60.7 },
+    "Santiago del Estero":      { lat:-27.8, lon:-64.3 },
+    "Salta":                    { lat:-24.8, lon:-65.4 },
+    "Buenos Aires":             { lat:-36.6, lon:-60.3 },
+    "Córdoba":                  { lat:-32.1, lon:-63.5 },
+    "La Pampa":                 { lat:-37.1, lon:-65.4 },
+    "Paraguay Oriental":        { lat:-25.3, lon:-57.6 },
+    "Chaco Paraguayo":          { lat:-22.5, lon:-60.0 },
+    "Mato Grosso do Sul (BR)":  { lat:-20.5, lon:-55.0 },
+    "Mato Grosso / Goiás (BR)": { lat:-15.0, lon:-52.0 },
+    "Santa Cruz / Beni (BO)":   { lat:-16.5, lon:-62.0 },
+    "Tarija / Chaco (BO)":      { lat:-22.0, lon:-63.5 },
+    "Rio Grande do Sul (BR)":   { lat:-30.0, lon:-53.0 },
+    "Pantanal (BR)":            { lat:-17.0, lon:-57.5 },
+  };
+
+  // ── EFECTO: fetch satelital ────────────────────────────────────
+  // Usa GPS si disponible; si no, usa centroide de la provincia seleccionada
+  // → el clima llega siempre que el usuario haya elegido provincia
   useEffect(() => {
-    if (!coords) return;
+    const refCoords = coords || (form.provincia ? COORDS_PROV[form.provincia] : null);
+    if (!refCoords) return;
     setSat(null);
-    fetchSat(coords.lat, coords.lon, form.zona, form.provincia, form.enso, setSat);
-    // Asegurar que si el fetch demora, se muestra el spinner
+    fetchSat(refCoords.lat, refCoords.lon, form.zona || "NEA", form.provincia, form.enso, setSat);
   }, [coords, form.enso, form.zona, form.provincia]);
 
   // ── GPS ───────────────────────────────────────────────────────
@@ -8242,7 +8306,7 @@ function AgroMindPro() {
             ]} />
           </div>
           {form.torosLote === "distribuidos" && (
-            <Input label="CANTIDAD DE LOTES (con toros)" value={form.torosLotes||""} onChange={v=>set("torosLotes",v)} placeholder="Ej: 3" type="number" sub="Verificar que cada lote tiene al menos 1 toro" />
+            <Input label="CANTIDAD DE LOTES (con toros)" value={form.torosLotes||""} onChange={v=>set("torosLotes",v)} placeholder="" type="number" sub="Verificar que cada lote tiene al menos 1 toro" />
           )}
           {/* Diagnóstico automático */}
           {(() => {
@@ -8302,19 +8366,19 @@ function AgroMindPro() {
             ["Indobrasil",   "Indobrasil"],
           ]},
           { label:"── Braford (Hereford × Cebú) ──", opts:[
-            ["Braford 3/8",  "Braford 3/8 Cebú  ← más común NEA"],
-            ["Braford 5/8",  "Braford 5/8 Cebú"],
+            ["Braford 3/8",  "Braford 3/8"],
+            ["Braford 5/8",  "Braford 5/8"],
           ]},
           { label:"── Brangus (Angus × Brahman) ──", opts:[
-            ["Brangus 3/8",  "Brangus 3/8 Cebú"],
-            ["Brangus 5/8",  "Brangus 5/8 Cebú"],
+            ["Brangus 3/8",  "Brangus 3/8"],
+            ["Brangus 5/8",  "Brangus 5/8"],
           ]},
           { label:"── Británicas puras ─────────────", opts:[
             ["Hereford",       "Hereford"],
             ["Aberdeen Angus", "Aberdeen Angus"],
           ]},
         ]}
-        sub="Braford = Hereford × Cebú · Brangus = Angus × Brahman · Cebú puro = mayor tolerancia al calor"
+        
       />
       {form.biotipo && (
         <div style={{ background:C.card2, borderRadius:10, padding:10, marginBottom:12, border:`1px solid ${C.border}` }}>
@@ -8329,14 +8393,14 @@ function AgroMindPro() {
       {form.primerParto && <Alerta tipo="warn">1° parto: requerimientos +10% · Umbral anestro +0.3 CC</Alerta>}
       <div style={{ height:12 }} />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-        <Input label="VACAS"  value={form.vacasN}  onChange={v=>set("vacasN",v)}  placeholder="200" type="number" />
-        <Input label="TOROS"  value={form.torosN}  onChange={v=>set("torosN",v)}  placeholder="8"   type="number" />
+        <Input label="VACAS"  value={form.vacasN}  onChange={v=>set("vacasN",v)}  placeholder="" type="number" />
+        <Input label="TOROS"  value={form.torosN}  onChange={v=>set("torosN",v)}  placeholder="" type="number" />
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
         <Input label="PV VACA ADULTA (kg)" value={form.pvVacaAdulta} onChange={v=>set("pvVacaAdulta",v)} placeholder="320" type="number" />
-        <Input label="PV TOROS (kg)"       value={form.pvToros}      onChange={v=>set("pvToros",v)}      placeholder="450" type="number" sub="Para suplementación" />
+        <Input label="PV TOROS (kg)"       value={form.pvToros}      onChange={v=>set("pvToros",v)}      placeholder="" type="number" sub="Para suplementación" />
       </div>
-      <Input label="PREÑEZ HISTÓRICA (%)"   value={form.prenez}       onChange={v=>set("prenez",v)}       placeholder="75"  type="number" />
+      <Input label="PREÑEZ HISTÓRICA (%)"   value={form.prenez}       onChange={v=>set("prenez",v)}       placeholder="" type="number" />
       <Input label="% DESTETE HISTÓRICO"    value={form.pctDestete}   onChange={v=>set("pctDestete",v)}   placeholder="88"  type="number" />
       <SelectF label="ESTADO REPRODUCTIVO ACTUAL" value={form.eReprod} onChange={v=>set("eReprod",v)} options={[
         "Gestación temprana (1–4 meses)","Gestación media (5–7 meses)","Preparto (último mes)",
@@ -8428,12 +8492,12 @@ function AgroMindPro() {
       <SelectF label="EDAD AL PRIMER ENTORE"
         value={form.edadPrimerEntore}
         onChange={v=>set("edadPrimerEntore",v)}
-        sub="NEA semiárido: sin suplementación invernal la mayoría llega a 36 meses. Con suplementación bien manejada: 24 meses."
+        
         options={[
-          ["15","15 meses — entore precoz (solo razas precoces con CC ≥5.5 y recría intensiva)"],
-          ["18","18 meses — requiere recría ajustada + suplementación ambos inviernos"],
-          ["24","24 meses — objetivo con suplementación invernal ← recomendado NEA"],
-          ["36","36 meses — sin suplementación invernal (realidad más común en el campo)"],
+          ["15","15 meses"],
+          ["18","18 meses"],
+          ["24","24 meses"],
+          ["36","36 meses"],
         ]}
       />
       {form.edadPrimerEntore && (
@@ -8806,7 +8870,7 @@ function AgroMindPro() {
           </summary>
           <div style={{ background:C.card2, borderRadius:"0 0 12px 12px", padding:14, border:`1px solid ${C.border}`, borderTop:"none" }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-              <Input label="CANTIDAD" value={form.vaq2N} onChange={v=>set("vaq2N",v)} placeholder="30" type="number" />
+              <Input label="CANTIDAD" value={form.vaq2N} onChange={v=>set("vaq2N",v)} placeholder="" type="number" />
               <MetricCard label="PV ENTRADA (kg)" value={pvEntradaVaq2||"—"} color={C.green} sub="Auto desde Vaq1" />
             </div>
             {vaq2E?.alertaSinSupl && <Alerta tipo="error">{vaq2E.alertaSinSupl}</Alerta>}
@@ -8935,8 +8999,8 @@ function AgroMindPro() {
           </div>
 
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-            <Input label="CANTIDAD (cab)" value={form.v2sN}  onChange={v=>set("v2sN",v)}  placeholder="20"  type="number" />
-            <Input label="PV ACTUAL (kg)" value={form.v2sPV} onChange={v=>set("v2sPV",v)} placeholder="310" type="number"
+            <Input label="CANTIDAD (cab)" value={form.v2sN}  onChange={v=>set("v2sN",v)}  placeholder="" type="number" />
+            <Input label="PV ACTUAL (kg)" value={form.v2sPV} onChange={v=>set("v2sPV",v)} placeholder="" type="number"
               sub={form.pvVacaAdulta ? `PV adulta: ${form.pvVacaAdulta}kg · V2S típicamente 85-92% del adulto` : ""} />
           </div>
 
@@ -10183,13 +10247,13 @@ function AgroMindPro() {
             <div>
               <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />
               <TrayectoriaVaquillona motor={motor} form={form} />
-              {tray && dist && (
+              {tray && cadena && (
                 <GraficoCCEscenarios
                   escenarios={[
-                    { label:"Sin cambios", cc:tray, color:C.amber },
-                    { label:"Con destete precoz", cc:{...tray, ccMinLact:Math.min(tray.ccMinLact+0.3, tray.ccParto)}, color:C.green },
+                    { label:"Sin cambios", tray:tray, color:C.amber },
+                    { label:"Con destete precoz", tray:{...tray, ccMinLact:Math.min((tray.ccMinLact||3.5)+0.3, tray.ccParto||4.5)}, color:C.green },
                   ]}
-                  cadena={cadena} mesesLact={tray.mesesLact} form={form} sat={sat}
+                  cadena={cadena} mesesLact={tray.mesesLact || 6} form={form} sat={sat}
                 />
               )}
             </div>
@@ -10286,6 +10350,25 @@ function AgroMindPro() {
           </button>
         </div>
       </div>
+
+      {/* ── Banner: datos del productor autocargados ── */}
+      {bannerProductor && (
+        <div style={{ background:C.green+"12", border:"1px solid "+C.green+"40",
+          borderRadius:0, padding:"10px 16px", display:"flex", alignItems:"center",
+          justifyContent:"space-between", gap:10 }}>
+          <div>
+            <div style={{ fontFamily:C.font, fontSize:10, color:C.green, fontWeight:700 }}>
+              ✓ Datos de {bannerProductor.nombre} cargados automáticamente
+            </div>
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginTop:2 }}>
+              {bannerProductor.campos} campos precargados desde el formulario del productor · Revisá y completá lo que falta
+            </div>
+          </div>
+          <button onClick={() => setBannerProductor(null)}
+            style={{ background:"none", border:"none", color:C.textFaint,
+              cursor:"pointer", fontSize:16, flexShrink:0, padding:"0 4px" }}>✕</button>
+        </div>
+      )}
 
       {/* Título paso */}
       <div style={{ padding:"14px 16px 6px" }}>
