@@ -7133,7 +7133,7 @@ MODELO TÉCNICO v14:
 - CC PARTO (Selk 1988): cada 0.5 unidades CC al parto = 25 días menos de anestro = +8–12 pp preñez. Ventana crítica: últimos 60 días gestación.
 - DESTETE HIPERPRECOZ (Wiltbank 1990): elimina bloqueo LH en 7–14 días. Efecto en CC en 45 días. Herramienta de rescate para vacas CC <4.5.
 - SUPLEMENTACIÓN PROTEICA INVERNAL (Detmann/NASSEM 2010): pasto >50% floración = PB <4% → por debajo del mínimo ruminal. 0.3–0.5 kg/día expeller girasol libera la digestión de fibra disponible. Diario obligatorio.
-- SANIDAD: techo del sistema. Aftosa + Brucelosis = obligatorio legal. IBR/DVB = −15 pp preñez si sin vacunar. Toros sin ESAN = tricomoniasis silenciosa en hasta 40% del rodeo.
+- SANIDAD: techo del sistema. Aftosa + Brucelosis = obligatorio legal. IBR/DVB = −15 pp preñez si sin vacunar. Toros sin revisión pre-servicio = problemas físicos y de libido no detectados.
 
 5 SECCIONES OBLIGATORIAS — emojis exactos al inicio de cada título:
 1️⃣ DIAGNÓSTICO AMBIENTAL
@@ -7380,7 +7380,7 @@ function AgroMindPro() {
 
     t += `\nSANIDAD:\n`;
     t += `  Aftosa: ${form.sanAftosa==="si"?"✅":"⚠️ Sin vacunar"} · Brucelosis: ${form.sanBrucelosis==="si"?"✅":"⚠️ Sin vacunar"} · IBR/DVB: ${form.sanVacunas==="si"?"✅":"⚠️ Sin vacunar"}\n`;
-    t += `  Toros ESAN: ${form.sanToros==="con_control"?"✅":"⚠️ Sin evaluación"} · Abortos: ${form.sanAbortos==="si"?"⚠️ Sí":"No"} · Programa: ${form.sanPrograma==="si"?"✅":"⚠️ No"}\n`;
+    t += "  Rev. toros: " + (form.sanToros==="con_control"?"✅":"⚠️ Sin revisión") + " · Abortos: " + (form.sanAbortos==="si"?"⚠️ Sí":"No") + " · Programa: " + (form.sanPrograma==="si"?"✅":"⚠️ No") + "\n";
 
     if (tray) {
       t += `\nTRAYECTORIA CC (rodeo promedio):\n`;
@@ -7673,7 +7673,7 @@ function AgroMindPro() {
         `Aftosa: ${form.sanAftosa==="si"?"Al dia":"SIN VACUNAR"}`,
         `Brucelosis: ${form.sanBrucelosis==="si"?"Al dia":"SIN VACUNAR"}`,
         `IBR/DVB: ${form.sanVacunas==="si"?"Al dia":"SIN VACUNAR"}`,
-        `Toros ESAN: ${form.sanToros==="con_control"?"Con evaluacion":"SIN EVALUACION"}`,
+        "Rev. toros: " + (form.sanToros==="con_control"?"Con revision":"SIN REVISION"),
         `Abortos: ${form.sanAbortos==="si"?"Si":"No"}`,
         `Programa: ${form.sanPrograma==="si"?"Si":"No"}`,
       ].join("  ·  ");
@@ -7830,7 +7830,7 @@ function AgroMindPro() {
       ["San_aftosa",                form.sanAftosa    === "si" ? "Al_dia" : "Sin_vacunar"],
       ["San_brucelosis",            form.sanBrucelosis=== "si" ? "Al_dia" : "Sin_vacunar"],
       ["San_IBR_DVB",               form.sanVacunas   === "si" ? "Al_dia" : "Sin_vacunar"],
-      ["Toros_ESAN",                form.sanToros     === "con_control" ? "Con_evaluacion" : "Sin_evaluacion"],
+      ["Toros_revision",            form.sanToros     === "con_control" ? "Con_revision" : "Sin_revision"],
       ["Historia_abortos",          form.sanAbortos   === "si" ? "Si" : "No"],
       ["Programa_sanitario",        form.sanPrograma  === "si" ? "Si" : "No"],
       ["San_parasito_externo",      form.sanParasitoExt || ""],
@@ -9536,8 +9536,8 @@ function AgroMindPro() {
       )}
 
       {/* Toros y programa */}
-      <Toggle label="🐂 ¿Toros con evaluación ESAN?"       value={form.sanToros    === "con_control"} onChange={v => set("sanToros",     v ? "con_control" : "sin_control")} />
-      {form.sanToros === "sin_control" && <Alerta tipo="error">Toros sin ESAN: tricomoniasis/campylobacteriosis no detectadas. Infecta 15–40% del rodeo silenciosamente.</Alerta>}
+      <Toggle label="🐂 ¿Toros con revisión pre-servicio?"  value={form.sanToros    === "con_control"} onChange={v => set("sanToros",     v ? "con_control" : "sin_control")} />
+      {form.sanToros === "sin_control" && <Alerta tipo="error">Toros sin revisión pre-servicio: un toro con lesión no detectada puede dejar 15–20 vacas vacías sin que nadie lo note hasta el tacto.</Alerta>}
 
       <Toggle label="📋 ¿Historia de abortos en el rodeo?" value={form.sanAbortos  === "si"} onChange={v => set("sanAbortos",   v ? "si" : "no")} />
       {form.sanAbortos === "si" && <Alerta tipo="warn">Historia de abortos: diagnóstico diferencial IBR/DVB/Leptospira/Brucelosis/Neospora prioritario.</Alerta>}
@@ -9621,9 +9621,8 @@ function AgroMindPro() {
         </div>
       )}
 
-      {/* ══ 4 TABS PRINCIPALES ══ */}
-      {motor && (
-        <div>
+      {/* ══ 4 TABS PRINCIPALES — siempre visibles, se adaptan a los datos disponibles ══ */}
+      <div>
           <div style={{ display:"flex", gap:4, marginBottom:12, overflowX:"auto", scrollbarWidth:"none" }}>
             {[["diagnostico","🔍 Diagnóstico"],["balance","📊 Balance"],["gei","🌿 GEI"],["cerebro","🧠 Cerebro"]].map(([k,l]) => (
               <button key={k} onClick={()=>setTab(k)} style={{
@@ -9639,6 +9638,98 @@ function AgroMindPro() {
           {/* ═══ TAB DIAGNÓSTICO ═══ */}
           {tab === "diagnostico" && (
             <div>
+              {/* ── Banner de puntos críticos — visible aunque el motor sea null ── */}
+              {(() => {
+                // Detectar puntos críticos desde el formulario solo, sin necesitar motor
+                const criticos = [];
+                const oport = [];
+
+                // Sanidad — datos disponibles desde el formulario siempre
+                if (form.sanAftosa !== "si")      criticos.push({ ico:"🔴", txt:"Aftosa sin vacuna — obligatorio legal" });
+                if (form.sanBrucelosis !== "si")  criticos.push({ ico:"🔴", txt:"Brucelosis sin vacuna — obligatorio legal + riesgo zoonótico" });
+                if (form.sanVacunas !== "si")     oport.push({ ico:"🟡", txt:"Sin vacuna IBR/DVB — puede reducir preñez 15pp" });
+                if (form.sanToros !== "con_control") criticos.push({ ico:"🔴", txt:"Toros sin revisión pre-servicio" });
+                if (form.sanAbortos === "si")     oport.push({ ico:"🟡", txt:"Historia de abortos — requiere diagnóstico diferencial" });
+                if (form.sanPrograma !== "si")    oport.push({ ico:"🟡", txt:"Sin programa sanitario estructurado" });
+
+                // CC — si se cargó
+                const cc = parseFloat(form.distribucionCC ? Object.entries(form.distribucionCC||{}).reduce((s,[k,v])=>s+parseFloat(k||0)*(parseFloat(v)||0),0)/Math.max(1,Object.values(form.distribucionCC||{}).reduce((s,v)=>s+(parseFloat(v)||0),0)) : 0);
+                if (cc > 0 && cc < 4.0)  criticos.push({ ico:"🔴", txt:"CC promedio " + cc.toFixed(1) + " — crítica para el servicio (óptimo ≥4.5)" });
+                else if (cc > 0 && cc < 4.5) oport.push({ ico:"🟡", txt:"CC promedio " + cc.toFixed(1) + " — por debajo del óptimo al servicio" });
+
+                // Fechas de servicio
+                const cadenaForm = calcCadena(form.iniServ, form.finServ);
+                if (!form.iniServ || !form.finServ) oport.push({ ico:"🟡", txt:"Sin fechas de servicio — el diagnóstico contextual no puede activarse" });
+                else if (cadenaForm?.diasServ > 90) oport.push({ ico:"🟡", txt:"Servicio de " + cadenaForm.diasServ + " días — cola de preñez pesada (óptimo 75–90d)" });
+
+                // Relación toro:vaca
+                const relTV = parseFloat(form.vacasN||0) / Math.max(1, parseFloat(form.torosN||1));
+                if (form.torosN && relTV > 30) criticos.push({ ico:"🔴", txt:"Relación toros:vacas " + Math.round(relTV) + ":1 — riesgo de vacas no servidas en los primeros 21 días" });
+
+                // Forraje — si hay datos de ubicación
+                if (sat?.ndvi && parseFloat(sat.ndvi) < 0.35) criticos.push({ ico:"🔴", txt:"NDVI " + sat.ndvi + " — pasto escaso ahora (" + (sat.condForr||"crítico") + ")" });
+                else if (sat?.ndvi && parseFloat(sat.ndvi) < 0.45) oport.push({ ico:"🟡", txt:"NDVI " + sat.ndvi + " — condición forrajera regular" });
+
+                // Si no hay ningún dato cargado aún
+                const sinDatos = !form.vacasN && !form.biotipo && !form.iniServ;
+
+                if (sinDatos) return (
+                  <div style={{ background:C.card2, border:"1px dashed "+C.border, borderRadius:12, padding:16, marginBottom:12, textAlign:"center" }}>
+                    <div style={{ fontFamily:C.font, fontSize:26, marginBottom:8 }}>🔍</div>
+                    <div style={{ fontFamily:C.font, fontSize:12, color:C.text, fontWeight:700, marginBottom:4 }}>
+                      Completá los pasos del formulario para ver el diagnóstico
+                    </div>
+                    <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint }}>
+                      Con solo la ubicación ya podés ver el clima y el estado forrajero actual
+                    </div>
+                  </div>
+                );
+
+                if (criticos.length === 0 && oport.length === 0 && !motor) return (
+                  <div style={{ background:C.green+"08", border:"1px solid "+C.green+"30", borderRadius:12, padding:12, marginBottom:12 }}>
+                    <div style={{ fontFamily:C.font, fontSize:10, color:C.green }}>
+                      ✅ Los datos cargados no muestran alertas críticas visibles. Completá los pasos de CC y forraje para el diagnóstico completo.
+                    </div>
+                  </div>
+                );
+
+                return (criticos.length > 0 || oport.length > 0) && (
+                  <div style={{ marginBottom:12 }}>
+                    {criticos.length > 0 && (
+                      <div style={{ background:C.red+"08", border:"1px solid "+C.red+"25", borderRadius:12, padding:"10px 14px", marginBottom:8 }}>
+                        <div style={{ fontFamily:C.font, fontSize:9, color:C.red, letterSpacing:1, marginBottom:8 }}>
+                          🔴 PUNTOS CRÍTICOS DETECTADOS ({criticos.length})
+                        </div>
+                        {criticos.map((c,i) => (
+                          <div key={i} style={{ display:"flex", gap:8, alignItems:"flex-start", marginBottom:5 }}>
+                            <span style={{ fontSize:12 }}>{c.ico}</span>
+                            <span style={{ fontFamily:C.font, fontSize:10, color:C.text, lineHeight:1.5 }}>{c.txt}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {oport.length > 0 && (
+                      <div style={{ background:C.amber+"08", border:"1px solid "+C.amber+"25", borderRadius:12, padding:"10px 14px" }}>
+                        <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, letterSpacing:1, marginBottom:8 }}>
+                          🟡 OPORTUNIDADES DE MEJORA ({oport.length})
+                        </div>
+                        {oport.map((c,i) => (
+                          <div key={i} style={{ display:"flex", gap:8, alignItems:"flex-start", marginBottom:5 }}>
+                            <span style={{ fontSize:12 }}>{c.ico}</span>
+                            <span style={{ fontFamily:C.font, fontSize:10, color:C.text, lineHeight:1.5 }}>{c.txt}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!motor && (
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:8, textAlign:"center" }}>
+                        Completá los pasos de CC, Forraje y Categorías para el diagnóstico completo con balance forrajero y proyección de preñez
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Fase del ciclo */}
               {motor?.cadena && <PanelFaseCiclo faseCiclo={calcFaseCiclo(motor.cadena, form,
                 { tempHoy: sat?.temp ? parseFloat(sat.temp) : null,
@@ -9887,7 +9978,6 @@ function AgroMindPro() {
             </div>
           )}
         </div>
-      )}
     </div>
     );
   };
