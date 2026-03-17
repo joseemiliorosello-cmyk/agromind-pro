@@ -53,8 +53,8 @@ const getSupl = (k) => SUPLEMENTOS[k] || SUPLEMENTOS["Expeller girasol"];
 
 // ─── PRODUCCIÓN BASE FORRAJERA ────────────────────────────────────
 const PROD_BASE = {
-  "Pastizal natural NEA/Chaco":                   14,
-  "Megatérmicas C4 (gatton panic, brachiaria)":   22,
+  "Pastizal natural":                   14,
+  "Megatérmicas C4":   22,
   "Pasturas templadas C3":                         16,
   "Mixta gramíneas+leguminosas":                   18,
   "Bosque nativo":                                  2.5,
@@ -297,8 +297,8 @@ function calcTrayectoriaCC(params) {
     provincia,
   } = params;
 
-  const ccH = ccPond(dist);
-  if (!ccH || !cadena) return null;
+  const ccH = ccPond(dist) || 4.5; // fallback 4.5 si no hay CC cargada
+  if (!cadena) return null;
 
   const bt       = getBiotipo(biotipo);
   const ha       = parseFloat(supHa) || 100;
@@ -795,7 +795,7 @@ function calcVaq2(pvEntradaVaq1Sal, pvAdulta, ndvi, disponMS, fenologia, suplRea
   const pvSal1 = parseFloat(pvEntradaVaq1Sal) || 0;
   const pva    = parseFloat(pvAdulta) || 320;
   if (!pvSal1) return { _aviso:"PV se calcula automáticamente desde la salida del 1° invierno." };
-  // Vaq2 SIEMPRE necesita suplementación — pasto solo da 120-250 g/d en invierno NEA
+  // Vaq2: en invierno NEA el pasto solo da 120-250 g/d — suplementación recomendada para llegar al objetivo de entore
   // Sin suplemento llega a destino con déficit de PV irrecuperable antes del entore
 
   const pvMayo2Inv      = calcPvEntradaVaq2(pvSal1);
@@ -1579,7 +1579,7 @@ function correrMotor(form, sat, potreros, usaPotreros) {
 
   // ── 1.4 Oferta mensual con variación estacional ──────────────
   const ofertaMensual = calcOfertaMensualArray(
-    form.vegetacion || "Pastizal natural NEA/Chaco",
+    form.vegetacion || "Pastizal natural",
     ndviN, form.provincia || "Corrientes", enso, form.fenologia,
     form.zona || "NEA"
   ).map(v => +(v * factorAgua).toFixed(2)); // agua reduce oferta real
@@ -2357,23 +2357,27 @@ function Input({ label, value, onChange, placeholder, type = "text", sub, warn, 
 }
 
 // ─── SELECT F ────────────────────────────────────────────────────
-function SelectF({ label, value, onChange, options, groups, sub }) {
+function SelectF({ label, value, onChange, options, groups, sub, placeholder }) {
   // options = [[val, label], ...] plana
   // groups  = [{ label:"Grupo", opts:[[val,label],...] }, ...]
+  // placeholder = opción vacía inicial
   return (
     <div style={{ marginBottom:14 }}>
       {label && <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:5 }}>{label}</div>}
       <select
         value={value} onChange={e => onChange(e.target.value)}
-        style={{ width:"100%", background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, color:C.text, padding:"12px 14px", fontFamily:C.sans, fontSize:14 }}
+        style={{ width:"100%", background:C.card2, border:`1px solid ${C.border}`, borderRadius:10,
+          color: value ? C.text : C.textFaint,
+          padding:"12px 14px", fontFamily:C.sans, fontSize:14 }}
       >
+        {placeholder && <option value="">{placeholder}</option>}
         {groups
           ? groups.map(g => (
               <optgroup key={g.label} label={g.label}>
                 {g.opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </optgroup>
             ))
-          : options.map(([v, l]) => <option key={v} value={v}>{l}</option>)
+          : (options||[]).map(([v, l]) => <option key={v} value={v}>{l}</option>)
         }
       </select>
       {sub && <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:3 }}>{sub}</div>}
@@ -2568,8 +2572,8 @@ function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
     const sup    = parseFloat(form?.supHa)    || 100;
     const pctM   = parseFloat(form?.pctMonte) || 0;
     const pctN   = parseFloat(form?.pctNGan)  || 0;
-    const ofTotal = calcOfPasto(form?.vegetacion || "Pastizal natural NEA/Chaco", ndviI, h.t, h.p, enso, fenolMs) * sup * Math.max(0, 100-pctM-pctN) / 100;
-    const ofVaca  = nTotal > 0 ? ofTotal / nTotal : calcOfPasto(form?.vegetacion || "Pastizal natural NEA/Chaco", ndviI, h.t, h.p, enso, fenolMs) * 0.024 * pvVaca;
+    const ofTotal = calcOfPasto(form?.vegetacion || "Pastizal natural", ndviI, h.t, h.p, enso, fenolMs) * sup * Math.max(0, 100-pctM-pctN) / 100;
+    const ofVaca  = nTotal > 0 ? ofTotal / nTotal : calcOfPasto(form?.vegetacion || "Pastizal natural", ndviI, h.t, h.p, enso, fenolMs) * 0.024 * pvVaca;
     const enLact  = i >= mesP && i < mesP + Math.ceil(mesesLactGraf);
     const eRep    = enLact ? "Lactación con ternero al pie" : i === ((mesP-1+12)%12) ? "Preparto (último mes)" : "Gestación media (5–7 meses)";
     const demVaca = reqEM(pvVaca, eRep, form?.biotipo) || 13;
@@ -2798,8 +2802,8 @@ function calcCO2PastizalAnual(veg, ndvi, supHa, cargaEV_ha, precipAnual, t_media
   // Rango base de secuestro de C según tipo de vegetación
   // McSherry & Ritchie 2013 + IPCC 2006 Vol.4 Tabla 6.1
   const SOC_BASE_KGC_HA = {
-    "Pastizal natural NEA/Chaco":                 220, // kg C/ha/año — pastizal nativo C4
-    "Megatérmicas C4 (gatton panic, brachiaria)": 280, // C4 implantada, mayor productividad
+    "Pastizal natural":                 220, // kg C/ha/año — pastizal nativo C4
+    "Megatérmicas C4": 280, // C4 implantada, mayor productividad
     "Pasturas templadas C3":                       200, // C3 subtropical
     "Mixta gramíneas+leguminosas":                 250, // fijación N mejora ciclo C
     "Bosque nativo":                               350, // mayor biomasa aérea+raíz
@@ -3246,7 +3250,7 @@ function calcGEI(form, motor, tray, sat) {
 
   // ── BALANCE CO₂ PASTIZAL ──────────────────────────────────────────────────────
   const co2Pastizal = calcCO2PastizalAnual(
-    form.vegetacion || "Pastizal natural NEA/Chaco",
+    form.vegetacion || "Pastizal natural",
     ndvi, supHa, cargaEV, precipAnual, t_media
   );
 
@@ -3616,7 +3620,7 @@ function PanelGEI({ form, motor, tray, sat }) {
             PRODUCTIVIDAD PRIMARIA NETA (NPP)
           </div>
           {[
-            ["Vegetación", form.vegetacion || "Pastizal natural NEA/Chaco", T.text],
+            ["Vegetación", form.vegetacion || "Pastizal natural", T.text],
             ["NPP real ajustada", p.NPP_real + " kgC/ha/año", G.co2],
             ["NEP (secuestro neto)", p.NEP + " kgC/ha/año", p.NEP > 0 ? G.mejor : G.inefi],
             ["Efecto carga animal", p.factCarga > 0 ? "+" + (p.factCarga * 100).toFixed(0) + "% (secuestro adicional)" : p.factCarga === 0 ? "Neutral" : (p.factCarga * 100).toFixed(0) + "% (degrada)", p.factCarga > 0 ? G.mejor : p.factCarga === 0 ? T.textFaint : G.inefi],
@@ -3843,9 +3847,9 @@ function GraficoBalance({ form, sat, cadena, tray, motor }) {
   const verdeoMesI  = motor?.verdeoMesInicio ?? 7;
   const tieneVerdeo = form?.tieneVerdeo === "si" && verdeoMcal > 0;
 
-  if (!bm) return (
+  if (!bm || bm.length === 0) return (
     <div style={{ padding:24, textAlign:"center", fontFamily:T.font, fontSize:11, color:T.textFaint }}>
-      Completá los datos del rodeo para ver el balance energético
+      Completá provincia, vegetación y vacas para ver el balance energético
     </div>
   );
 
@@ -6635,317 +6639,372 @@ function DashboardEstablecimiento({ motor, form, sat, score, onTab }) {
 
 // ── COMPONENTE: Tab Cerebro ───────────────────────────────────────────
 function TabCerebro({ motor, form, sat }) {
-  const cerebro = React.useMemo(() => calcCerebro(motor, form, sat), [motor, form, sat]);
+  const cerebro    = React.useMemo(() => calcCerebro(motor, form, sat), [motor, form, sat]);
   const [expandida, setExpandida] = React.useState(null);
   if (!cerebro) return null;
 
-  // C disponible en scope global
-
   const colorPrio = { URGENTE:C.red, P1:C.amber, P2:C.blue, P3:C.textFaint };
   const { parrafo, tarjetas, resumen, contextoClima, calendarioAcciones, faseCiclo } = cerebro;
-  const [eventoSel, setEventoSel] = React.useState(null);
   const mesHoy = new Date().getMonth();
   const MESES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const pvVaca  = parseFloat(form.pvVacaAdulta) || 320;
+  const tray    = motor?.tray;
+  const balMen  = motor?.balanceMensual ?? [];
+  const smf     = (v, ok, warn) => v >= ok ? C.green : v >= warn ? C.amber : C.red;
+
+  // ── Construir tarjetas de dimensión (CC, balance, vaquillona, sanidad, toros) ──
+  const ccServ  = parseFloat(tray?.ccServ || 0);
+  const prenez  = tray?.pr ?? null;
+  const anestro = tray?.anestro?.dias ?? null;
+  const mesesDef = balMen.filter(m=>[5,6,7].includes(m.i)&&m.balance<0).length;
+  const peorBal  = balMen.filter(m=>[5,6,7].includes(m.i)).reduce((mn,m)=>m.balance<(mn?.balance??0)?m:mn,null);
+  const vaq1E   = motor?.vaq1E;
+  const vaq2E   = motor?.vaq2E;
+  const sanidad = motor?.sanidad;
+  const ccToros = parseFloat(form.torosCC || 0);
+
+  const DIMS = [
+    // ── CC AL SERVICIO ────────────────────────────────────────────
+    {
+      id:"cc", icono:"📊", titulo:"Condición corporal al servicio",
+      valor: ccServ > 0 ? ccServ.toFixed(1) : "—",
+      unidad: "/ 9",
+      color: ccServ > 0 ? smf(ccServ, 4.5, 4.0) : C.textFaint,
+      estado: ccServ <= 0 ? "Sin dato" : ccServ >= 4.5 ? "Óptima" : ccServ >= 4.0 ? "Por debajo del óptimo" : "Crítica",
+      filas: [
+        ["CC hoy",     tray?.ccHoy    ? tray.ccHoy.toFixed(1)    : "—",  tray?.ccHoy    ? smf(tray.ccHoy,4.5,4.0)    : null],
+        ["CC parto",   tray?.ccParto  ? tray.ccParto.toFixed(1)  : "—",  tray?.ccParto  ? smf(tray.ccParto,4.5,4.0)  : null],
+        ["CC mín. lact",tray?.ccMinLact? tray.ccMinLact.toFixed(1): "—", tray?.ccMinLact? smf(tray.ccMinLact,3.5,3.0): null],
+        ["CC al serv", ccServ > 0     ? ccServ.toFixed(1)        : "—",  ccServ > 0     ? smf(ccServ,4.5,4.0)        : null],
+        ["Preñez est.", prenez != null ? prenez + "%" : "—",              prenez != null ? smf(prenez,65,45)          : null],
+        ["Anestro pp", anestro != null ? anestro + "d" : "—",             anestro != null ? smf(1/Math.max(1,anestro),1/60,1/90) : null],
+      ],
+      alerta: ccServ > 0 && ccServ < 4.5
+        ? "CC por debajo de 4.5 — cada 0.5 puntos menos reduce preñez ~8pp (NRC 2000)"
+        : ccServ <= 0 ? "Sin CC cargada — el motor usa valores estimados" : null,
+    },
+    // ── BALANCE FORRAJERO ─────────────────────────────────────────
+    {
+      id:"balance", icono:"🌾", titulo:"Balance forrajero invernal",
+      valor: mesesDef === 0 ? "✓" : mesesDef + "/3",
+      unidad: mesesDef === 0 ? "sin déficit" : "meses déficit",
+      color: mesesDef === 0 ? C.green : mesesDef === 1 ? C.amber : C.red,
+      estado: mesesDef === 0 ? "Balance positivo" : mesesDef === 1 ? "Déficit moderado" : "Déficit severo",
+      filas: [
+        ["Jun", balMen[5]?.balance != null ? (balMen[5].balance>0?"+":"") + Math.round(balMen[5].balance) + " Mcal/d" : "—", balMen[5]?.balance != null ? (balMen[5].balance>=0?C.green:C.red) : null],
+        ["Jul", balMen[6]?.balance != null ? (balMen[6].balance>0?"+":"") + Math.round(balMen[6].balance) + " Mcal/d" : "—", balMen[6]?.balance != null ? (balMen[6].balance>=0?C.green:C.red) : null],
+        ["Ago", balMen[7]?.balance != null ? (balMen[7].balance>0?"+":"") + Math.round(balMen[7].balance) + " Mcal/d" : "—", balMen[7]?.balance != null ? (balMen[7].balance>=0?C.green:C.red) : null],
+        ["Peor mes", peorBal ? MESES_C[peorBal.i] + ": " + Math.round(peorBal.balance) + " Mcal/d" : "—", peorBal?.balance < 0 ? C.red : C.green],
+        ["NDVI hoy", sat?.ndvi ? sat.ndvi + " (" + (sat.condForr||"—") + ")" : "—", sat?.ndvi ? smf(parseFloat(sat.ndvi),0.50,0.35) : null],
+        ["Temp. hoy", sat?.temp ? sat.temp + "°C" : "—", sat?.temp && parseFloat(sat.temp) < 15 ? C.amber : C.green],
+      ],
+      alerta: mesesDef >= 2
+        ? "Déficit " + mesesDef + " meses — pérdida de CC invernal sin intervención"
+        : mesesDef === 1 ? "Un mes con déficit — manejable con suplemento o ajuste de carga" : null,
+    },
+    // ── VAQUILLONA ────────────────────────────────────────────────
+    {
+      id:"vaquillona", icono:"🐮", titulo:"Vaquillona de reposición",
+      valor: !vaq1E && !vaq2E ? "—" : (vaq2E?.llegas === false ? "⚠" : "✓"),
+      unidad: !vaq1E && !vaq2E ? "sin datos" : vaq2E?.llegas === false ? "no llega" : "en camino",
+      color: !vaq1E && !vaq2E ? C.textFaint : vaq2E?.llegas === false ? C.red : C.green,
+      estado: !vaq1E && !vaq2E ? "Sin datos de vaquillona" : vaq2E?.llegas === false ? "No llega al entore" : "Trayectoria correcta",
+      filas: [
+        ["Vaq1 GDP pasto", vaq1E ? vaq1E.gdpPasto + " g/d" : "—", vaq1E ? smf(vaq1E.gdpPasto,400,200) : null],
+        ["Vaq1 GDP c/supl", vaq1E ? vaq1E.gdpReal + " g/d" : "—", vaq1E ? smf(vaq1E.gdpReal,533,350) : null],
+        ["Vaq1 PV agosto", vaq1E?.pvSal ? vaq1E.pvSal + " kg" : "—", vaq1E?.pvSal ? smf(vaq1E.pvSal,Math.round(pvVaca*0.55),Math.round(pvVaca*0.45)) : null],
+        ["Vaq2 PV entore", vaq2E?.pvEntore ? Math.round(vaq2E.pvEntore) + " kg" : "—", vaq2E ? (vaq2E.llegas ? C.green : C.red) : null],
+        ["Vaq2 objetivo", vaq2E?.pvMinEntore ? Math.round(vaq2E.pvMinEntore) + " kg (75% adulto)" : "—", null],
+        ["Llega al entore", !vaq2E ? "Sin datos" : vaq2E.llegas ? "Sí ✓" : "No — faltan " + Math.round(Math.max(0,(vaq2E.pvMinEntore||0)-(vaq2E.pvEntore||0))) + " kg", vaq2E ? (vaq2E.llegas ? C.green : C.red) : null],
+      ],
+      alerta: vaq2E && !vaq2E.llegas
+        ? "Vaq2 no llega al entore — suplementar invierno para cubrir el déficit de " + Math.round(Math.max(0,(vaq2E.pvMinEntore||0)-(vaq2E.pvEntore||0))) + " kg"
+        : !vaq1E && !vaq2E ? "Sin datos de vaquillona — cargá cantidad y edad en el paso Categorías" : null,
+    },
+    // ── SANIDAD ───────────────────────────────────────────────────
+    {
+      id:"sanidad", icono:"🩺", titulo:"Sanidad",
+      valor: (sanidad?.alerts||[]).filter(a=>a.nivel==="rojo").length === 0 ? "✓" : (sanidad?.alerts||[]).filter(a=>a.nivel==="rojo").length,
+      unidad: (sanidad?.alerts||[]).filter(a=>a.nivel==="rojo").length === 0 ? "sin alertas" : "alertas críticas",
+      color: (sanidad?.alerts||[]).filter(a=>a.nivel==="rojo").length > 0 ? C.red : (sanidad?.alerts||[]).filter(a=>a.nivel==="ambar").length > 0 ? C.amber : C.green,
+      estado: (sanidad?.alerts||[]).filter(a=>a.nivel==="rojo").length > 0 ? "Alertas críticas" : "Sin alertas",
+      filas: [
+        ["Aftosa",      form.sanAftosa==="si"?"Al día ✓":"⚠ Sin vacunar",  form.sanAftosa==="si"?C.green:C.red],
+        ["Brucelosis",  form.sanBrucelosis==="si"?"Al día ✓":"⚠ Sin vacunar", form.sanBrucelosis==="si"?C.green:C.red],
+        ["IBR/DVB",     form.sanVacunas==="si"?"Al día ✓":"Sin vacunar",   form.sanVacunas==="si"?C.green:C.amber],
+        ["Rev. toros",  form.sanToros==="con_control"?"Con revisión ✓":"Sin revisión", form.sanToros==="con_control"?C.green:C.red],
+        ["Abortos",     form.sanAbortos==="si"?"⚠ Sí — revisar":"No",      form.sanAbortos==="si"?C.amber:C.green],
+        ["Prog. sanit.", form.sanPrograma==="si"?"Sí ✓":"No",               form.sanPrograma==="si"?C.green:C.amber],
+      ],
+      alerta: form.sanAftosa!=="si" || form.sanBrucelosis!=="si"
+        ? "Vacunación obligatoria incompleta — riesgo legal y sanitario"
+        : null,
+    },
+    // ── TOROS ─────────────────────────────────────────────────────
+    {
+      id:"toros", icono:"🐂", titulo:"Toros — preparo servicio",
+      valor: ccToros > 0 ? ccToros.toFixed(1) : "—",
+      unidad: ccToros > 0 ? "CC actual" : "sin dato",
+      color: ccToros > 0 ? smf(ccToros, 5.0, 4.5) : C.textFaint,
+      estado: ccToros <= 0 ? "Sin CC registrada" : ccToros >= 5.5 ? "Óptimo" : ccToros >= 5.0 ? "Aceptable" : "Requiere preparo",
+      filas: [
+        ["CC actual",    ccToros > 0 ? ccToros.toFixed(1) : "—",     ccToros > 0 ? smf(ccToros,5.0,4.5) : null],
+        ["Objetivo serv.","≥5.5",                                      C.green],
+        ["Cantidad",     form.torosN ? form.torosN + " cab" : "—",    null],
+        ["Relación T:V", form.vacasN && form.torosN ? Math.round(parseFloat(form.vacasN)/parseFloat(form.torosN)) + ":1" : "—",
+          form.vacasN && form.torosN ? (parseFloat(form.vacasN)/parseFloat(form.torosN) > 30 ? C.amber : C.green) : null],
+        ["Rev. pre-serv.",form.sanToros==="con_control"?"Sí ✓":"Pendiente", form.sanToros==="con_control"?C.green:C.amber],
+        ["Días al serv.", cerebro?.resumen?.diasHastaServ != null ? cerebro.resumen.diasHastaServ + "d" : "—", null],
+      ],
+      alerta: ccToros > 0 && ccToros < 5.0
+        ? "CC " + ccToros + " — iniciar preparo ahora: " + Math.round((5.5-ccToros)/0.018) + " días para llegar a CC 5.5"
+        : ccToros <= 0 ? "Sin CC de toros — registrar en el paso Rodeo" : null,
+    },
+  ];
+
+  // ── Cronograma Gantt — acciones del año ─────────────────────────
+  // Construir eventos desde tarjetas + calendario del cerebro + fase del ciclo
+  const eventosGantt = React.useMemo(() => {
+    const eventos = [];
+    const mesServ = cerebro?.resumen?.iniServDate
+      ? new Date(cerebro.resumen.iniServDate).getMonth() : null;
+    const mesParto = motor?.cadena?.partoTemp
+      ? motor.cadena.partoTemp.getMonth() : null;
+
+    // Desde tarjetas del motor — usar "cuando" para ubicar en el año
+    (tarjetas || []).forEach(t => {
+      // Parsear el mes de "cuando" si es posible
+      const meses = { "mayo":4,"junio":5,"julio":6,"agosto":7,"septiembre":8,"octubre":9,"noviembre":10,"diciembre":11,"enero":0,"febrero":1,"marzo":2,"abril":3 };
+      let mesInicio = null, mesFin = null;
+      if (t.cuando) {
+        const txt = t.cuando.toLowerCase();
+        Object.entries(meses).forEach(([nom, idx]) => { if (txt.includes(nom) && mesInicio === null) mesInicio = idx; });
+        // Rango tipo "mayo–agosto"
+        const partes = txt.split(/[–\-]/);
+        if (partes.length >= 2) {
+          Object.entries(meses).forEach(([nom, idx]) => { if (partes[1].includes(nom)) mesFin = idx; });
+        }
+        if (mesFin === null) mesFin = mesInicio;
+      }
+      if (mesInicio !== null) {
+        eventos.push({
+          id: t.id,
+          mes: mesInicio,
+          mesFin: mesFin !== null ? mesFin : mesInicio,
+          titulo: t.titulo,
+          categoria: t.prioridad === "P1" || t.prioridad === "URGENTE" ? "critico" : "normal",
+          color: t.prioridad === "P1" || t.prioridad === "URGENTE" ? C.red : t.prioridad === "P2" ? C.amber : C.blue,
+          icono: t.icono || "📌",
+        });
+      }
+    });
+
+    // Hitos del ciclo reproductivo
+    if (mesServ !== null) eventos.push({ id:"serv", mes:mesServ, mesFin:(mesServ+3)%12, titulo:"Servicio", categoria:"hito", color:C.blue, icono:"🐂" });
+    if (mesParto !== null) eventos.push({ id:"parto", mes:mesParto, mesFin:(mesParto+2)%12, titulo:"Parición", categoria:"hito", color:C.amber, icono:"🐄" });
+
+    return eventos;
+  }, [tarjetas, cerebro, motor]);
 
   return (
     <div>
-      {/* ── FASE DEL CICLO — ANCLA TEMPORAL ────────────────────── */}
-      <PanelFaseCiclo faseCiclo={faseCiclo} />
-
-      {/* ── RESUMEN 3 NÚMEROS — contextual según fase ──────────── */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:12 }}>
-        {[
-          { label:"PREÑEZ HOY", val:`${resumen.prenez}%`, sub: resumen.prenez >= 75 ? "✓ dentro del rango" : "↑ potencial: "+resumen.prenezPot+"%", color: resumen.prenez >= 75 ? C.green : C.amber },
-          { label:"CC AL SERVICIO", val: resumen.ccServ > 0 ? resumen.ccServ : "—", sub: resumen.ccServ >= 4.5 ? "✓ óptima" : resumen.ccServ > 0 ? "↑ necesita ≥4.5" : "Sin datos", color: resumen.ccServ >= 4.5 ? C.green : resumen.ccServ > 0 ? C.amber : C.textFaint },
-          // Tercer número cambia según la fase: días al servicio, días al parto, o días al tacto
-          faseCiclo?.fase === "PARTO" || faseCiclo?.fase === "PRE_PARTO"
-            ? { label:"PARTO EN", val: faseCiclo.fase === "PARTO" ? "Ahora" : `${faseCiclo.siguiente?.diasFaltan ?? "—"}d`, sub: faseCiclo.fase === "PARTO" ? "Parición activa" : "Primeras pariciones", color: C.red }
-            : faseCiclo?.fase === "TACTO" || faseCiclo?.fase === "POST_SERVICIO"
-            ? { label:"TACTO EN", val: `${faseCiclo.siguiente?.diasFaltan ?? "—"}d`, sub: "Diagnóstico preñez", color: C.amber }
-            : { label:"SERVICIO EN", val: resumen.diasHastaServ !== null ? `${resumen.diasHastaServ}d` : "—", sub: resumen.iniServDate ? resumen.iniServDate : "Cargar fecha", color: resumen.diasHastaServ !== null && resumen.diasHastaServ < 45 ? C.red : C.textDim },
-        ].map((k,i) => (
-          <div key={i} style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, padding:10, textAlign:"center" }}>
-            <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, letterSpacing:1, marginBottom:4 }}>{k.label}</div>
-            <div style={{ fontFamily:C.font, fontSize:22, fontWeight:700, color:k.color, lineHeight:1 }}>{k.val}</div>
-            <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:4 }}>{k.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── CONTEXTO CLIMÁTICO ─────────────────────────────────── */}
-      {contextoClima && (
-        <div style={{ padding:"5px 10px", marginBottom:8, borderRadius:8,
-          background:`${C.blue}08`, border:`1px solid ${C.blue}18`,
-          fontFamily:C.font, fontSize:8, color:C.blue }}>
-          📡 {contextoClima}
+      {/* ══ TARJETAS DE DIMENSIÓN ══════════════════════════════════ */}
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
+          ESTADO DEL SISTEMA — {new Date().toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"})}
         </div>
-      )}
-
-      {/* ── PÁRRAFO DEL ASESOR ─────────────────────────────────── */}
-      <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, letterSpacing:1, marginBottom:10 }}>
-          🧠 SITUACIÓN DEL SISTEMA
-        </div>
-        <div style={{ fontFamily:C.font, fontSize:11, color:"#c8e0c0", lineHeight:1.7 }}>
-          {parrafo}
-        </div>
-        {resumen.ternerosDif > 0 && (
-          <div style={{ marginTop:12, background:`${C.green}10`, border:`1px solid ${C.green}30`, borderRadius:8, padding:10 }}>
-            <span style={{ fontFamily:C.font, fontSize:10, color:C.green, fontWeight:700 }}>
-              💰 {resumen.ternerosDif} terneros adicionales posibles — ${resumen.valorDif.toLocaleString("es-AR")}
-            </span>
-            <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
-              {" "}aplicando las correcciones de esta temporada
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* ── TRAYECTORIA VAQUILLONA ─────────────────────────────── */}
-      {(motor.nVaq1 > 0 || motor.nVaq2 > 0) && (
-        <TrayectoriaVaquillona motor={motor} form={form} />
-      )}
-
-      {/* ── CALENDARIO DE ACCIONES DEL AÑO ────────────────────── */}
-      {calendarioAcciones && (() => {
-        const { eventos, hitos, mesServR, mesParto, mesDestR } = calendarioAcciones;
-        const ev = eventos;
-        return (
-          <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12,
-            padding:14, marginBottom:12 }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
-              📅 CALENDARIO — QUÉ HACER CADA MES
-            </div>
-
-            {/* Grilla de meses */}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(12,1fr)", gap:2 }}>
-              {MESES_C.map((m, i) => {
-                const esHoy    = i === mesHoy;
-                const hitosMes = hitos.filter(h => h.mes === i);
-                const evMes    = ev.filter(e => {
-                  // el evento cubre este mes (circular)
-                  if (e.mesIni <= e.mesFin) return i >= e.mesIni && i <= e.mesFin;
-                  return i >= e.mesIni || i <= e.mesFin; // cruza fin de año
-                });
-                const maxPrio  = evMes.reduce((best, e) => {
-                  const ord = { URGENTE:0, P1:1, P2:2, P3:3 };
-                  return (ord[e.prioridad]??9) < (ord[best]??9) ? e.prioridad : best;
-                }, null);
-                const bg = maxPrio === "URGENTE" ? "rgba(224,85,48,.18)"
-                         : maxPrio === "P1"      ? "rgba(232,160,48,.14)"
-                         : maxPrio === "P2"      ? "rgba(74,159,212,.12)"
-                         : maxPrio === "P3"      ? "rgba(136,136,136,.08)"
-                         : "transparent";
-                const borderCol = esHoy ? C.green : maxPrio ? (
-                  maxPrio==="URGENTE"?C.red : maxPrio==="P1"?C.amber : maxPrio==="P2"?C.blue : C.border
-                ) : C.border;
-                return (
-                  <div key={i} style={{
-                    borderRadius:6, padding:"5px 2px", textAlign:"center",
-                    background:bg, border:`1px solid ${borderCol}`,
-                    opacity: evMes.length === 0 && !hitosMes.length ? 0.45 : 1,
-                  }}>
-                    {/* Nombre mes */}
-                    <div style={{ fontFamily:C.font, fontSize:7,
-                      color: esHoy ? C.green : C.textFaint,
-                      fontWeight: esHoy ? 700 : 400 }}>
-                      {m}{esHoy ? " ◉" : ""}
-                    </div>
-                    {/* Hitos del rodeo */}
-                    {hitosMes.map(h => (
-                      <div key={h.label} title={h.label}
-                        style={{ fontSize:10, lineHeight:1.2 }}>{h.icono}</div>
-                    ))}
-                    {/* Puntos de acción */}
-                    <div style={{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:1, marginTop:2 }}>
-                      {evMes.slice(0,4).map(e => (
-                        <div key={e.id}
-                          onClick={() => setEventoSel(eventoSel?.id===e.id ? null : e)}
-                          title={e.label}
-                          style={{ width:7, height:7, borderRadius:"50%",
-                            background:e.color, cursor:"pointer", flexShrink:0 }} />
-                      ))}
-                    </div>
+        {DIMS.map(dim => {
+          const abierta = expandida === dim.id;
+          return (
+            <div key={dim.id}
+              onClick={() => setExpandida(abierta ? null : dim.id)}
+              style={{ background:C.card2, border:"1px solid "+(abierta ? dim.color+"60" : C.border),
+                borderRadius:12, marginBottom:8, overflow:"hidden", cursor:"pointer",
+                transition:"border-color 0.2s" }}>
+              {/* Header de la tarjeta */}
+              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px" }}>
+                <span style={{ fontSize:20, flexShrink:0 }}>{dim.icono}</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:2 }}>
+                    {dim.titulo.toUpperCase()}
                   </div>
-                );
-              })}
-            </div>
-
-            {/* Leyenda hitos */}
-            <div style={{ display:"flex", gap:10, marginTop:8, flexWrap:"wrap" }}>
-              {hitos.map(h => (
-                <span key={h.label} style={{ fontFamily:C.font, fontSize:8, color:h.color }}>
-                  {h.icono} {h.label} ({MESES_C[h.mes]})
-                </span>
-              ))}
-              <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginLeft:"auto" }}>
-                ● Urgente &nbsp;● P1 &nbsp;● P2
-              </span>
-            </div>
-
-            {/* Detalle del evento seleccionado */}
-            {eventoSel && (
-              <div style={{ marginTop:10, padding:"10px 12px",
-                background:`${eventoSel.color}12`,
-                border:`1px solid ${eventoSel.color}40`, borderRadius:10 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-                  <div style={{ fontFamily:C.font, fontSize:11, color:"#c8e0c0", fontWeight:700, marginBottom:4 }}>
-                    {eventoSel.icono} {eventoSel.label}
+                  <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+                    <span style={{ fontFamily:C.font, fontSize:22, fontWeight:700, color:dim.color, lineHeight:1 }}>
+                      {dim.valor}
+                    </span>
+                    <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+                      {dim.unidad}
+                    </span>
                   </div>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:eventoSel.color, fontWeight:700 }}>
-                    {MESES_C[eventoSel.mesIni]}{eventoSel.mesFin!==eventoSel.mesIni?`–${MESES_C[eventoSel.mesFin]}`:""}
+                  <div style={{ fontFamily:C.font, fontSize:9, color:dim.color, marginTop:2 }}>
+                    {dim.estado}
                   </div>
                 </div>
-                <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, lineHeight:1.6, marginBottom:6 }}>
-                  {eventoSel.que}
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
+                  {dim.alerta && (
+                    <div style={{ width:8, height:8, borderRadius:"50%", background:dim.color,
+                      boxShadow:"0 0 6px "+dim.color+"80" }} />
+                  )}
+                  <span style={{ fontFamily:C.font, fontSize:10, color:C.textFaint }}>
+                    {abierta ? "▲" : "▼"}
+                  </span>
                 </div>
-                {eventoSel.conexion && (
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, lineHeight:1.5,
-                    borderTop:`1px solid ${C.border}`, paddingTop:6 }}>
-                    {eventoSel.conexion}
-                  </div>
-                )}
-                {eventoSel.impacto && (
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:6 }}>
-                    💰 {eventoSel.impacto}
-                  </div>
-                )}
               </div>
-            )}
-          </div>
-        );
-      })()}
 
-      {/* ── TARJETAS DE ACCIÓN ─────────────────────────────────── */}
-      {(() => {
-        // Tarjetas "AHORA" — calculadas desde el estado real del rodeo + fase del ciclo
-        // No es una lista fija: si los toros ya tienen CC ≥5.5, toros_prep no es urgente
-        const fase = faseCiclo?.fase || "";
-        const ccTorHoy  = parseFloat(cerebro?.resumen?.ccServ || 0); // proxy — ccServ del resumen
-        const faseTarjIds = (() => {
-          const ids = [];
-          // Agua salada — siempre urgente si hay problema
-          if (tarjetas.find(t => t.id === "agua_sal")) ids.push("agua_sal");
-          // Sanidad urgente — siempre
-          tarjetas.filter(t => t.id.startsWith("san_") && t.prioridad === "URGENTE")
-            .forEach(t => ids.push(t.id));
+              {/* Alerta si hay */}
+              {dim.alerta && !abierta && (
+                <div style={{ background:dim.color+"10", borderTop:"1px solid "+dim.color+"20",
+                  padding:"6px 14px" }}>
+                  <span style={{ fontFamily:C.font, fontSize:9, color:dim.color }}>
+                    ⚠ {dim.alerta}
+                  </span>
+                </div>
+              )}
 
-          // Por fase:
-          if (fase === "SERVICIO" || fase === "PRE_SERVICIO") {
-            // Toros: solo si CC <5.0 o sin ESAN
-            if (tarjetas.find(t => t.id === "toros_prep"))  ids.push("toros_prep");
-            if (tarjetas.find(t => t.id === "esan_toros"))  ids.push("esan_toros");
-            // Destete: solo si CC al servicio baja
-            if (tarjetas.find(t => t.id === "destete_cc"))  ids.push("destete_cc");
-          }
-          if (fase === "POST_PARTO") {
-            if (tarjetas.find(t => t.id === "destete_cc"))  ids.push("destete_cc");
-          }
-          if (fase === "GESTACION_MEDIA" || fase === "POST_SERVICIO") {
-            // Vaquillona: solo si hay problema real
-            if (tarjetas.find(t => t.id === "vaq1_prot"))   ids.push("vaq1_prot");
-            if (tarjetas.find(t => t.id === "vaq2_supl"))   ids.push("vaq2_supl");
-          }
-          if (fase === "PRE_PARTO") {
-            if (tarjetas.find(t => t.id === "supl_preparto")) ids.push("supl_preparto");
-            // Toros también — van a entrar al servicio en ~4 meses
-            if (tarjetas.find(t => t.id === "toros_prep"))   ids.push("toros_prep");
-          }
-          if (fase === "PARTO") {
-            // En parición: solo los urgentes y sanidad — no abrumar con todo
-            // las tarjetas de suplemento/destete son para después del parto
-          }
-          if (fase === "TACTO") {
-            // En tacto el foco es la decisión de descarte — ninguna tarjeta de suplemento es urgente ahora
-            tarjetas.filter(t => t.id.startsWith("san_prog_")).forEach(t => ids.push(t.id));
-          }
-          return [...new Set(ids)]; // deduplicar
-        })();
-        const mesHoyLocal = new Date().getMonth();
-
-        // Ordenar: las "ahora" primero, luego por prioridad original
-        const tarjetasOrdenadas = [...tarjetas].sort((a, b) => {
-          const aAhora = faseTarjIds.includes(a.id) ? 0 : 1;
-          const bAhora = faseTarjIds.includes(b.id) ? 0 : 1;
-          if (aAhora !== bAhora) return aAhora - bAhora;
-          const ordP = { URGENTE:0, P1:1, P2:2, P3:3 };
-          return (ordP[a.prioridad]??9) - (ordP[b.prioridad]??9);
-        });
-
-        return (
-          <div>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
-              {tarjetasOrdenadas.length > 0
-                ? `${tarjetasOrdenadas.length} ACCIONES — ${faseTarjIds.length > 0 ? faseTarjIds.filter(id => tarjetasOrdenadas.find(t=>t.id===id)).length + " urgentes ahora · " : ""}ordenadas por momento del ciclo`
-                : "SIN ALERTAS ACTIVAS"}
-            </div>
-            {tarjetasOrdenadas.map((t) => {
-              const abierta   = expandida === t.id;
-              const cp        = colorPrio[t.prioridad] || C.textDim;
-              const esAhora   = faseTarjIds.includes(t.id);
-              const borderBase = esAhora ? (faseCiclo?.color || C.amber) : (abierta ? cp : C.border);
-              return (
-                <div key={t.id}
-                  onClick={() => setExpandida(abierta ? null : t.id)}
-                  style={{ background: esAhora ? `${faseCiclo?.color || C.amber}08` : C.card2,
-                    border:`1px solid ${borderBase}`,
-                    borderRadius:12, padding:"12px 14px", marginBottom:8, cursor:"pointer",
-                    transition:"border-color 0.2s" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <span style={{ fontFamily:C.font, fontSize:16 }}>{t.icono}</span>
-                    <div style={{ flex:1 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginBottom:2 }}>
-                        <span style={{ fontFamily:C.font, fontSize:11, color:"#c8e0c0", fontWeight:700 }}>
-                          {t.titulo}
-                        </span>
-                        {esAhora && (
-                          <span style={{ fontFamily:C.font, fontSize:7, color:faseCiclo?.color || C.amber,
-                            background:`${faseCiclo?.color || C.amber}18`, borderRadius:4,
-                            padding:"1px 5px", letterSpacing:.5, fontWeight:700 }}>
-                            AHORA
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
-                        📅 {t.cuando}
-                      </div>
-                    </div>
-                    <div style={{ textAlign:"right" }}>
-                      <div style={{ fontFamily:C.font, fontSize:8, color:esAhora ? (faseCiclo?.color || C.amber) : cp, fontWeight:700, letterSpacing:1 }}>
-                        {esAhora ? faseCiclo?.label?.toUpperCase().split(" ")[0] || t.prioridad : t.prioridad}
-                      </div>
-                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:2 }}>
-                        {abierta ? "▲" : "▼"}
-                      </div>
-                    </div>
-                  </div>
-                  {abierta && (
-                    <div style={{ marginTop:12, borderTop:`1px solid ${C.border}`, paddingTop:10 }}>
-                      <div style={{ fontFamily:C.font, fontSize:10, color:"#c8e0c0", lineHeight:1.6, marginBottom:8 }}>
-                        <strong>Qué hacer:</strong> {t.que}
-                      </div>
-                      {t.conexion && (
-                        <div style={{ background:`${cp}10`, border:`1px solid ${cp}25`, borderRadius:8, padding:"8px 10px" }}>
-                          <div style={{ fontFamily:C.font, fontSize:9, color:cp, marginBottom:3, letterSpacing:1 }}>POR QUÉ IMPORTA EN ESTE RODEO</div>
-                          <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, lineHeight:1.5 }}>{t.conexion}</div>
-                        </div>
-                      )}
-                      {t.impacto && (
-                        <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:8 }}>
-                          💰 {t.impacto}
-                        </div>
-                      )}
+              {/* Detalle expandido */}
+              {abierta && (
+                <div style={{ borderTop:"1px solid "+C.border, padding:"10px 14px" }}>
+                  {dim.alerta && (
+                    <div style={{ background:dim.color+"10", border:"1px solid "+dim.color+"25",
+                      borderRadius:8, padding:"8px 12px", marginBottom:10 }}>
+                      <span style={{ fontFamily:C.font, fontSize:10, color:dim.color }}>⚠ {dim.alerta}</span>
                     </div>
                   )}
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 12px" }}>
+                    {dim.filas.map(([label, valor, color], i) => (
+                      <div key={i} style={{ display:"flex", justifyContent:"space-between",
+                        alignItems:"center", padding:"4px 0",
+                        borderBottom:"1px solid "+C.border+"60" }}>
+                        <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{label}</span>
+                        <span style={{ fontFamily:C.font, fontSize:10, color:color||C.text, fontWeight: color ? 600 : 400 }}>
+                          {valor}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              );
-            })}
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ══ CRONOGRAMA GANTT ═══════════════════════════════════════ */}
+      {eventosGantt.length > 0 && (
+        <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:12,
+          padding:"12px 14px", marginBottom:16, overflowX:"auto" }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
+            📅 CRONOGRAMA DE ACCIONES — AÑO COMPLETO
           </div>
-        );
-      })()}
+          {(() => {
+            const W = Math.max(600, 12 * 44); // ancho mínimo
+            const mesW = W / 12;
+            const filas = [];
+            // Agrupar eventos por fila para evitar solapamiento
+            eventosGantt.forEach(ev => {
+              let fila = filas.findIndex(f => f.every(e =>
+                e.mesFin < ev.mes || e.mes > ev.mesFin
+              ));
+              if (fila === -1) { filas.push([]); fila = filas.length - 1; }
+              filas[fila].push(ev);
+            });
+
+            const alturaFila = 28;
+            const altHeader  = 22;
+            const totalH     = altHeader + filas.length * alturaFila + 8;
+
+            return (
+              <svg viewBox={"0 0 " + W + " " + totalH}
+                style={{ width:"100%", display:"block", minWidth:500 }}>
+
+                {/* Columnas de meses */}
+                {MESES_C.map((m, i) => {
+                  const esCurrent = i === mesHoy;
+                  const x = i * mesW;
+                  return (
+                    <g key={i}>
+                      <rect x={x} y={0} width={mesW} height={totalH}
+                        fill={esCurrent ? C.green+"08" : i%2===0 ? C.card+"60" : "transparent"}
+                        stroke="none" />
+                      <text x={x + mesW/2} y={14}
+                        textAnchor="middle"
+                        style={{ fontFamily:C.font, fontSize:"8px",
+                          fill: esCurrent ? C.green : C.textFaint,
+                          fontWeight: esCurrent ? "700" : "400" }}>
+                        {m}
+                      </text>
+                      {esCurrent && (
+                        <line x1={x + mesW/2} y1={altHeader} x2={x + mesW/2} y2={totalH}
+                          stroke={C.green} strokeWidth="1" strokeDasharray="3,3" opacity="0.4" />
+                      )}
+                    </g>
+                  );
+                })}
+
+                {/* Línea separadora header */}
+                <line x1={0} y1={altHeader} x2={W} y2={altHeader}
+                  stroke={C.border} strokeWidth="1" />
+
+                {/* Eventos */}
+                {filas.map((fila, fi) =>
+                  fila.map(ev => {
+                    const x1 = ev.mes * mesW + 2;
+                    const x2 = (ev.mesFin + 1) * mesW - 2;
+                    const y  = altHeader + fi * alturaFila + 4;
+                    const h  = alturaFila - 8;
+                    const esHito = ev.categoria === "hito";
+                    return (
+                      <g key={ev.id}>
+                        <rect x={x1} y={y} width={Math.max(mesW-4, x2-x1)} height={h}
+                          rx={4} ry={4}
+                          fill={ev.color + (esHito ? "25" : "18")}
+                          stroke={ev.color + (esHito ? "80" : "50")}
+                          strokeWidth={esHito ? "1.5" : "1"} />
+                        <text x={x1 + 5} y={y + h/2 + 3.5}
+                          style={{ fontFamily:C.font, fontSize:"7px", fill:ev.color, fontWeight:"600" }}
+                          clipPath={"url(#clip-"+fi+"-"+ev.mes+")"}>
+                          {ev.icono} {ev.titulo.slice(0,25)}{ev.titulo.length>25?"…":""}
+                        </text>
+                        <clipPath id={"clip-"+fi+"-"+ev.mes}>
+                          <rect x={x1} y={y} width={Math.max(mesW-4,x2-x1)} height={h} />
+                        </clipPath>
+                      </g>
+                    );
+                  })
+                )}
+              </svg>
+            );
+          })()}
+
+          {/* Leyenda */}
+          <div style={{ display:"flex", gap:12, marginTop:8, flexWrap:"wrap" }}>
+            {[["Acción crítica",C.red],["Acción importante",C.amber],["Acción de seguimiento",C.blue],["Hito reproductivo",C.green]].map(([l,c]) => (
+              <div key={l} style={{ display:"flex", alignItems:"center", gap:4 }}>
+                <div style={{ width:10, height:10, borderRadius:2, background:c+"30", border:"1px solid "+c+"60" }} />
+                <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>{l}</span>
+              </div>
+            ))}
+            <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+              <div style={{ width:10, height:10, borderRadius:2, background:C.green+"15",
+                border:"1px dashed "+C.green+"60" }} />
+              <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>Mes actual</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ ANÁLISIS IA ════════════════════════════════════════════ */}
+      <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>
+          📝 CONTEXTO PARA EL ANÁLISIS
+        </div>
+        <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, lineHeight:1.7 }}>
+          {parrafo || "Cargá los datos del rodeo para activar el análisis."}
+        </div>
+      </div>
 
       {tarjetas.length === 0 && (
-        <div style={{ background:C.card2, border:`1px solid ${C.green}40`, borderRadius:12, padding:20, textAlign:"center" }}>
+        <div style={{ background:C.card2, border:"1px solid "+C.green+"40", borderRadius:12, padding:20, textAlign:"center" }}>
           <div style={{ fontFamily:C.font, fontSize:28, marginBottom:8 }}>✅</div>
           <div style={{ fontFamily:C.font, fontSize:11, color:C.green }}>Sistema sin alertas críticas.</div>
           <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:4 }}>Mantener el manejo actual y revisar en la próxima visita.</div>
@@ -6954,7 +7013,6 @@ function TabCerebro({ motor, form, sat }) {
     </div>
   );
 }
-
 // ─── PANEL RECOMENDACIONES v19 ────────────────────────────────────
 function PanelRecomendaciones({ motor, form }) {
   const dx = React.useMemo(() => diagnosticarSistema(motor, form), [motor, form]);
@@ -7225,11 +7283,11 @@ function PanelRecomendaciones({ motor, form }) {
 
 const FORM_DEF = {
   // ── Ubicación ──────────────────────────────────────────────────
-  nombreProductor:"", zona:"NEA", provincia:"Corrientes", localidad:"",
+  nombreProductor:"", zona:"", provincia:"", localidad:"",
   // ── Rodeo ──────────────────────────────────────────────────────
-  biotipo:"Brangus 3/8", primerParto:false,
-  vacasN:"", torosN:"", pvVacaAdulta:"320", pvToros:"",
-  eReprod:"Gestación media (5–7 meses)", prenez:"", pctDestete:"88",
+  biotipo:"", primerParto:false,
+  vacasN:"", torosN:"", pvVacaAdulta:"", pvToros:"",
+  eReprod:"", prenez:"", pctDestete:"",
   iniServ:"", finServ:"",
   edadPrimerEntore:"24",
   // ── Vaquillona ─────────────────────────────────────────────────
@@ -7246,17 +7304,17 @@ const FORM_DEF = {
   cc2sDist:[{ cc:"5.0", pct:"50" },{ cc:"4.5", pct:"50" }],
   pctReposicion:"20", vaq1PV:"", vaq2N:"", vaq2PV:"",
   // ── CC ─────────────────────────────────────────────────────────
-  distribucionCC:[{ cc:"5.5", pct:"20" },{ cc:"5.0", pct:"50" },{ cc:"4.5", pct:"30" }],
+  distribucionCC:[],  // el usuario carga la distribución real
   fechaCC:"",            // fecha en que se midió la CC (nueva v15)
   // ── Destete ────────────────────────────────────────────────────
   destTrad:"0", destAntic:"0", destHiper:"0",
   // ── Toros — diagnóstico preparo de servicio (nuevo v15) ────────
   torosLote:"si",        // ¿están todos en un lote o distribuidos?
   torosLotes:"",         // cantidad de lotes si distribuidos
-  torosCC:"4.5",         // CC toros hoy (promedio)
+  torosCC:"",         // CC toros hoy (promedio)
   torosBCS_ok:"",        // % con CC ≥ 5.0 (condición óptima de servicio)
   // ── Forraje ────────────────────────────────────────────────────
-  vegetacion:"Pastizal natural NEA/Chaco", fenologia:"menor_10",
+  vegetacion:"Pastizal natural", fenologia:"menor_10",
   supHa:"", pctMonte:"10", pctNGan:"5",
   // ── Suplementación por categoría (sin duplicados) ──────────────
   supl1:"", dosis1:"0", supl2:"", dosis2:"0", supl3:"", dosis3:"0",
@@ -7370,7 +7428,7 @@ function AgroMindPro() {
   const [tab,         setTab]         = useState("resumen");
   const [modoForraje, setModoForraje] = useState("general");
   const [usaPotreros, setUsaPotreros] = useState(true);
-  const [potreros,    setPotreros]    = useState([{ ha:"", veg:"Pastizal natural NEA/Chaco", fenol:"menor_10" }]);
+  const [potreros,    setPotreros]    = useState([{ ha:"", veg:"Pastizal natural", fenol:"menor_10" }]);
   const [vistaSupl,   setVistaSupl]   = useState("cuadrantes");
   const [bannerProductor, setBannerProductor] = useState(null); // datos autocargados del productor
 
@@ -8266,7 +8324,9 @@ function AgroMindPro() {
         </div>
       )}
       {sat?.error && <Alerta tipo="warn">{sat.error}</Alerta>}
-      <SelectF label="ZONA" value={form.zona} onChange={v=>set("zona",v)} options={[
+      <SelectF label="ZONA" value={form.zona} onChange={v=>set("zona",v)}
+        placeholder="Seleccioná la zona..."
+        options={[
         ["NEA","NEA — Corrientes / Chaco / Formosa / Misiones"],
         ["NOA","NOA — Salta / Jujuy / Tucumán"],
         ["Pampa Húmeda","Pampa Húmeda — Buenos Aires / Entre Ríos / Santa Fe sur"],
@@ -8275,7 +8335,9 @@ function AgroMindPro() {
         ["Brasil (Cerrado)","Brasil — Mato Grosso / Cerrado"],
         ["Bolivia (Llanos)","Bolivia — Llanos orientales"],
       ]} />
-      <SelectF label="PROVINCIA / REGIÓN" value={form.provincia} onChange={v=>set("provincia",v)} options={[
+      <SelectF label="PROVINCIA / REGIÓN" value={form.provincia} onChange={v=>set("provincia",v)}
+        placeholder="Seleccioná la provincia..."
+        options={[
         ["Corrientes","Corrientes"],["Chaco","Chaco"],["Formosa","Formosa"],
         ["Entre Ríos","Entre Ríos"],["Santa Fe","Santa Fe"],
         ["Santiago del Estero","Santiago del Estero"],["Salta","Salta"],
@@ -8295,7 +8357,9 @@ function AgroMindPro() {
         <div style={{ background:C.card2, border:`1px solid ${C.blue}30`, borderRadius:12, padding:14, marginTop:4 }}>
           <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, letterSpacing:1, marginBottom:10 }}>🐂 DIAGNÓSTICO PREPARO DE SERVICIO — TOROS</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <SelectF label="CC TOROS (promedio actual)" value={form.torosCC||"4.5"} onChange={v=>set("torosCC",v)} options={[
+            <SelectF label="CC TOROS (escala 1–9)" value={form.torosCC||""} onChange={v=>set("torosCC",v)}
+              placeholder="Seleccioná CC..."
+              options={[
               ["3.0","CC 3.0 — Muy flaco 🔴"],["3.5","CC 3.5 — Flaco 🔴"],
               ["4.0","CC 4.0 — Regular ⚠"],["4.5","CC 4.5 — Aceptable"],
               ["5.0","CC 5.0 — Óptimo ✓"],["5.5","CC 5.5 — Muy bueno ✓"],["6.0","CC 6.0 — Exceso"],
@@ -8359,6 +8423,7 @@ function AgroMindPro() {
   const renderRodeo = () => (
     <div>
       <SelectF label="BIOTIPO" value={form.biotipo} onChange={v=>set("biotipo",v)}
+        placeholder="Seleccioná el biotipo..."
         groups={[
           { label:"── Cebú puro ─────────────────", opts:[
             ["Nelore",       "Nelore"],
@@ -8397,12 +8462,19 @@ function AgroMindPro() {
         <Input label="TOROS"  value={form.torosN}  onChange={v=>set("torosN",v)}  placeholder="" type="number" />
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-        <Input label="PV VACA ADULTA (kg)" value={form.pvVacaAdulta} onChange={v=>set("pvVacaAdulta",v)} placeholder="320" type="number" />
-        <Input label="PV TOROS (kg)"       value={form.pvToros}      onChange={v=>set("pvToros",v)}      placeholder="" type="number" sub="Para suplementación" />
+        <Input label="PV VACA ADULTA (kg)" value={form.pvVacaAdulta} onChange={v=>set("pvVacaAdulta",v)} placeholder="" type="number" />
+        <Input label="PV TOROS (kg)"       value={form.pvToros}      onChange={v=>set("pvToros",v)}      placeholder="" type="number" />
       </div>
-      <Input label="PREÑEZ HISTÓRICA (%)"   value={form.prenez}       onChange={v=>set("prenez",v)}       placeholder="" type="number" />
-      <Input label="% DESTETE HISTÓRICO"    value={form.pctDestete}   onChange={v=>set("pctDestete",v)}   placeholder="88"  type="number" />
-      <SelectF label="ESTADO REPRODUCTIVO ACTUAL" value={form.eReprod} onChange={v=>set("eReprod",v)} options={[
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:0 }}>
+        <Input label="CC TOROS (1–9)" value={form.torosCC} onChange={v=>set("torosCC",v)} placeholder="" type="number"
+          warn={form.torosCC && parseFloat(form.torosCC) < 4.5 ? "CC baja — preparo antes del servicio" : null}
+          sub="Objetivo al servicio: ≥5.5" />
+        <Input label="PREÑEZ HISTÓRICA (%)" value={form.prenez} onChange={v=>set("prenez",v)} placeholder="" type="number" />
+      </div>
+      <Input label="% DESTETE HISTÓRICO"    value={form.pctDestete}   onChange={v=>set("pctDestete",v)}   placeholder="" type="number" />
+      <SelectF label="ESTADO REPRODUCTIVO ACTUAL" value={form.eReprod} onChange={v=>set("eReprod",v)}
+        placeholder="Seleccioná el estado..."
+        options={[
         "Gestación temprana (1–4 meses)","Gestación media (5–7 meses)","Preparto (último mes)",
         "Lactación con ternero al pie","Vaca seca sin ternero",
       ].map(e=>[e,e])} />
@@ -8533,7 +8605,10 @@ function AgroMindPro() {
       )}
       <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:12, padding:14, marginTop:4 }}>
         <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, letterSpacing:1, marginBottom:10 }}>🐄 VAQUILLONA — DATOS PARA SUPLEMENTACIÓN</div>
-        <Input label="EDAD AL 1° MAYO (meses)" value={form.edadVaqMayo} onChange={v=>set("edadVaqMayo",v)} placeholder="8" type="number" sub="Define PV esperado y GDP necesario." />
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+          <Input label="EDAD AL 1° MAYO (meses)" value={form.edadVaqMayo} onChange={v=>set("edadVaqMayo",v)} placeholder="" type="number" sub="Define GDP necesario" />
+          <Input label="PV ACTUAL VAQ1 (kg)" value={form.vaq1PV} onChange={v=>set("vaq1PV",v)} placeholder="" type="number" sub="Si no lo sabés, dejá vacío" />
+        </div>
 
       </div>
     </div>
@@ -8781,8 +8856,16 @@ function AgroMindPro() {
         </summary>
         <div style={{ background:C.card2, borderRadius:"0 0 12px 12px", padding:14, border:`1px solid ${C.border}`, borderTop:"none" }}>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-            <Input label="% REPOSICIÓN" value={form.pctReposicion} onChange={v=>set("pctReposicion",v)} placeholder="20" type="number" />
+            <Input label="% REPOSICIÓN" value={form.pctReposicion} onChange={v=>set("pctReposicion",v)} placeholder="" type="number" />
             <MetricCard label="VAQUILLAS" value={nVaqRepos} color={C.green} />
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+            <Input label="PV ACTUAL VAQ1 (kg)"
+              value={form.vaq1PV} onChange={v=>set("vaq1PV",v)} placeholder="" type="number"
+              sub="Peso real hoy — calibra GDP necesaria" />
+            <Input label="EDAD AL 1° MAYO (meses)"
+              value={form.edadVaqMayo} onChange={v=>set("edadVaqMayo",v)} placeholder="" type="number"
+              sub="Define objetivo de entore" />
           </div>
           {tcSave?.pvMayoPond > 0 && (
             <div style={{ background:`${C.green}08`, border:`1px solid ${C.green}25`, borderRadius:10, padding:10, marginBottom:10 }}>
@@ -8871,7 +8954,8 @@ function AgroMindPro() {
           <div style={{ background:C.card2, borderRadius:"0 0 12px 12px", padding:14, border:`1px solid ${C.border}`, borderTop:"none" }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
               <Input label="CANTIDAD" value={form.vaq2N} onChange={v=>set("vaq2N",v)} placeholder="" type="number" />
-              <MetricCard label="PV ENTRADA (kg)" value={pvEntradaVaq2||"—"} color={C.green} sub="Auto desde Vaq1" />
+              <Input label="PV ACTUAL VAQ2 (kg)" value={form.vaq2PV} onChange={v=>set("vaq2PV",v)} placeholder="" type="number"
+                sub="Peso real hoy" />
             </div>
             {vaq2E?.alertaSinSupl && <Alerta tipo="error">{vaq2E.alertaSinSupl}</Alerta>}
             {vaq2E && (
@@ -9138,8 +9222,8 @@ function AgroMindPro() {
   const renderForraje = () => {
     // Tipos de recurso forrajero con sus propiedades
     const RECURSOS = {
-      "Pastizal natural NEA/Chaco":                 { cat:"pastizal", label:"Pastizal natural NEA/Chaco",        emoji:"🌿", fenologia:true,  altura:true,  pb:14, desc:"Calidad variable por fenología · estimación por altura" },
-      "Megatérmicas C4 (gatton panic, brachiaria)": { cat:"c4",       label:"Megatérmicas C4 (gatton, brachia)",emoji:"🌱", fenologia:true,  altura:false, pb:22, desc:"Alta producción en verano · baja en invierno · fenología aplica" },
+      "Pastizal natural":                 { cat:"pastizal", label:"Pastizal natural",        emoji:"🌿", fenologia:true,  altura:true,  pb:14, desc:"Calidad variable por fenología · estimación por altura" },
+      "Megatérmicas C4": { cat:"c4",       label:"Megatérmicas C4",emoji:"🌱", fenologia:true,  altura:false, pb:22, desc:"Alta producción en verano · baja en invierno · fenología aplica" },
       "Pasturas templadas C3":                      { cat:"c3",       label:"Pasturas templadas C3",             emoji:"🌾", fenologia:false, altura:false, pb:16, desc:"Producción más estable · sin fenología estacional marcada" },
       "Mixta gramíneas+leguminosas":                { cat:"mixta",    label:"Mixta gramíneas + leguminosas",     emoji:"🌱", fenologia:false, altura:false, pb:18, desc:"PB alta por leguminosas · buena calidad todo el año" },
       "Bosque nativo / monte":                      { cat:"monte",    label:"Bosque nativo / monte",             emoji:"🌳", fenologia:false, altura:false, pb:2.5, desc:"Baja oferta · valor en sombra y refugio · no suplementa" },
@@ -9155,7 +9239,7 @@ function AgroMindPro() {
       <div>
         {/* ── Superficie total y carga ── */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-          <Input label="SUPERFICIE GANADERA TOTAL (ha)" value={form.supHa} onChange={v=>set("supHa",v)} placeholder="500" type="number" sub="Superficie efectivamente pastoreada" />
+          <Input label="SUPERFICIE GANADERA TOTAL (ha)" value={form.supHa} onChange={v=>set("supHa",v)} placeholder="" type="number" sub="Superficie efectivamente pastoreada" />
           <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 14px" }}>
             <div style={{ fontFamily:C.font, fontSize:8, color:C.textDim, letterSpacing:1, marginBottom:4 }}>CARGA EV/HA</div>
             <div style={{ fontFamily:C.font, fontSize:22, fontWeight:700, color:colorCarga }}>{cargaEV}</div>
@@ -9171,7 +9255,7 @@ function AgroMindPro() {
         </div>
 
         {potreros.map((p, i) => {
-          const rec = RECURSOS[p.veg] || RECURSOS["Pastizal natural NEA/Chaco"];
+          const rec = RECURSOS[p.veg] || RECURSOS["Pastizal natural"];
           const esPastizal = rec.cat === "pastizal";
           const esC4oPatizal = rec.cat === "c4" || rec.cat === "pastizal";
           const disp = esPastizal && p.altPasto ? calcDisponibilidadMS(p.altPasto, p.tipoPasto||"corto_denso") : null;
@@ -9261,7 +9345,7 @@ function AgroMindPro() {
           );
         })}
 
-        <button onClick={()=>setPotreros(ps=>[...ps,{ha:"",veg:"Pastizal natural NEA/Chaco",fenol:"menor_10",altPasto:"",tipoPasto:"corto_denso"}])}
+        <button onClick={()=>setPotreros(ps=>[...ps,{ha:"",veg:"Pastizal natural",fenol:"menor_10",altPasto:"",tipoPasto:"corto_denso"}])}
           style={{ width:"100%", background:`${C.green}06`, border:`1px solid ${C.border}`, borderRadius:10, color:C.green, padding:12, fontFamily:C.sans, fontSize:12, cursor:"pointer", marginBottom:14 }}>
           + Agregar potrero
         </button>
@@ -9590,7 +9674,7 @@ function AgroMindPro() {
           if (cat.key === "vaq1" && s1 === "Semilla algodón" && d1 > cat.pv * 0.004)
             alertas.push({ tipo:"error", msg:`Semilla algodón Vaq1: máx ${(cat.pv*0.004).toFixed(1)}kg (0.4% PV) — superar daña digestibilidad` });
           if (cat.key === "vaq2" && !tieneSupl)
-            alertas.push({ tipo:"warn", msg:"Vaq2° SIEMPRE necesita suplementación — sin ella solo logra 120-200 g/d en invierno NEA" });
+            alertas.push({ tipo:"warn", msg:"Sin suplemento invernal, Vaq2 logra 120–200 g/d con pasto C4 solo — revisar si llega al peso de entore" });
           if (cat.key === "toros" && (s1 === "Semilla algodón" || s2 === "Semilla algodón")) {
             const dosAlg = s1==="Semilla algodón" ? d1 : d2;
             if (dosAlg > cat.pv * 0.003)
