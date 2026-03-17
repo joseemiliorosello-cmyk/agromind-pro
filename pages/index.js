@@ -83,6 +83,7 @@ const ndviMes = (i, ndviHoy, zona) => {
   const refHoy = curva[mesHoy] || 1.0;
   return Math.min(0.95, Math.max(0.10, (parseFloat(ndviHoy) || 0.45) * (curva[i] / refHoy)));
 };
+const UTIL        = 0.55; // factor utilización pasto — 55% aprovechamiento real (Bavera 2005, NEA extensivo)
 const factorT     = (t) => t>=25?1.0 : t>=20?0.80 : t>=15?0.45 : t>=10?0.15 : 0.05;
 const factorP     = (p) => p>=100?1.0 : p>=50?0.85 : p>=20?0.60 : 0.30;
 const factorN     = (ndvi) => Math.min(1.5, Math.max(0.5, 0.5 + parseFloat(ndvi||0.45)*1.2));
@@ -1318,33 +1319,86 @@ const ndviBase = {
 
 async function fetchSat(lat, lon, zona, prov, enso, cb) {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,et0_fao_evapotranspiration&past_days=30&forecast_days=1&timezone=auto`;
+    // past_days=30 para historial climático + forecast_days=7 para pronóstico
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon +
+      "&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,et0_fao_evapotranspiration" +
+      "&past_days=30&forecast_days=7&timezone=auto";
     const d   = await (await fetch(url)).json();
     if (!d?.daily?.precipitation_sum) throw new Error("Sin datos");
 
-    const prec = d.daily.precipitation_sum || [];
-    const tMax = d.daily.temperature_2m_max || [];
-    const tMin = d.daily.temperature_2m_min || [];
-    const et0  = d.daily.et0_fao_evapotranspiration || [];
+    const fechas = d.daily.time || [];
+    const prec   = d.daily.precipitation_sum || [];
+    const tMax   = d.daily.temperature_2m_max || [];
+    const tMin   = d.daily.temperature_2m_min || [];
+    const et0    = d.daily.et0_fao_evapotranspiration || [];
 
-    const p7   = Math.round(prec.slice(-7).reduce((a,b)=>a+(b||0),0));
-    const p30  = Math.round(prec.reduce((a,b)=>a+(b||0),0));
-    const et07 = Math.round(et0.slice(-7).reduce((a,b)=>a+(b||0),0));
+    // Con past_days=30 + forecast_days=7 el array tiene 38 días
+    // Los últimos 7 son el pronóstico (índices -7 en adelante desde el final, pero
+    // necesitamos separar pasado de futuro por la fecha de hoy)
+    const hoyStr  = new Date().toISOString().slice(0,10);
+    const idxHoy  = fechas.indexOf(hoyStr);
+    const idxCut  = idxHoy >= 0 ? idxHoy : fechas.length - 7; // índice donde termina el pasado
+
+    // Datos históricos (pasado + hoy)
+    const precPas = prec.slice(0, idxCut + 1);
+    const tMaxPas = tMax.slice(0, idxCut + 1);
+    const tMinPas = tMin.slice(0, idxCut + 1);
+    const et0Pas  = et0.slice(0, idxCut + 1);
+
+    // Pronóstico (días futuros — excluye hoy)
+    const precFut   = prec.slice(idxCut + 1);
+    const tMaxFut   = tMax.slice(idxCut + 1);
+    const tMinFut   = tMin.slice(idxCut + 1);
+    const fechasFut = fechas.slice(idxCut + 1);
+
+    // Métricas históricas
+    const p7   = Math.round(precPas.slice(-7).reduce((a,b)=>a+(b||0),0));
+    const p30  = Math.round(precPas.reduce((a,b)=>a+(b||0),0));
+    const et07 = Math.round(et0Pas.slice(-7).reduce((a,b)=>a+(b||0),0));
+    const tMaxArr7 = tMaxPas.slice(-7);
+    const tMinArr7 = tMinPas.slice(-7);
     const temp = parseFloat((
-      (tMax.slice(-7).reduce((a,b)=>a+(b||0),0) + tMin.slice(-7).reduce((a,b)=>a+(b||0),0))
-      / (Math.max(1, tMax.slice(-7).length) * 2)
+      (tMaxArr7.reduce((a,b)=>a+(b||0),0) + tMinArr7.reduce((a,b)=>a+(b||0),0))
+      / (Math.max(1, tMaxArr7.length) * 2)
     ).toFixed(1));
+
+    // Pronóstico 7 días — array de objetos {fecha, tMax, tMin, lluvia, descripcion}
+    const DIAS_NOM = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+    const pronostico = fechasFut.slice(0,7).map((f, i) => {
+      const tm  = Math.round(tMaxFut[i] ?? 25);
+      const tn  = Math.round(tMinFut[i] ?? 15);
+      const ll  = Math.round(precFut[i] ?? 0);
+      const tmed = (tm + tn) / 2;
+      const fecha = new Date(f + "T12:00:00");
+      const diaNom = DIAS_NOM[fecha.getDay()];
+      const desc = ll > 10 ? "Lluvia" : ll > 2 ? "Llovizna" : tmed >= 25 ? "Cálido" : tmed >= 15 ? "Templado" : "Frío";
+      return { fecha: f, dia: diaNom, tMax: tm, tMin: tn, lluvia: ll, desc };
+    });
+
+    // Resumen pronóstico para el motor
+    const lluviaProx7  = pronostico.reduce((a,d) => a + d.lluvia, 0);
+    const tempMediaProx7 = pronostico.length
+      ? parseFloat((pronostico.reduce((a,d) => a + (d.tMax+d.tMin)/2, 0) / pronostico.length).toFixed(1))
+      : temp;
+    const helada7 = pronostico.some(d => d.tMin <= 2);
 
     const m       = modENSO(enso);
     const nb      = ndviBase[zona] || 0.48;
     const ndviAdj = Math.min(0.95, Math.max(0.15, nb * (0.6 + p30/300) * m)).toFixed(2);
     const cond    = ndviAdj > 0.60 ? "Excelente" : ndviAdj > 0.45 ? "Buena" : ndviAdj > 0.30 ? "Regular" : "Crítica";
 
-    cb({ temp, tMax:Math.round(Math.max(...tMax.slice(-7))), tMin:Math.round(Math.min(...tMin.slice(-7))),
-         p7, p30, deficit:Math.round(p30 - et07*4.3), ndvi:ndviAdj, condForr:cond, et07,
-         prov, enso, zona }); // incluir provincia, enso y zona para que calcCerebro los use directamente
+    cb({
+      // Actuales
+      temp, tMax: Math.round(Math.max(...(tMaxArr7.length ? tMaxArr7 : [temp+5]))),
+      tMin: Math.round(Math.min(...(tMinArr7.length ? tMinArr7 : [temp-5]))),
+      p7, p30, deficit: Math.round(p30 - et07*4.3), ndvi: ndviAdj, condForr: cond, et07,
+      // Pronóstico
+      pronostico, lluviaProx7, tempMediaProx7, helada7,
+      // Contexto
+      prov, enso, zona,
+    });
   } catch (e) {
-    cb({ error:"No se pudieron obtener datos satelitales: " + e.message });
+    cb({ error: "No se pudieron obtener datos satelitales: " + e.message });
   }
 }
 
@@ -4531,6 +4585,248 @@ function calcDosisProtein(pvKg, pbPasto, pbMeta, suplObj) {
   return Math.max(0.2, Math.min(2.0, +kgSupl.toFixed(2)));
 }
 
+// ─── SCORE GENERAL DEL SISTEMA ────────────────────────────────────
+// 6 dimensiones ponderadas, contextuales a la fase del ciclo
+// Pesos: CC 25% · Balance 20% · Reproducción 20% · Vaquillona 15% · Sanidad 15% · GEI 5%
+// Devuelve { total, dim: [{id, nombre, score, color, descripcion, peso}] }
+function calcScore(motor, form, faseCiclo) {
+  if (!motor) return null;
+
+  const { tray, vaq1E, vaq2E, balanceMensual, sanidad } = motor;
+  const ccServ       = parseFloat(tray?.ccServ   || 0);
+  const prenez       = tray?.pr    ?? 0;
+  const anestro      = tray?.anestro?.dias ?? 90;
+  const ccToros      = parseFloat(form.torosCC || 0);
+  const vaq2Llega    = vaq2E?.llegas ?? true;
+  const vaq1Ok       = !vaq1E || (vaq1E?.gdpReal || 0) >= 400;
+  const mesesDef     = balanceMensual.filter(m => [5,6,7].includes(m.i) && m.balance < 0).length;
+  const peorBal      = balanceMensual.filter(m=>[5,6,7].includes(m.i)).reduce((min,m)=>m.balance<(min?.balance??0)?m:min,null)?.balance ?? 0;
+  const fase         = faseCiclo?.fase || "SIN_FECHA";
+
+  // ── 1. CC al servicio (25%) ───────────────────────────────────
+  // Óptimo ≥5.0, aceptable ≥4.5, crítico <4.0
+  let scoreCC = 0;
+  let descCC  = "";
+  if (ccServ <= 0) {
+    scoreCC = 50; descCC = "Sin dato de CC al servicio";
+  } else if (ccServ >= 5.0) {
+    scoreCC = 100; descCC = "CC óptima al servicio (≥5.0)";
+  } else if (ccServ >= 4.5) {
+    scoreCC = 75 + (ccServ - 4.5) / 0.5 * 25;
+    descCC = "CC aceptable — margen ajustado para biotipos Bos taurus";
+  } else if (ccServ >= 4.0) {
+    scoreCC = 40 + (ccServ - 4.0) / 0.5 * 35;
+    descCC = "CC baja al servicio — preñez comprometida ~8-12pp por cada 0.5 puntos menos";
+  } else {
+    scoreCC = Math.max(0, (ccServ - 2.0) / 2.0 * 40);
+    descCC = "CC crítica — anestro prolongado, preñez severamente reducida";
+  }
+  // Ajuste contextual: si estamos en PARTO o PRE_PARTO, penalizar menos (la CC se va a mover)
+  if (fase === "PARTO" || fase === "PRE_PARTO") scoreCC = Math.min(100, scoreCC * 1.1);
+
+  // ── 2. Balance forrajero invernal (20%) ──────────────────────
+  let scoreBal = 0;
+  let descBal  = "";
+  if (mesesDef === 0) {
+    scoreBal = 95; descBal = "Balance invernal positivo — oferta cubre demanda los 3 meses críticos";
+  } else if (mesesDef === 1) {
+    const deficit = Math.abs(peorBal);
+    scoreBal = deficit < 5 ? 70 : deficit < 15 ? 50 : 35;
+    descBal = "Un mes con déficit invernal — manejable con suplemento o ajuste de carga";
+  } else if (mesesDef === 2) {
+    const deficit = Math.abs(peorBal);
+    scoreBal = deficit < 10 ? 40 : 20;
+    descBal = "Dos meses con déficit — pérdida de CC invernal significativa sin intervención";
+  } else {
+    const deficit = Math.abs(peorBal);
+    scoreBal = deficit < 15 ? 20 : 5;
+    descBal = "Déficit invernal los 3 meses — las vacas pierden CC, el servicio empieza comprometido";
+  }
+
+  // ── 3. Reproducción (20%) ────────────────────────────────────
+  // Combina: preñez proyectada + anestro + CC toros
+  let scoreRepro = 0;
+  let descRepro  = "";
+  const prenezScore = prenez >= 75 ? 100 : prenez >= 60 ? 80 : prenez >= 45 ? 55 : prenez >= 30 ? 30 : 10;
+  const anestroScore = anestro <= 45 ? 100 : anestro <= 60 ? 80 : anestro <= 90 ? 55 : anestro <= 120 ? 30 : 10;
+  const toroScore = ccToros <= 0 ? 70 : ccToros >= 5.5 ? 100 : ccToros >= 5.0 ? 80 : ccToros >= 4.5 ? 55 : 30;
+  scoreRepro = Math.round(prenezScore * 0.5 + anestroScore * 0.3 + toroScore * 0.2);
+  descRepro = "Preñez " + prenez + "% · Anestro " + anestro + "d" + (ccToros > 0 ? " · Toros CC " + ccToros : "");
+
+  // ── 4. Vaquillona de reposición (15%) ────────────────────────
+  let scoreVaq = 0;
+  let descVaq  = "";
+  const gdpV1  = vaq1E?.gdpReal || 0;
+  if (!vaq1E && !vaq2E) {
+    scoreVaq = 60; descVaq = "Sin datos de vaquillona cargados";
+  } else {
+    const v1Score = !vaq1E ? 75 : gdpV1 >= 533 ? 100 : gdpV1 >= 400 ? 75 : gdpV1 >= 250 ? 45 : 20;
+    const v2Score = !vaq2E ? 75 : vaq2Llega ? 100 : Math.max(10, 100 - (vaq2E.pvMinEntore - vaq2E.pvEntore) * 2);
+    scoreVaq = Math.round(v1Score * 0.5 + v2Score * 0.5);
+    descVaq = (vaq1E ? "Vaq1 GDP " + gdpV1 + "g/d" : "Sin Vaq1") +
+              (vaq2E ? " · Vaq2 " + (vaq2Llega ? "llega al entore" : "no llega (" + Math.round(vaq2E.pvEntore||0) + "/" + Math.round(vaq2E.pvMinEntore||0) + "kg)") : "");
+  }
+
+  // ── 5. Sanidad (15%) ────────────────────────────────────────
+  let scoreSan = 100;
+  let descSan  = "";
+  const alerts = sanidad?.alerts || [];
+  const alertasRojas = alerts.filter(a => a.nivel === "rojo").length;
+  const alertasAmbar = alerts.filter(a => a.nivel === "ambar").length;
+  scoreSan = Math.max(0, 100 - alertasRojas * 25 - alertasAmbar * 10);
+  if (form.sanAftosa !== "si") scoreSan = Math.max(0, scoreSan - 20);
+  if (form.sanBrucelosis !== "si") scoreSan = Math.max(0, scoreSan - 15);
+  descSan = alertasRojas > 0
+    ? alertasRojas + " alerta" + (alertasRojas > 1 ? "s" : "") + " sanitaria" + (alertasRojas > 1 ? "s" : "") + " crítica" + (alertasRojas > 1 ? "s" : "")
+    : alertasAmbar > 0 ? alertasAmbar + " observación" + (alertasAmbar > 1 ? "es" : "") + " sanitaria" + (alertasAmbar > 1 ? "s" : "")
+    : "Sin alertas sanitarias activas";
+
+  // ── 6. GEI — eficiencia emisiones (5%) ──────────────────────
+  // Intensidad: kg CO2e / kg PV producido. Mejor = menos emisiones por kg
+  let scoreGEI = 60; // default si no hay datos
+  let descGEI  = "Sin datos suficientes para calcular eficiencia GEI";
+  const gei = calcGEI(form, motor, motor?.tray, null);
+  if (gei) {
+    const intens = parseFloat(gei.intensBase || 0);
+    // Referencia NEA: 25–35 kg CO2e/kg PV (promedio sistemas extensivos)
+    // Bueno: <25, aceptable: 25–35, alto: 35–50, crítico: >50
+    scoreGEI = intens <= 0 ? 60 : intens < 20 ? 100 : intens < 25 ? 85 : intens < 35 ? 65 : intens < 50 ? 40 : 20;
+    descGEI = intens > 0 ? "Intensidad: " + intens.toFixed(1) + " kg CO₂e/kg PV producido" : "Sin producción calculada";
+  }
+
+  // ── TOTAL PONDERADO ──────────────────────────────────────────
+  const dim = [
+    { id:"cc",      nombre:"CC al servicio",    score:Math.round(scoreCC),    peso:25, descripcion:descCC,    color:scoreCC>=75?C.green:scoreCC>=50?C.amber:C.red },
+    { id:"balance", nombre:"Balance invernal",   score:Math.round(scoreBal),   peso:20, descripcion:descBal,   color:scoreBal>=75?C.green:scoreBal>=50?C.amber:C.red },
+    { id:"repro",   nombre:"Reproducción",       score:Math.round(scoreRepro), peso:20, descripcion:descRepro, color:scoreRepro>=75?C.green:scoreRepro>=50?C.amber:C.red },
+    { id:"vaq",     nombre:"Vaquillona",         score:Math.round(scoreVaq),   peso:15, descripcion:descVaq,   color:scoreVaq>=75?C.green:scoreVaq>=50?C.amber:C.red },
+    { id:"sanidad", nombre:"Sanidad",            score:Math.round(scoreSan),   peso:15, descripcion:descSan,   color:scoreSan>=75?C.green:scoreSan>=50?C.amber:C.red },
+    { id:"gei",     nombre:"Eficiencia GEI",     score:Math.round(scoreGEI),   peso:5,  descripcion:descGEI,   color:scoreGEI>=75?C.green:scoreGEI>=50?C.amber:C.red },
+  ];
+  const total = Math.round(dim.reduce((s,d) => s + d.score * d.peso / 100, 0));
+  const colorTotal = total >= 75 ? C.green : total >= 50 ? C.amber : C.red;
+  const labelTotal = total >= 80 ? "Sistema bien manejado" : total >= 65 ? "Sistema con oportunidades" : total >= 50 ? "Sistema con limitantes importantes" : "Sistema en situación crítica";
+
+  return { total, colorTotal, labelTotal, dim };
+}
+
+// ─── RADAR SCORE (SVG puro) ────────────────────────────────────────
+function ScoreRadar({ score }) {
+  if (!score) return null;
+  const { total, colorTotal, labelTotal, dim } = score;
+
+  // SVG araña — 6 ejes radiales
+  const W = 280, H = 280, cx = 140, cy = 145, R = 100;
+  const n = dim.length;
+  const angle = (i) => (Math.PI * 2 * i / n) - Math.PI / 2; // arriba = primer eje
+
+  // Puntos del polígono de score real
+  const pts = dim.map((d, i) => {
+    const r = R * d.score / 100;
+    return { x: cx + r * Math.cos(angle(i)), y: cy + r * Math.sin(angle(i)) };
+  });
+  // Polígono exterior (100%)
+  const ptsMax = dim.map((_, i) => ({
+    x: cx + R * Math.cos(angle(i)),
+    y: cy + R * Math.sin(angle(i)),
+  }));
+  // Polígono intermedio (50%)
+  const ptsMid = dim.map((_, i) => ({
+    x: cx + R * 0.5 * Math.cos(angle(i)),
+    y: cy + R * 0.5 * Math.sin(angle(i)),
+  }));
+
+  const toPath = (ps) => ps.map((p, i) => (i === 0 ? "M" : "L") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ") + " Z";
+
+  // Color de relleno según total
+  const fillColor = total >= 75 ? "#7ec85030" : total >= 50 ? "#e8a03025" : "#e0553025";
+  const strokeColor = total >= 75 ? C.green : total >= 50 ? C.amber : C.red;
+
+  return (
+    <div style={{ background:C.card2, border:"1px solid " + C.border, borderRadius:16, padding:16, marginBottom:14 }}>
+      {/* Header con score total */}
+      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:12 }}>
+        <div style={{ textAlign:"center", flexShrink:0 }}>
+          <div style={{ fontFamily:C.font, fontSize:38, fontWeight:700, color:colorTotal, lineHeight:1 }}>
+            {total}
+          </div>
+          <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1 }}>/ 100</div>
+        </div>
+        <div>
+          <div style={{ fontFamily:C.font, fontSize:13, color:C.text, fontWeight:700, marginBottom:4 }}>
+            {labelTotal}
+          </div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+            {dim.map(d => (
+              <span key={d.id} style={{
+                fontFamily:C.font, fontSize:8, color:d.color,
+                background:d.color + "15", borderRadius:4, padding:"2px 6px"
+              }}>
+                {d.nombre} {d.score}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Radar SVG */}
+      <svg viewBox={"0 0 " + W + " " + H} style={{ width:"100%", maxWidth:W, display:"block", margin:"0 auto" }}>
+        {/* Grillas de fondo */}
+        <path d={toPath(ptsMax)} fill="none" stroke={C.border} strokeWidth="1" />
+        <path d={toPath(ptsMid)} fill="none" stroke={C.border} strokeWidth="0.5" strokeDasharray="3,3" />
+        {/* Ejes radiales */}
+        {ptsMax.map((p, i) => (
+          <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={C.border} strokeWidth="0.5" />
+        ))}
+        {/* Polígono de score */}
+        <path d={toPath(pts)} fill={fillColor} stroke={strokeColor} strokeWidth="2" />
+        {/* Puntos en los vértices */}
+        {pts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={4} fill={dim[i].color} stroke={C.card2} strokeWidth={1.5} />
+        ))}
+        {/* Etiquetas de ejes */}
+        {ptsMax.map((p, i) => {
+          const pad = 14;
+          const lx = cx + (R + pad) * Math.cos(angle(i));
+          const ly = cy + (R + pad) * Math.sin(angle(i));
+          const anchor = lx < cx - 5 ? "end" : lx > cx + 5 ? "start" : "middle";
+          return (
+            <g key={i}>
+              <text x={lx} y={ly - 3} textAnchor={anchor}
+                style={{ fontFamily:C.font, fontSize:"8px", fill:dim[i].color, fontWeight:700 }}>
+                {dim[i].nombre}
+              </text>
+              <text x={lx} y={ly + 8} textAnchor={anchor}
+                style={{ fontFamily:C.font, fontSize:"9px", fill:C.text }}>
+                {dim[i].score}
+              </text>
+            </g>
+          );
+        })}
+        {/* Centro */}
+        <circle cx={cx} cy={cy} r={3} fill={strokeColor} />
+      </svg>
+
+      {/* Detalle por dimensión */}
+      <div style={{ marginTop:8 }}>
+        {dim.map(d => (
+          <div key={d.id} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:5 }}>
+            <div style={{ width:32, flexShrink:0, textAlign:"right", fontFamily:C.font, fontSize:10, color:d.color, fontWeight:700 }}>
+              {d.score}
+            </div>
+            <div style={{ flex:1, height:4, background:C.border, borderRadius:2, overflow:"hidden" }}>
+              <div style={{ width:d.score + "%", height:"100%", background:d.color, borderRadius:2, transition:"width 0.5s" }} />
+            </div>
+            <div style={{ width:70, flexShrink:0, fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+              {d.nombre}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function diagnosticarSistema(motor, form) {
   if (!motor) return null;
 
@@ -4574,7 +4870,7 @@ function diagnosticarSistema(motor, form) {
     stockOk:       Object.values(stockStatus).every(s=>s.suficiente),
     relacionAT:    (nVacas && nToros) ? Math.round(nVacas/nToros) : null,
     ccToros:       parseFloat(form.torosCC) || null,
-    sanidadAlerts: sanidad?.alertas?.length ?? 0,
+    sanidadAlerts: sanidad?.alerts?.length ?? 0,
     cargaEV_ha,
     factorAgua,
     pvVaq1Entrada: pvEntVaq1,
@@ -4936,7 +5232,7 @@ function diagnosticarSistema(motor, form) {
   // Sanidad
   if (form.sanAftosa === "no")  cuellos.push({ id:"san_aftosa",  categoria:"Sanidad", icono:"🔴", prioridad:"P1", titulo:"Sin vacunación Aftosa — obligatorio SENASA", impacto:"Clausura establecimiento + pérdida trazabilidad exportación", causas:[] });
   if (form.sanBrucelosis==="no") cuellos.push({ id:"san_brucela", categoria:"Sanidad", icono:"🔴", prioridad:"P1", titulo:"Sin vacunación Brucelosis — obligatorio SENASA", impacto:"Abortos hasta 30% al 7° mes gestación", causas:[] });
-  if (form.sanToros==="sin_control") cuellos.push({ id:"san_toros_esan", categoria:"Sanidad", icono:"🔴", prioridad:"P1", titulo:"Toros sin ESAN pre-servicio", impacto:"Trichomonas/Campylobacter: infecta 15–40% rodeo silenciosamente", causas:[] });
+  if (form.sanToros==="sin_control") cuellos.push({ id:"san_toros_rev", categoria:"Sanidad", icono:"🔴", prioridad:"P1", titulo:"Toros sin revisión pre-servicio", impacto:"Toro con lesión no detectada puede dejar 15–20 vacas vacías silenciosamente", causas:[] });
 
   // Stock insuficiente
   Object.entries(stockStatus).forEach(([alim, st]) => {
@@ -5136,7 +5432,7 @@ function calcFaseCiclo(cadena, form, ctx) {
       (pastoB ? `NDVI ${ndviHoy?.toFixed(2)} — pasto limitado: las vacías van a competir con las preñadas. Anticipar el descarte.` :
        `Es momento de reservar potreros y preparar el balance forrajero para el invierno.`);
     acciones = [
-      `Control sanitario de toros antes de la seca — ESAN, Trichomoniasis, Campylobacter`,
+      `Revisión de toros después del servicio — CC, aplomos, prepucio, lesiones de monta`,
       `Reservar potreros: cerrar los mejores para el invierno antes de que se pisooteen en otoño`,
       `Calcular cuántas vacas vacías entran al invierno — cada vaca vacía gasta pasto que necesita una preñada`,
       diasAlTacto < 20
@@ -5312,7 +5608,7 @@ function calcFaseCiclo(cadena, form, ctx) {
         ? ` Toros CC ${ccToros} — el preparo necesita empezar YA para llegar a 5.5 al inicio del servicio.`
         : "");
     acciones = [
-      `ESAN completo de toros — aptitud reproductiva + frotis Trichomonas/Campylobacter`,
+      `Revisión de toros: CC, aplomos, prepucio, libido — mínimo 35 días antes del servicio`,
       torosBajos
         ? `Toros CC ${ccToros}: suplementar ${diasAlServ < 30 ? "URGENTE" : "ahora"} — ${Math.round(diasAlServ * 0.5 * 1.3 / 1000)} kg expeller total por toro`
         : `CC de toros ≥5.0 — confirmar antes del ingreso al servicio`,
@@ -5726,10 +6022,10 @@ function calcCerebro(motor, form, sat) {
       id: "esan_toros",
       prioridad: "P1",
       icono: "🔬",
-      titulo: "ESAN toros — antes del servicio",
+      titulo: "Revisión de toros — antes del servicio",
       cuando: diasHastaServ ? `${fmtDesde(diasHastaServ - 35)} (35d antes del servicio)` : "35–40 días antes del servicio",
-      que: "Evaluación capacidad libidinal + aptitud reproductiva + frotis prepucial Trichomonas/Campylobacter.",
-      conexion: "Trichomonas infecta 30–40% del rodeo sin síntomas. No hay tratamiento — descarte del toro.",
+      que: "Revisión clínica de campo: condición corporal, aplomos, prepucio, libido observable. Detectar lesiones, cojeras, problemas articulares que reducen la capacidad de monta.",
+      conexion: "Un toro con problema físico no detectado puede dejar 15–20 vacas vacías en un rodeo sin que nadie lo note hasta el tacto. La revisión de campo cuesta 30 minutos.",
     });
   }
 
@@ -6926,7 +7222,7 @@ function AgroMindPro() {
   const [loading,     setLoading]     = useState(false);
   const [loadMsg,     setLoadMsg]     = useState("");
   const [result,      setResult]      = useState("");
-  const [tab,         setTab]         = useState("acciones");
+  const [tab,         setTab]         = useState("diagnostico");
   const [modoForraje, setModoForraje] = useState("general");
   const [usaPotreros, setUsaPotreros] = useState(true); // siempre potreros
   const [potreros,    setPotreros]    = useState([{ ha:"", veg:"Pastizal natural NEA/Chaco", fenol:"menor_10" }]);
@@ -7002,25 +7298,40 @@ function AgroMindPro() {
   // ── BUILD PROMPT ──────────────────────────────────────────────
   function buildPromptFull() {
     const hoy = new Date().toLocaleDateString("es-AR", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
-    let t = `ANÁLISIS — ${hoy}\n`;
+    let t = "ANÁLISIS — " + hoy + "\n";
     // Score sistémico del motor
     if (motor) {
-      t += `SCORE SISTÉMICO: ${scoreRiesgo}/100 (riesgo ${nivelRiesgo.toUpperCase()})\n`;
-      if (alertasMotor.length > 0) {
-        t += `ALERTAS MOTOR (${alertasMotor.length}): ${alertasMotor.map(a=>a.tipo+": "+a.msg.slice(0,60)).join(" | ")}\n`;
+      t += "SCORE SISTÉMICO: " + scoreRiesgo + "/100 (riesgo " + nivelRiesgo.toUpperCase() + ")\n";
+      // Score nuevo por dimensiones
+      const sc = calcScore(motor, form, null);
+      if (sc) {
+        t += "SCORE DIAGNÓSTICO TOTAL: " + sc.total + "/100 — " + sc.labelTotal + "\n";
+        sc.dim.forEach(d => {
+          t += "  · " + d.nombre + ": " + d.score + "/100 — " + d.descripcion + "\n";
+        });
       }
-      if (cargaEV_ha) t += `CARGA REAL: ${cargaEV_ha} EV/ha (factor oferta: ${motor.factorCarga})\n`;
-      if (motor.factorAgua < 1) t += `FACTOR AGUA: ${motor.factorAgua.toFixed(2)} (agua salobre reduce oferta efectiva)\n`;
-      if (motor.verdeoAporteMcalMes > 0) t += `VERDEO APORTE: +${motor.verdeoAporteMcalMes} Mcal/día rodeo desde mes ${motor.verdeoMesInicio+1}\n`;
+      if (alertasMotor.length > 0) {
+        t += "ALERTAS MOTOR (" + alertasMotor.length + "): " + alertasMotor.map(a=>a.tipo+": "+a.msg.slice(0,60)).join(" | ") + "\n";
+      }
+      if (cargaEV_ha) t += "CARGA REAL: " + cargaEV_ha + " EV/ha (factor oferta: " + motor.factorCarga + ")\n";
+      if (motor.factorAgua < 1) t += "FACTOR AGUA: " + motor.factorAgua.toFixed(2) + " (agua salobre reduce oferta efectiva)\n";
+      if (motor.verdeoAporteMcalMes > 0) t += "VERDEO APORTE: +" + motor.verdeoAporteMcalMes + " Mcal/día rodeo desde mes " + (motor.verdeoMesInicio+1) + "\n";
     }
 
     const locStr = [form.localidad, form.provincia, form.zona].filter(Boolean).join(" · ");
-    if (coords) t += `UBICACIÓN: ${coords.lat?.toFixed(4)}°S ${coords.lon?.toFixed(4)}°W · ${locStr}\n`;
-    else if (locStr) t += `UBICACIÓN: ${locStr} (sin GPS)\n`;
-    if (sat?.temp) t += `MET REAL: T${sat.temp}°C (Mx${sat.tMax}/Mn${sat.tMin}) · P7d:${sat.p7}mm P30d:${sat.p30}mm · Bal:${sat.deficit>0?"+":""}${sat.deficit}mm · NDVI:${sat.ndvi}(${sat.condForr})\n`;
+    if (coords) t += "UBICACIÓN: " + coords.lat?.toFixed(4) + "°S " + coords.lon?.toFixed(4) + "°W · " + locStr + "\n";
+    else if (locStr) t += "UBICACIÓN: " + locStr + " (sin GPS)\n";
+    if (sat?.temp) {
+      t += "MET REAL: T" + sat.temp + "°C (Mx" + sat.tMax + "/Mn" + sat.tMin + ") · P7d:" + sat.p7 + "mm P30d:" + sat.p30 + "mm · Bal:" + (sat.deficit>0?"+":"") + sat.deficit + "mm · NDVI:" + sat.ndvi + "(" + sat.condForr + ")\n";
+      if (sat.pronostico?.length > 0) {
+        t += "PRONÓSTICO 7D: " + sat.pronostico.map(d => d.dia + " " + d.tMax + "/" + d.tMin + "°C" + (d.lluvia > 2 ? "+" + d.lluvia + "mm" : "")).join(" · ") + "\n";
+        if (sat.helada7) t += "⚠ HELADA PROBABLE próximos 7 días — riesgo terneros recién nacidos\n";
+        if (sat.lluviaProx7 > 30) t += "Lluvia acumulada próximos 7 días: " + sat.lluviaProx7 + "mm\n";
+      }
+    }
 
-    t += `ENSO: ${form.enso==="nino"?"El Niño +25%":form.enso==="nina"?"La Niña −25%":"Neutro"} · BIOTIPO: ${form.biotipo||"Brangus 3/8"}\n`;
-    if (dispar) t += `DISPARADOR C4: ${dispar.dias===0?"⛔ Invierno activo — C4 restringido":dispar.dias+" días hasta temp <15°C"}\n`;
+    t += "ENSO: " + (form.enso==="nino"?"El Niño +25%":form.enso==="nina"?"La Niña −25%":"Neutro") + " · BIOTIPO: " + (form.biotipo||"Brangus 3/8") + "\n";
+    if (dispar) t += "DISPARADOR C4: " + (dispar.dias===0?"⛔ Invierno activo — C4 restringido":dispar.dias+" días hasta temp <15°C") + "\n";
 
     if (cadena) {
       t += `\nCRONOLOGÍA:\n`;
@@ -7480,6 +7791,10 @@ function AgroMindPro() {
       ["Balance_hidrico_mm",        sat?.deficit || ""],
       ["NDVI",                      sat?.ndvi || ""],
       ["Cond_forrajera",            sat?.condForr || ""],
+      ["Lluvia_prox7d_mm",           sat?.lluviaProx7 ?? ""],
+      ["Temp_media_prox7d_C",        sat?.tempMediaProx7 ?? ""],
+      ["Helada_prox7d",              sat?.helada7 ? "Si" : sat ? "No" : ""],
+      ["Pronostico_7d",              sat?.pronostico ? sat.pronostico.map(d=>d.dia+":"+d.tMax+"/"+d.tMin+"°C"+( d.lluvia>2?"+"+d.lluvia+"mm":"")).join(" | ") : ""],
       // ─ Suplementación ─
       ["Supl_gestacion",            form.supl1 || ""],
       ["Dosis_gestacion_kgd",       form.dosis1 || "0"],
@@ -7575,6 +7890,13 @@ function AgroMindPro() {
           ["Valor_adicional_ARS",      cb.resumen?.valorDif || ""],
           ["Cuellos_P1",               p1],
           ["Cuellos_P2",               p2],
+          ["Score_total",              (() => { const sc = calcScore(motor, form, null); return sc?.total ?? ""; })()],
+          ["Score_CC",                 (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="cc")?.score ?? ""; })()],
+          ["Score_Balance",            (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="balance")?.score ?? ""; })()],
+          ["Score_Reproduccion",       (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="repro")?.score ?? ""; })()],
+          ["Score_Vaquillona",         (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="vaq")?.score ?? ""; })()],
+          ["Score_Sanidad",            (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="sanidad")?.score ?? ""; })()],
+          ["Score_GEI",                (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="gei")?.score ?? ""; })()],
           ["Anos_recup_vaq1",          cb.anosRecupVaq1 || ""],
           ["Anos_recup_vaq2",          cb.anosRecupVaq2 || ""],
         ];
@@ -7728,7 +8050,7 @@ function AgroMindPro() {
                 )}
                 {parseInt(form.vacasN)/parseInt(form.torosN) > 30 && (
                   <Alerta tipo="warn">
-                    Relación toro:vaca &gt; 30:1 — riesgo de vacas no servidas en los primeros 21 días. Revisar ESAN y libido antes del servicio.
+                    Relación toro:vaca &gt; 30:1 — riesgo de vacas no servidas en los primeros 21 días. Revisar condición física y libido de los toros antes del servicio.
                   </Alerta>
                 )}
               </div>
@@ -9224,10 +9546,10 @@ function AgroMindPro() {
       {form.sanPrograma === "no" && <Alerta tipo="warn">Sin programa sanitario estructurado. La sanidad es el techo del sistema — ninguna mejora nutricional compensa enfermedades activas.</Alerta>}
 
       {/* Resumen alertas si hay motor */}
-      {motor && sanidad?.alertas?.length > 0 && (
+      {motor && sanidad?.alerts?.length > 0 && (
         <div style={{ marginTop:16 }}>
           <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>ALERTAS SANITARIAS</div>
-          {sanidad.alertas.map((a,i) => (
+          {sanidad.alerts.map((a,i) => (
             <Alerta key={i} tipo={a.nivel==="rojo"?"error":"warn"}>{a.msg}</Alerta>
           ))}
         </div>
@@ -9236,369 +9558,340 @@ function AgroMindPro() {
   );
 
   // ── PASO 8: ANÁLISIS ──────────────────────────────────────────
-  const renderAnalisis = () => (
+  const renderAnalisis = () => {
+    const score = motor ? calcScore(motor, form, calcFaseCiclo(motor?.cadena ?? calcCadena(form.iniServ, form.finServ), form)) : null;
+    const DIAS_SEMANA = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+
+    return (
     <div>
-      {/* ── SEMÁFORO DIAGNÓSTICO — simple y directo ── */}
-      {motor && (() => {
-        const nP1 = alertasMotor.filter(a=>a.tipo==="P1").length;
-        const nP2 = alertasMotor.filter(a=>a.tipo==="P2").length;
-        const colSem = nP1 > 0 ? C.red : nP2 > 0 ? C.amber : C.green;
-        const textoSem = nP1 > 0
-          ? `${nP1} problema${nP1>1?"s":""} urgente${nP1>1?"s":""} que afectan la preñez`
-          : nP2 > 0
-          ? `${nP2} punto${nP2>1?"s":""} a corregir antes del servicio`
-          : "Sistema dentro de parámetros técnicos";
-        const prenezActual = tray?.pr ?? null;
-        const ccServActual = tray?.ccServ ?? null;
-        return (
-          <div style={{ background:`${colSem}08`, border:`1px solid ${colSem}30`, borderRadius:14, padding:14, marginBottom:14 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
-              <div style={{ width:14, height:14, borderRadius:"50%", background:colSem, flexShrink:0, boxShadow:`0 0 8px ${colSem}60` }} />
-              <div style={{ fontFamily:C.sans, fontSize:13, color:C.text, fontWeight:600, flex:1 }}>{textoSem}</div>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-              <div style={{ textAlign:"center", padding:"8px 4px", background:`${C.card}`, borderRadius:8 }}>
-                <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:prenezActual>=55?C.green:prenezActual>=35?C.amber:C.red }}>{prenezActual ?? "—"}%</div>
-                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>preñez estimada</div>
-              </div>
-              <div style={{ textAlign:"center", padding:"8px 4px", background:`${C.card}`, borderRadius:8 }}>
-                <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:parseFloat(ccServActual)>=4.5?C.green:C.red }}>{ccServActual ?? "—"}</div>
-                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>CC al servicio</div>
-              </div>
-              <div style={{ textAlign:"center", padding:"8px 4px", background:`${C.card}`, borderRadius:8 }}>
-                <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:nP1>0?C.red:nP2>0?C.amber:C.green }}>{nP1+nP2}</div>
-                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>correcciones</div>
-              </div>
+
+      {/* ══ SCORE RADAR — visible siempre que haya motor ══ */}
+      {motor
+        ? <ScoreRadar score={score} />
+        : (
+          <div style={{ background:C.card2, border:"1px dashed " + C.border, borderRadius:14, padding:20, textAlign:"center", marginBottom:14 }}>
+            <div style={{ fontFamily:C.font, fontSize:28, marginBottom:6 }}>📊</div>
+            <div style={{ fontFamily:C.font, fontSize:11, color:C.textFaint }}>
+              Completá los pasos anteriores para ver el diagnóstico completo
             </div>
           </div>
-        );
-      })()}
+        )
+      }
 
-      {!result && !loading && (
-        <button onClick={runAnalysis} style={{ width:"100%", background:C.green, color:"#0b1a0c", padding:16, borderRadius:14, border:"none", fontFamily:C.font, fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:1, marginBottom:16 }}>
-          ⚡ GENERAR ANÁLISIS TÉCNICO
-        </button>
+      {/* ══ PRONÓSTICO 7 DÍAS — si hay datos satelitales ══ */}
+      {sat?.pronostico?.length > 0 && (
+        <div style={{ background:C.card2, border:"1px solid " + C.border, borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
+            🌤 PRONÓSTICO 7 DÍAS — {form.localidad || form.provincia || ""}
+          </div>
+          <div style={{ display:"flex", gap:4, overflowX:"auto", scrollbarWidth:"none" }}>
+            {sat.pronostico.map((d, i) => {
+              const lluvia = d.lluvia > 10 ? "💧" : d.lluvia > 2 ? "🌦" : d.tMin <= 2 ? "❄️" : d.tMax >= 30 ? "☀️" : "🌤";
+              const tmed = (d.tMax + d.tMin) / 2;
+              const activo = tmed < 15; // C4 no activo
+              return (
+                <div key={i} style={{
+                  flex:"0 0 auto", textAlign:"center", padding:"6px 8px", borderRadius:8,
+                  background: activo ? C.amber + "10" : C.green + "08",
+                  border:"1px solid " + (activo ? C.amber + "30" : C.border),
+                  minWidth:42,
+                }}>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>{d.dia}</div>
+                  <div style={{ fontSize:14 }}>{lluvia}</div>
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.text, fontWeight:700 }}>{d.tMax}°</div>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>{d.tMin}°</div>
+                  {d.lluvia > 2 && (
+                    <div style={{ fontFamily:C.font, fontSize:7, color:"#5aaff0" }}>{d.lluvia}mm</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {sat.helada7 && (
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, marginTop:6 }}>
+              ⚠ Helada probable en los próximos 7 días — revisar terneros recién nacidos
+            </div>
+          )}
+          {sat.lluviaProx7 > 0 && (
+            <div style={{ fontFamily:C.font, fontSize:9, color:"#5aaff0", marginTop:4 }}>
+              💧 Lluvia acumulada próx. 7 días: {sat.lluviaProx7}mm
+              {sat.tempMediaProx7 < 15 ? " · C4 restringido (T<15°C)" : ""}
+            </div>
+          )}
+        </div>
       )}
-      {loading && <LoadingPanel msg={loadMsg} />}
-      {result && !loading && (
+
+      {/* ══ 4 TABS PRINCIPALES ══ */}
+      {motor && (
         <div>
-          {/* 3 tabs simplificados */}
-          <div style={{ display:"flex", gap:6, marginBottom:14 }}>
-            {[["acciones","🎯 Acciones"],["balance","📊 Balance"],["gei","🌿 GEI"],["seguimiento","📅 Campo"],["cerebro","🧠 Cerebro"]].map(([k,l]) => (
+          <div style={{ display:"flex", gap:4, marginBottom:12, overflowX:"auto", scrollbarWidth:"none" }}>
+            {[["diagnostico","🔍 Diagnóstico"],["balance","📊 Balance"],["gei","🌿 GEI"],["cerebro","🧠 Cerebro"]].map(([k,l]) => (
               <button key={k} onClick={()=>setTab(k)} style={{
-                flex:1, padding:"10px 6px", borderRadius:10, cursor:"pointer",
+                flex:"0 0 auto", padding:"10px 12px", borderRadius:10, cursor:"pointer",
                 background: tab===k ? C.green : "transparent",
-                border:     tab===k ? `1px solid ${C.green}` : `1px solid ${C.border}`,
+                border:     tab===k ? "1px solid " + C.green : "1px solid " + C.border,
                 color:      tab===k ? "#0b1a0c" : C.textDim,
                 fontFamily: C.font, fontSize:10, fontWeight: tab===k ? 700 : 400,
               }}>{l}</button>
             ))}
           </div>
 
-          {/* TAB CEREBRO — diagnóstico integrado */}
-          {tab === "cerebro" && (
-            <TabCerebro motor={motor} form={form} sat={sat} />
-          )}
-
-          {/* TAB ACCIONES — informe IA como protagonista */}
-          {tab === "acciones" && (
+          {/* ═══ TAB DIAGNÓSTICO ═══ */}
+          {tab === "diagnostico" && (
             <div>
-              {/* ── Sin informe: CTA principal + preview de cuellos ── */}
-              {!result && !loading && (() => {
+              {/* Fase del ciclo */}
+              {motor?.cadena && <PanelFaseCiclo faseCiclo={calcFaseCiclo(motor.cadena, form,
+                { tempHoy: sat?.temp ? parseFloat(sat.temp) : null,
+                  ndviHoy: sat?.ndvi ? parseFloat(sat.ndvi) : null,
+                  p30Hoy:  sat?.p30  ? parseFloat(sat.p30)  : null,
+                  ccServ:  parseFloat(motor.tray?.ccServ || 0),
+                  ccToros: parseFloat(form.torosCC || 0),
+                  prenez:  motor.tray?.pr ?? 0,
+                  mesesDeficit: motor.balanceMensual?.filter(m=>[5,6,7].includes(m.i)&&m.balance<0).length ?? 0,
+                  peorBalanceMcal: motor.balanceMensual?.filter(m=>[5,6,7].includes(m.i)).reduce((mn,m)=>m.balance<(mn?.balance??0)?m:mn,null)?.balance ?? 0,
+                  pvVaca:  parseFloat(form.pvVacaAdulta)||320,
+                  nVacas:  parseFloat(form.vacasN)||0,
+                  vaq1SinCorr: motor.vaq1E ? (motor.vaq1E?.gdpReal||0) < 200 : false,
+                  vaq2Llega: motor.vaq2E?.llegas ?? true,
+                  pvVaq2Falta: motor.vaq2E?.llegas ? 0 : (motor.vaq2E?.pvMinEntore||0)-(motor.vaq2E?.pvEntore||0),
+                  balanceMesActual: motor.balanceMensual?.find(m=>m.i===new Date().getMonth())?.balance ?? 0,
+                }
+              )} />}
+
+              {/* Tabla completa de parámetros con interpretación */}
+              {(() => {
                 const dx = diagnosticarSistema(motor, form);
-                const P1 = (dx?.cuellos||[]).filter(c=>c.prioridad==="P1");
-                const P2 = (dx?.cuellos||[]).filter(c=>c.prioridad==="P2");
+                const MESES_C2 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+                const smf2 = (v, ok, warn) => v >= ok ? C.green : v >= warn ? C.amber : C.red;
+
+                // Secciones de diagnóstico
+                const secciones = [
+                  {
+                    titulo: "📍 Establecimiento",
+                    filas: [
+                      ["Productor",      form.nombreProductor || "—",                      null, ""],
+                      ["Ubicación",      (form.localidad||"") + " · " + (form.provincia||"—"), null, ""],
+                      ["Zona",           form.zona || "—",                                  null, ""],
+                      ["Superficie",     form.supHa ? form.supHa + " ha" : "—",            null, ""],
+                      ["Clima hoy",      sat?.temp ? sat.temp + "°C · NDVI " + sat.ndvi + " · Lluvia 30d " + sat.p30 + "mm" : "Sin datos satelitales", null, ""],
+                    ]
+                  },
+                  {
+                    titulo: "🐄 Rodeo",
+                    filas: [
+                      ["Biotipo",        form.biotipo || "—",                               null, ""],
+                      ["Vacas",          (form.vacasN||"—") + " cab",                       null, ""],
+                      ["Toros",          (form.torosN||"—") + " cab · CC " + (form.torosCC||"—"), form.torosCC ? smf2(parseFloat(form.torosCC),5.0,4.5) : null, form.torosCC < 4.5 ? "CC baja — revisar 35d antes del servicio" : ""],
+                      ["Relación T:V",   form.vacasN && form.torosN ? Math.round(parseFloat(form.vacasN)/parseFloat(form.torosN)) + ":1" : "—", form.vacasN && form.torosN && parseFloat(form.vacasN)/parseFloat(form.torosN) > 30 ? C.amber : C.green, parseFloat(form.vacasN||0)/parseFloat(form.torosN||1) > 30 ? "Relación alta — riesgo de vacas no servidas" : "Relación adecuada"],
+                      ["PV adulto",      form.pvVacaAdulta ? form.pvVacaAdulta + " kg" : "—", null, ""],
+                      ["Preñez hist.",   form.prenez ? form.prenez + "%" : "—",             null, ""],
+                      ["% Destete hist.",form.pctDestete ? form.pctDestete + "%" : "—",     null, ""],
+                      ["Estado reprod.", form.eReprod || "—",                               null, ""],
+                    ]
+                  },
+                  {
+                    titulo: "📊 Condición corporal",
+                    filas: [
+                      ["CC ponderada hoy",    ccPondVal > 0 ? ccPondVal.toFixed(1) : "—",   ccPondVal > 0 ? smf2(ccPondVal, 4.5, 4.0) : null, ""],
+                      ["CC proyectada parto", tray?.ccParto ? tray.ccParto.toFixed(1) : "—", tray?.ccParto ? smf2(tray.ccParto, 4.5, 4.0) : null, tray?.ccParto < 4.0 ? "Parto con CC baja → mayor anestro posparto" : ""],
+                      ["CC mínima lactación", tray?.ccMinLact ? tray.ccMinLact.toFixed(1) : "—", tray?.ccMinLact ? smf2(tray.ccMinLact, 3.5, 3.0) : null, tray?.ccMinLact < 3.0 ? "Mínima crítica — mobilización excesiva" : ""],
+                      ["CC al servicio",      tray?.ccServ ? tray.ccServ.toFixed(1) : "—",  tray?.ccServ ? smf2(tray.ccServ, 4.5, 4.0) : null, tray?.ccServ < 4.5 ? "Por debajo del óptimo (4.5) → preñez reducida" : "Óptima para el servicio"],
+                    ]
+                  },
+                  {
+                    titulo: "🔬 Reproducción",
+                    filas: [
+                      ["Preñez estimada",  tray?.pr != null ? tray.pr + "%" : "—",         tray?.pr != null ? smf2(tray.pr, 65, 45) : null, tray?.pr < 45 ? "Preñez baja — revisar CC, toros y anestro" : tray?.pr >= 75 ? "Excelente" : "Aceptable"],
+                      ["Anestro posparto", tray?.anestro ? tray.anestro.dias + " días" : "—", tray?.anestro ? smf2(1/(tray.anestro.dias||90), 1/60, 1/90) : null, tray?.anestro?.dias > 90 ? "Anestro prolongado — clave para biotipo " + (form.biotipo||"") : ""],
+                      ["Meses lactación",  tray?.mesesLact ? tray.mesesLact + " meses" : "—", null, ""],
+                      ["Ini. servicio",    form.iniServ ? new Date(form.iniServ+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}) : "—", null, ""],
+                      ["Fin servicio",     form.finServ ? new Date(form.finServ+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}) : "—", null, ""],
+                      ["Duración servicio", cadena?.diasServ ? cadena.diasServ + " días" : "—", cadena?.diasServ ? (cadena.diasServ >= 75 && cadena.diasServ <= 90 ? C.green : C.amber) : null, cadena?.diasServ > 90 ? "Servicio largo → cola de preñez pesada" : ""],
+                    ]
+                  },
+                  {
+                    titulo: "🌾 Forraje y balance",
+                    filas: [
+                      ["Vegetación",      form.vegetacion || "—",                           null, ""],
+                      ["Fenología",       form.fenologia  || "—",                           null, ""],
+                      ["NDVI hoy",        sat?.ndvi ? sat.ndvi + " (" + (sat.condForr||"—") + ")" : "—", sat?.ndvi ? smf2(parseFloat(sat.ndvi), 0.50, 0.35) : null, sat?.ndvi < 0.35 ? "Pasto escaso — confirmar con recorrida" : ""],
+                      ["Balance jun",     balanceMensual[5]?.balance != null ? (balanceMensual[5].balance > 0 ? "+" : "") + Math.round(balanceMensual[5].balance) + " Mcal/día" : "—", balanceMensual[5]?.balance != null ? (balanceMensual[5].balance >= 0 ? C.green : C.red) : null, ""],
+                      ["Balance jul",     balanceMensual[6]?.balance != null ? (balanceMensual[6].balance > 0 ? "+" : "") + Math.round(balanceMensual[6].balance) + " Mcal/día" : "—", balanceMensual[6]?.balance != null ? (balanceMensual[6].balance >= 0 ? C.green : C.red) : null, ""],
+                      ["Balance ago",     balanceMensual[7]?.balance != null ? (balanceMensual[7].balance > 0 ? "+" : "") + Math.round(balanceMensual[7].balance) + " Mcal/día" : "—", balanceMensual[7]?.balance != null ? (balanceMensual[7].balance >= 0 ? C.green : C.red) : null, ""],
+                      ["Carga EV/ha",     cargaEV_ha ? cargaEV_ha.toFixed(2) : "—",        null, ""],
+                    ]
+                  },
+                  {
+                    titulo: "🐮 Vaquillona",
+                    filas: [
+                      ["Reposición",      nVaqRepos + " cab (" + (form.pctReposicion||20) + "%)", null, ""],
+                      ["Vaq1 — GDP inv.", vaq1E ? (vaq1E.gdpReal || 0) + " g/día" : "Sin datos", vaq1E ? smf2(vaq1E.gdpReal||0, 400, 250) : null, vaq1E && (vaq1E.gdpReal||0) < 400 ? "Por debajo del objetivo (533g/d) — suplemento proteico" : ""],
+                      ["Vaq1 — PV salida",vaq1E?.pvSal ? vaq1E.pvSal + " kg" : "—",         null, ""],
+                      ["Vaq2 — llega entore", vaq2E ? (vaq2E.llegas ? "Sí (" + Math.round(vaq2E.pvEntore||0) + "kg)" : "No (" + Math.round(vaq2E.pvEntore||0) + "/" + Math.round(vaq2E.pvMinEntore||0) + "kg)") : "Sin datos", vaq2E ? (vaq2E.llegas ? C.green : C.red) : null, vaq2E && !vaq2E.llegas ? "Entore comprometido — suplementar o postergar" : ""],
+                    ]
+                  },
+                  {
+                    titulo: "🩺 Sanidad",
+                    filas: [
+                      ["Aftosa",          form.sanAftosa    === "si" ? "Al día ✓" : "Sin vacunar", form.sanAftosa    === "si" ? C.green : C.red, form.sanAftosa !== "si" ? "Obligatorio legal" : ""],
+                      ["Brucelosis",      form.sanBrucelosis=== "si" ? "Al día ✓" : "Sin vacunar", form.sanBrucelosis=== "si" ? C.green : C.red, form.sanBrucelosis !== "si" ? "Obligatorio legal + riesgo zoonótico" : ""],
+                      ["IBR/DVB",         form.sanVacunas   === "si" ? "Al día ✓" : "Sin vacunar", form.sanVacunas   === "si" ? C.green : C.amber, form.sanVacunas !== "si" ? "−15pp preñez si sin vacunar (Gnemmi 2001)" : ""],
+                      ["Rev. toros",      form.sanToros === "con_control" ? "Con revisión ✓" : "Sin revisión", form.sanToros === "con_control" ? C.green : C.red, form.sanToros !== "con_control" ? "Toro con lesión no detectada = 15-20 vacas vacías" : ""],
+                      ["Historia abortos",form.sanAbortos   === "si" ? "Sí — investigar" : "No", form.sanAbortos === "si" ? C.amber : C.green, form.sanAbortos === "si" ? "Requiere diagnóstico etiológico" : ""],
+                      ["Programa sanit.", form.sanPrograma  === "si" ? "Sí ✓" : "No", form.sanPrograma  === "si" ? C.green : C.amber, form.sanPrograma !== "si" ? "Sin programa estructurado — sanidad es el techo del sistema" : ""],
+                    ]
+                  },
+                ];
+
                 return (
                   <div>
-                    {/* Preview cuellos detectados */}
-                    {(P1.length > 0 || P2.length > 0) && (
-                      <div style={{ marginBottom:14 }}>
-                        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
-                          🔍 {P1.length + P2.length} LIMITANTES DETECTADOS
+                    {secciones.map(sec => (
+                      <div key={sec.titulo} style={{ marginBottom:12 }}>
+                        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>
+                          {sec.titulo}
                         </div>
-                        {[...P1,...P2].map(c => (
-                          <div key={c.id} style={{
-                            display:"flex", alignItems:"center", gap:10, padding:"10px 12px",
-                            background: c.prioridad==="P1" ? `${C.red}08` : `${C.amber}07`,
-                            border:`1px solid ${c.prioridad==="P1"?C.red:C.amber}25`,
-                            borderRadius:10, marginBottom:6,
-                          }}>
-                            <span style={{ fontSize:16 }}>{c.icono}</span>
-                            <div style={{ flex:1 }}>
-                              <div style={{ fontFamily:C.font, fontSize:8, color:c.prioridad==="P1"?C.red:C.amber, letterSpacing:.5, marginBottom:2 }}>
-                                {c.prioridad} · {c.categoria}
-                              </div>
-                              <div style={{ fontFamily:C.fontSans||C.font, fontSize:12, color:C.text, fontWeight:500 }}>
-                                {c.titulo}
-                              </div>
-                              <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:2 }}>
-                                📈 {c.impacto}
+                        <div style={{ background:C.card2, border:"1px solid " + C.border, borderRadius:10, overflow:"hidden" }}>
+                          {sec.filas.map(([label, valor, color, interp], fi) => (
+                            <div key={fi} style={{
+                              display:"flex", alignItems:"flex-start", gap:8, padding:"7px 12px",
+                              borderBottom: fi < sec.filas.length-1 ? "1px solid " + C.border : "none",
+                              background: fi % 2 === 0 ? "transparent" : C.card + "40",
+                            }}>
+                              <div style={{ flex:"0 0 130px", fontFamily:C.font, fontSize:9, color:C.textFaint }}>{label}</div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontFamily:C.font, fontSize:10, color:color || C.text, fontWeight: color ? 700 : 400 }}>
+                                  {valor}
+                                </div>
+                                {interp && <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:1 }}>{interp}</div>}
                               </div>
                             </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Alertas P1/P2 */}
+                    {alertasMotor.length > 0 && (
+                      <div style={{ marginTop:8 }}>
+                        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>⚠ ALERTAS DEL SISTEMA</div>
+                        {alertasMotor.map((a,i) => (
+                          <div key={i} style={{ display:"flex", gap:8, padding:"8px 12px", background:(a.tipo==="P1"?C.red:C.amber)+"08", border:"1px solid "+(a.tipo==="P1"?C.red:C.amber)+"25", borderRadius:8, marginBottom:5 }}>
+                            <span style={{ fontFamily:C.font, fontSize:8, color:a.tipo==="P1"?C.red:C.amber, fontWeight:700, flexShrink:0 }}>{a.tipo}</span>
+                            <span style={{ fontFamily:C.font, fontSize:10, color:C.text }}>{a.msg}</span>
                           </div>
                         ))}
                       </div>
                     )}
-                    <button onClick={runAnalysis} style={{ width:"100%", background:C.green, color:"#0b1a0c", padding:16, borderRadius:14, border:"none", fontFamily:C.font, fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:1, marginBottom:10 }}>
-                      ⚡ GENERAR INFORME TÉCNICO
-                    </button>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, textAlign:"center" }}>
-                      El informe incluye diagnóstico completo, planes de acción con dosis y fundamento científico
-                    </div>
+
+                    {/* Subtab visitas de campo */}
+                    <details style={{ marginTop:12 }}>
+                      <summary style={{ fontFamily:C.font, fontSize:10, color:C.textDim, cursor:"pointer", padding:"10px 14px", background:C.card2, borderRadius:10, border:"1px solid " + C.border, listStyle:"none", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        <span>📅 Visitas de campo</span><span>▼</span>
+                      </summary>
+                      <div style={{ marginTop:6 }}>
+                        <div style={{ background:C.card2, border:"1px solid " + C.border, borderRadius:10, padding:12, marginBottom:8 }}>
+                          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
+                            <Input label="FECHA" value={form._visitaFecha||""} onChange={v=>set("_visitaFecha",v)} type="date" />
+                            <Input label="CC OBSERVADA" value={form._visitaCC||""} onChange={v=>set("_visitaCC",v)} type="number" placeholder="4.5" />
+                          </div>
+                          <Input label="OBSERVACIÓN" value={form._visitaObs||""} onChange={v=>set("_visitaObs",v)} placeholder="Vacas con buena cobertura, pasto escaso en potrero N…" />
+                          <button onClick={() => {
+                            if (!form._visitaFecha) return;
+                            const nueva = { fecha:form._visitaFecha, cc:form._visitaCC||"", obs:form._visitaObs||"" };
+                            set("visitasCampo", [...(form.visitasCampo||[]), nueva]);
+                            set("_visitaFecha",""); set("_visitaCC",""); set("_visitaObs","");
+                          }} style={{ width:"100%", background:C.green+"15", border:"1px solid "+C.green+"40", borderRadius:8, color:C.green, padding:10, fontFamily:C.font, fontSize:11, cursor:"pointer", marginTop:6 }}>
+                            + Registrar visita
+                          </button>
+                        </div>
+                        {(form.visitasCampo||[]).length > 0 && (
+                          <div>
+                            {[...(form.visitasCampo||[])].reverse().slice(0,5).map((v,i) => (
+                              <div key={i} style={{ padding:"8px 12px", background:C.card2, border:"1px solid "+C.border, borderRadius:8, marginBottom:4 }}>
+                                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
+                                  <span style={{ fontFamily:C.font, fontSize:10, color:C.text }}>{v.fecha}</span>
+                                  {v.cc && <span style={{ fontFamily:C.font, fontSize:10, color:C.amber }}>CC {v.cc}</span>}
+                                </div>
+                                {v.obs && <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{v.obs}</div>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </details>
                   </div>
                 );
               })()}
-
-              {loading && <LoadingPanel msg={loadMsg} />}
-
-              {/* ── Con informe: estructura clara en 3 bloques ── */}
-              {result && !loading && (
-                <div>
-                  {/* BLOQUE 1: Informe IA — protagonista */}
-                  <RenderInforme texto={result} />
-
-                  {/* BLOQUE 2: Planes detallados — accordion secundario */}
-                  <details style={{ marginTop:14 }}>
-                    <summary style={{
-                      fontFamily:C.font, fontSize:10, color:C.textDim, cursor:"pointer",
-                      padding:"10px 14px", background:C.card2, borderRadius:10,
-                      border:`1px solid ${C.border}`, listStyle:"none",
-                      display:"flex", alignItems:"center", justifyContent:"space-between",
-                    }}>
-                      <span>🎯 Planes de acción detallados — dosis, frecuencia y fundamento</span>
-                      <span>▼</span>
-                    </summary>
-                    <div style={{ marginTop:6 }}>
-                      <PanelRecomendaciones motor={motor} form={form} />
-                    </div>
-                  </details>
-
-                  {/* BLOQUE 3: Acciones de exportación */}
-                  <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                    <button onClick={descargarPDF} style={{ flex:2, background:`${C.blue}12`, border:`1px solid ${C.blue}35`, borderRadius:10, color:C.blue, padding:13, fontFamily:C.sans||C.font, fontSize:13, cursor:"pointer" }}>⬇ Exportar PDF</button>
-                    <button onClick={descargarCSV} style={{ flex:1, background:`${C.green}10`, border:`1px solid ${C.green}35`, borderRadius:10, color:C.green, padding:13, fontFamily:C.sans||C.font, fontSize:13, cursor:"pointer" }}>📊 CSV</button>
-                  </div>
-                  <button onClick={runAnalysis} style={{ width:"100%", background:`${C.green}06`, border:`1px solid ${C.border}`, borderRadius:10, color:C.textDim, padding:10, fontFamily:C.sans||C.font, fontSize:12, cursor:"pointer", marginTop:8 }}>
-                    🔄 Regenerar informe
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
-          {/* TAB BALANCE — gráficos energéticos + CC grupos */}
+          {/* ═══ TAB BALANCE ═══ */}
           {tab === "balance" && (
             <div>
               <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />
+              <TrayectoriaVaquillona motor={motor} form={form} />
+              {tray && dist && (
+                <GraficoCCEscenarios
+                  escenarios={[
+                    { label:"Sin cambios", cc:tray, color:C.amber },
+                    { label:"Con destete precoz", cc:{...tray, ccMinLact:Math.min(tray.ccMinLact+0.3, tray.ccParto)}, color:C.green },
+                  ]}
+                  cadena={cadena} mesesLact={tray.mesesLact} form={form} sat={sat}
+                />
+              )}
             </div>
           )}
+
+          {/* ═══ TAB GEI ═══ */}
           {tab === "gei" && (
             <PanelGEI form={form} motor={motor} tray={tray} sat={sat} />
           )}
-          {tab === "seguimiento" && (
+
+          {/* ═══ TAB CEREBRO ═══ */}
+          {tab === "cerebro" && (
             <div>
-              {/* ── Visitas de campo ── */}
-              <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:10 }}>📅 REGISTRAR VISITA DE CAMPO</div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-                  <Input label="FECHA" value={form._visitaFecha||""} onChange={v=>set("_visitaFecha",v)} type="date" />
-                  <Input label="CC OBSERVADA (prom. rodeo)" value={form._visitaCC||""} onChange={v=>set("_visitaCC",v)} type="number" placeholder="4.5" />
-                </div>
-                <Input label="OBSERVACIÓN" value={form._visitaObs||""} onChange={v=>set("_visitaObs",v)} placeholder="Ej: vacas con buena cobertura, pasto escaso en potrero N…" />
-                <button onClick={() => {
-                  if (!form._visitaFecha) return;
-                  const nueva = { fecha:form._visitaFecha, cc:form._visitaCC||"", obs:form._visitaObs||"" };
-                  set("visitasCampo", [...(form.visitasCampo||[]), nueva]);
-                  set("_visitaFecha",""); set("_visitaCC",""); set("_visitaObs","");
-                }} style={{ width:"100%", background:`${C.green}15`, border:`1px solid ${C.green}40`, borderRadius:8, color:C.green, padding:10, fontFamily:C.font, fontSize:11, cursor:"pointer", marginTop:4 }}>
-                  + Registrar visita
-                </button>
-              </div>
-              {(form.visitasCampo||[]).length > 0 && (
-                <div style={{ marginBottom:12 }}>
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>HISTORIAL</div>
-                  {[...(form.visitasCampo||[])].reverse().map((v, i) => {
-                    const ccObsN = parseFloat(v.cc);
-                    const diff   = ccObsN && ccPondVal ? (ccObsN - ccPondVal).toFixed(2) : null;
-                    return (
-                      <div key={i} style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:10, padding:12, marginBottom:6 }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                          <span style={{ fontFamily:C.font, fontSize:11, color:C.text, fontWeight:600 }}>
-                            {new Date(v.fecha+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"short",year:"numeric"})}
-                          </span>
-                          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                            {v.cc && <span style={{ fontFamily:C.font, fontSize:11, color:parseFloat(v.cc)>=4.5?C.green:C.red, fontWeight:700 }}>CC {v.cc}</span>}
-                            {diff && <span style={{ fontFamily:C.font, fontSize:9, color:parseFloat(diff)>=0?C.green:C.amber }}>({parseFloat(diff)>=0?"+":""}{diff} vs plan)</span>}
-                          </div>
-                        </div>
-                        {v.obs && <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim }}>{v.obs}</div>}
-                        <button onClick={()=>set("visitasCampo",(form.visitasCampo||[]).filter((_,j)=>j!==(form.visitasCampo.length-1-i)))}
-                          style={{ background:"none",border:"none",color:C.textFaint,cursor:"pointer",fontFamily:C.font,fontSize:9,marginTop:4 }}>✕ eliminar</button>
+              <TabCerebro motor={motor} form={form} sat={sat} />
+              <div style={{ marginTop:14 }}>
+                {!result && !loading && (
+                  <div>
+                    <button onClick={runAnalysis} style={{ width:"100%", background:C.green, color:"#0b1a0c", padding:16, borderRadius:14, border:"none", fontFamily:C.font, fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:1, marginBottom:8 }}>
+                      ⚡ GENERAR INFORME TÉCNICO COMPLETO
+                    </button>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, textAlign:"center" }}>
+                      La IA analiza score, fase del ciclo, balance, GEI y datos del rodeo — produce el diagnóstico integrado con cuantificación de mejoras
+                    </div>
+                  </div>
+                )}
+                {loading && <LoadingPanel msg={loadMsg} />}
+                {result && !loading && (
+                  <div>
+                    <RenderInforme texto={result} />
+                    <details style={{ marginTop:12 }}>
+                      <summary style={{ fontFamily:C.font, fontSize:10, color:C.textDim, cursor:"pointer", padding:"10px 14px", background:C.card2, borderRadius:10, border:"1px solid "+C.border, listStyle:"none", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        <span>🎯 Planes de acción detallados con dosis y fundamento</span><span>▼</span>
+                      </summary>
+                      <div style={{ marginTop:6 }}>
+                        <PanelRecomendaciones motor={motor} form={form} />
                       </div>
-                    );
-                  })}
-                  {(form.visitasCampo||[]).filter(v=>v.cc).length >= 2 && (
-                    <div style={{ background:C.card2, borderRadius:10, padding:14, border:`1px solid ${C.border}` }}>
-                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>CC OBSERVADA vs PLAN</div>
-                      <ResponsiveContainer width="100%" height={140}>
-                        <LineChart data={(form.visitasCampo||[]).filter(v=>v.cc).map(v=>({
-                          fecha:new Date(v.fecha+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"short"}),
-                          ccObservada:parseFloat(v.cc), ccPlan:ccPondVal,
-                        }))}>
-                          <XAxis dataKey="fecha" tick={{fill:C.textFaint,fontSize:8}} />
-                          <YAxis domain={[3,7]} tick={{fill:C.textFaint,fontSize:8}} />
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.06)" />
-                          <Tooltip contentStyle={{background:C.card,border:`1px solid ${C.border}`,borderRadius:8,fontFamily:C.font,fontSize:10}} />
-                          <Legend wrapperStyle={{fontFamily:C.font,fontSize:9}} />
-                          <Line dataKey="ccObservada" name="CC campo" stroke={C.green} strokeWidth={2} dot={{r:4}} />
-                          <Line dataKey="ccPlan" name="CC plan base" stroke={C.amber} strokeDasharray="5 3" strokeWidth={1.5} dot={false} />
-                        </LineChart>
-                      </ResponsiveContainer>
+                    </details>
+                    <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                      <button onClick={descargarPDF} style={{ flex:2, background:C.blue+"12", border:"1px solid "+C.blue+"35", borderRadius:10, color:C.blue, padding:13, fontFamily:C.font, fontSize:13, cursor:"pointer" }}>⬇ Exportar PDF completo</button>
+                      <button onClick={descargarCSV} style={{ flex:1, background:C.green+"10", border:"1px solid "+C.green+"35", borderRadius:10, color:C.green, padding:13, fontFamily:C.font, fontSize:13, cursor:"pointer" }}>📊 CSV</button>
                     </div>
-                  )}
-                </div>
-              )}
-              {/* Lista de compras semanal */}
-              {(() => {
-                const CATS_R = [
-                  // vacas: herramienta = destete, no suplemento
-                  { sK:"supl_v2s",     dK:"dosis_v2s",     n:parseInt(form.v2sN)||0     },
-                  { sK:"supl_toros",   dK:"dosis_toros",   n:parseInt(form.torosN)||0   },
-                  { sK:"supl_vaq2",    dK:"dosis_vaq2",    n:parseInt(form.vaq2N)||0    },
-                  { sK:"supl_vaq1",    dK:"dosis_vaq1",    n:Math.round((parseInt(form.vacasN)||0)*(parseFloat(form.pctReposicion)||20)/100) },
-                ];
-                const demSem = {};
-                CATS_R.forEach(c => {
-                  const alim = form[c.sK]; if (!alim||!c.n) return;
-                  const d = parseFloat(form[c.dK])||0; if (!d) return;
-                  if (!demSem[alim]) demSem[alim] = 0;
-                  demSem[alim] += d * c.n * 7;
-                });
-                if (Object.keys(demSem).length === 0) return (
-                  <div style={{ fontFamily:C.sans, fontSize:12, color:C.textFaint, textAlign:"center", padding:20 }}>
-                    Cargá el plan de suplementación en el paso 6 para ver la lista de compras
+                    <button onClick={runAnalysis} style={{ width:"100%", background:C.green+"06", border:"1px solid "+C.border, borderRadius:10, color:C.textDim, padding:10, fontFamily:C.font, fontSize:12, cursor:"pointer", marginTop:8 }}>
+                      🔄 Regenerar informe
+                    </button>
                   </div>
-                );
-                return (
-                  <div style={{ background:`${C.green}06`, border:`1px solid ${C.green}25`, borderRadius:12, padding:14 }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:10 }}>
-                      🛒 LISTA DE COMPRAS — Necesidades semanales del plan
-                    </div>
-                    {Object.entries(demSem).map(([alim, kgSem]) => {
-                      const stockItem = (form.stockAlim||[]).find(s=>s.alimento===alim);
-                      const stockKg   = stockItem ? parseFloat(stockItem.toneladas)*1000 : null;
-                      const semanas   = stockKg ? Math.floor(stockKg/kgSem) : null;
-                      return (
-                        <div key={alim} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, padding:"8px 12px", background:C.card, borderRadius:8, border:`1px solid ${semanas!==null&&semanas<4?C.red+"30":C.border}` }}>
-                          <div>
-                            <div style={{ fontFamily:C.font, fontSize:10, color:C.text, fontWeight:600 }}>{alim}</div>
-                            {semanas !== null && (
-                              <div style={{ fontFamily:C.font, fontSize:8, color:semanas<4?C.red:C.green }}>
-                                {semanas < 4 ? `⚠ Stock para ${semanas} semanas — reabastecer urgente` : `✓ Stock para ${semanas} semanas`}
-                              </div>
-                            )}
-                            {semanas === null && <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>Sin stock registrado</div>}
-                          </div>
-                          <div style={{ textAlign:"right" }}>
-                            <div style={{ fontFamily:C.font, fontSize:14, color:C.amber, fontWeight:700 }}>{(kgSem/1000).toFixed(2)} t/sem</div>
-                            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{Math.round(kgSem)} kg/semana</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+                )}
+              </div>
             </div>
           )}
         </div>
       )}
-
-        {/* ══ PROYECCIÓN VAQ1 y VAQ2 post suplementación ══ */}
-        {(() => {
-          const tieneVaq1Supl = vaq1E && !vaq1E.sinSupl && !vaq1E.mensaje;
-          const tieneVaq2Supl = vaq2E && !vaq2E.sinSupl;
-          if (!tieneVaq1Supl && !tieneVaq2Supl) return null;
-          return (
-          <div style={{ marginTop:16 }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:10 }}>
-              📊 PROYECCIÓN CON SUPLEMENTACIÓN CARGADA
-            </div>
-
-            {/* Vaq1 — solo si tiene suplemento cargado */}
-            {tieneVaq1Supl && (
-              <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:10, padding:12, marginBottom:10 }}>
-                <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:6, fontWeight:600 }}>
-                  🐮 VAQUILLONA 1° INVIERNO
-                </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-                  <MetricCard label="GDP PROYECTADO" value={(vaq1E.gdpReal||"—")+" g/d"} color={C.green} />
-                  <MetricCard label="PV AGOSTO" value={(vaq1E.pvSal||"—")+" kg"} color={(vaq1E.pvSal||0)>=220?C.green:C.amber}
-                    sub={(vaq1E.pvSal||0)>=220?"✓ Supera objetivo":"< 220 kg objetivo"} />
-                </div>
-                {/* Entore anticipado si supera 65% PV adulto */}
-                {(vaq1E.pvSal||0) >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.65) ? (
-                  <div style={{ background:`${C.green}10`, border:`1px solid ${C.green}30`, borderRadius:8, padding:"10px 12px" }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.green, fontWeight:700, marginBottom:4 }}>
-                      ✅ Supera 65% PV adulto — EVALUAR ENTORE ANTICIPADO
-                    </div>
-                    <div style={{ fontFamily:C.sans, fontSize:11, color:C.text, lineHeight:1.5 }}>
-                      Con {vaq1E.pvSal} kg en agosto ya está en condición para entore. Adelantar el servicio a <strong>agosto–septiembre</strong> de este año en lugar de esperar al servicio general del año siguiente. Ganás un ciclo productivo completo.
-                    </div>
-                  </div>
-                ) : (
-                  <Alerta tipo="warn">
-                    Proyecta {vaq1E.pvSal} kg en agosto — revisar dosis de suplementación
-                  </Alerta>
-                )}
-              </div>
-            )}
-
-            {/* Vaq2 — solo si tiene suplemento cargado */}
-            {tieneVaq2Supl && (
-              <div style={{ background:`${C.blue}08`, border:`1px solid ${C.blue}30`, borderRadius:10, padding:12 }}>
-                <div style={{ fontFamily:C.font, fontSize:10, color:C.blue, marginBottom:8, fontWeight:600 }}>
-                  🐂 VAQUILLONA 2° INVIERNO
-                </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
-                  {/* Cuadrante agosto */}
-                  <div style={{ background:C.card, borderRadius:8, padding:"10px 12px", border:`1px solid ${C.border}` }}>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1, marginBottom:4 }}>PESO AGOSTO</div>
-                    <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700,
-                      color:(vaq2E.pvV2Agosto||0) >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.72) ? C.green : C.amber }}>
-                      {vaq2E.pvV2Agosto || pvEntradaVaq2 || "—"} kg
-                    </div>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
-                      obj: {Math.round((parseFloat(form.pvVacaAdulta)||320)*0.72)} kg (72% PV adulto)
-                    </div>
-                  </div>
-                  {/* Cuadrante entore */}
-                  <div style={{ background:C.card, borderRadius:8, padding:"10px 12px", border:`1px solid ${vaq2E.llegas?C.green:C.red}40` }}>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1, marginBottom:4 }}>PESO ENTORE</div>
-                    <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:vaq2E.llegas?C.green:C.red }}>
-                      {vaq2E.pvEntore||"—"} kg
-                    </div>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
-                      obj: {vaq2E.pvMinEntore} kg (75% PV adulto)
-                    </div>
-                  </div>
-                </div>
-                {vaq2E.llegas ? (
-                  <div style={{ padding:"6px 10px", background:`${C.green}10`, borderRadius:6, fontFamily:C.font, fontSize:9, color:C.green }}>
-                    ✅ Llega al objetivo de entore con esta suplementación
-                  </div>
-                ) : (
-                  <Alerta tipo="error">
-                    No llega a {vaq2E.pvMinEntore} kg para el entore — revisar dosis de suplementación
-                  </Alerta>
-                )}
-              </div>
-            )}
-          </div>
-          );
-        })()}
     </div>
-  );
+    );
+  };
+
 
   const RENDERS = [renderUbicacion, renderRodeo, renderCC, renderCategorias, renderForraje, renderSuplAgua, renderSanidad, renderAnalisis];
 
@@ -9634,7 +9927,7 @@ function AgroMindPro() {
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           {ccPondVal > 0 && <Pill color={smf(ccPondVal,4.5,5.5)}>CC {ccPondVal.toFixed(1)}</Pill>}
           {evalAgua && evalAgua.cat.riesgo >= 2 && <Pill color={C.red}>💧{evalAgua.cat.label}</Pill>}
-          {sanidad.alerts.length > 0 && <Pill color={C.red}>🩺{sanidad.alerts.length}</Pill>}
+          {sanidad?.alerts?.length > 0 && <Pill color={C.red}>🩺{sanidad.alerts.length}</Pill>}
           <button onClick={()=>signOut()} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.textDim, padding:"5px 10px", fontFamily:C.font, fontSize:10, cursor:"pointer" }}>
             salir
           </button>
