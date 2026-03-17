@@ -10,7 +10,7 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar,
 } from "recharts";
 // ═══════════════════════════════════════════════════════════════════
-// AGROMIND PRO v16 — PARTE 1: MOTOR DEL MODELO
+// CALF AI PRO v1 — PARTE 1: MOTOR DEL MODELO
 // ══════════════════════════════════════════════════════════════════
 // ─── BIOTIPOS ─────────────────────────────────────────────────────
 // movCC = movilización CC · recCC = recuperación CC · umbralAnestro = CC mínima para ciclar
@@ -1489,14 +1489,14 @@ function dProv(lat, lon) {
   return "Chaco";
 }
 
-const DISCLAIMER = "Las recomendaciones generadas por AgroMind Pro tienen carácter orientativo. No reemplazan el criterio profesional del ingeniero agrónomo o médico veterinario que asiste al establecimiento, quien deberá validar, ajustar e implementar cualquier decisión de manejo según las condiciones particulares de cada sistema productivo.";
+const DISCLAIMER = "Las recomendaciones generadas por Calf AI tienen carácter orientativo. No reemplazan el criterio profesional del ingeniero agrónomo o médico veterinario que asiste al establecimiento, quien deberá validar, ajustar e implementar cualquier decisión de manejo según las condiciones particulares de cada sistema productivo.";
 // ═══════════════════════════════════════════════════════════════════
-// AGROMIND PRO v16 — PARTE 2: COMPONENTES UI
+// CALF AI PRO v1 — PARTE 2: COMPONENTES UI
 // ═══════════════════════════════════════════════════════════════════
 
 
 // ═══════════════════════════════════════════════════════════════════
-// MOTOR DE INFERENCIA v16 — SISTEMA DE PROPAGACIÓN CAUSAL
+// MOTOR DE INFERENCIA v1 — SISTEMA DE PROPAGACIÓN CAUSAL
 // ═══════════════════════════════════════════════════════════════════
 // Diseño: cada nodo del grafo produce {valor, fuente, confianza, alertas[]}
 // El motor propaga cambios en cascada: una entrada modifica N salidas
@@ -3847,11 +3847,31 @@ function GraficoBalance({ form, sat, cadena, tray, motor }) {
   const verdeoMesI  = motor?.verdeoMesInicio ?? 7;
   const tieneVerdeo = form?.tieneVerdeo === "si" && verdeoMcal > 0;
 
-  if (!bm || bm.length === 0) return (
-    <div style={{ padding:24, textAlign:"center", fontFamily:T.font, fontSize:11, color:T.textFaint }}>
-      Completá provincia, vegetación y vacas para ver el balance energético
-    </div>
-  );
+  // Verificar qué falta para un diagnóstico útil
+  const faltaSupHa   = !form?.supHa || parseFloat(form.supHa) <= 0;
+  const faltaVacas   = !form?.vacasN || parseInt(form.vacasN) <= 0;
+  const faltaProv    = !form?.provincia;
+
+  if (!bm || bm.length === 0) {
+    const faltantes = [];
+    if (faltaProv)  faltantes.push("provincia");
+    if (faltaVacas) faltantes.push("cantidad de vacas");
+    if (faltaSupHa) faltantes.push("superficie (ha)");
+    return (
+      <div style={{ padding:20, background:C.card2, border:"1px solid "+C.border, borderRadius:12, textAlign:"center" }}>
+        <div style={{ fontFamily:T.font, fontSize:20, marginBottom:8 }}>📊</div>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.text, marginBottom:6 }}>
+          Falta completar para ver el balance
+        </div>
+        {faltantes.map(f => (
+          <div key={f} style={{ fontFamily:T.font, fontSize:10, color:T.amber }}>⚠ {f}</div>
+        ))}
+      </div>
+    );
+  }
+
+  // Si hay balance pero sin superficie, mostrar aviso
+  const sinSupHa = faltaSupHa;
 
   // ── Construir datos por categoría ────────────────────────────
   // Cada mes: oferta pasto/cabeza vs requerimiento/cabeza, por categoría
@@ -4518,7 +4538,7 @@ function RenderInforme({ texto }) {
   );
 }
 // ═══════════════════════════════════════════════════════════════════
-// AGROMIND PRO v16 — PARTE 3: APP PRINCIPAL
+// CALF AI PRO v1 — PARTE 3: APP PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════
 
 // ─── CONSTANTES UI ───────────────────────────────────────────────
@@ -4552,7 +4572,7 @@ const PASOS = [
 // ─── FORM DEFAULT ────────────────────────────────────────────────
 // ─── MOTOR DE RECOMENDACIONES ────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════
-// CEREBRO TÉCNICO v19 — árbol de decisión causal
+// CEREBRO TÉCNICO v1 — árbol de decisión causal
 // Lógica: 1) identifica cuellos de botella reales por categoría
 //         2) establece relaciones causales entre problemas
 //         3) genera recomendación con dosis + alimento + momento
@@ -7013,7 +7033,7 @@ function TabCerebro({ motor, form, sat }) {
     </div>
   );
 }
-// ─── PANEL RECOMENDACIONES v19 ────────────────────────────────────
+// ─── PANEL RECOMENDACIONES v1 ────────────────────────────────────
 function PanelRecomendaciones({ motor, form }) {
   const dx = React.useMemo(() => diagnosticarSistema(motor, form), [motor, form]);
   const [planAbierto, setPlanAbierto] = React.useState(null);
@@ -7287,14 +7307,14 @@ const FORM_DEF = {
   // ── Rodeo ──────────────────────────────────────────────────────
   biotipo:"", primerParto:false,
   vacasN:"", torosN:"", pvVacaAdulta:"", pvToros:"",
-  eReprod:"", prenez:"", pctDestete:"",
+  eReprod:"Gestación media (5–7 meses)", prenez:"", pctDestete:"",
   iniServ:"", finServ:"",
   edadPrimerEntore:"24",
   // ── Vaquillona ─────────────────────────────────────────────────
   edadVaqMayo:"", tipoDesteteVaq:"",
   // ── Disponibilidad forrajera ───────────────────────────────────
   altPasto:"20", tipoPasto:"alto_denso",
-  // Verdeos de invierno (nuevo v15)
+  // Verdeos de invierno (nuevo v1)
   tieneVerdeo:"no", verdeoHa:"", verdeoTipo:"Avena/Cebadilla", verdeoDisp:"agosto",
   suplMeses:["5","6","7"],  // meses de suplementación invernal (0=ene … 11=dic)
   mesTacto:"abr",     // mes en que se hizo el tacto (feb/mar/abr/may/jun/otro)
@@ -7304,11 +7324,11 @@ const FORM_DEF = {
   cc2sDist:[{ cc:"5.0", pct:"50" },{ cc:"4.5", pct:"50" }],
   pctReposicion:"20", vaq1PV:"", vaq2N:"", vaq2PV:"",
   // ── CC ─────────────────────────────────────────────────────────
-  distribucionCC:[],  // el usuario carga la distribución real
-  fechaCC:"",            // fecha en que se midió la CC (nueva v15)
+  distribucionCC:[{ cc:"5.0", pct:"40" },{ cc:"4.5", pct:"40" },{ cc:"4.0", pct:"20" }],  // típico NEA — editar en paso CC
+  fechaCC:"",            // fecha en que se midió la CC (nueva v1)
   // ── Destete ────────────────────────────────────────────────────
   destTrad:"0", destAntic:"0", destHiper:"0",
-  // ── Toros — diagnóstico preparo de servicio (nuevo v15) ────────
+  // ── Toros — diagnóstico preparo de servicio (nuevo v1) ────────
   torosLote:"si",        // ¿están todos en un lote o distribuidos?
   torosLotes:"",         // cantidad de lotes si distribuidos
   torosCC:"",         // CC toros hoy (promedio)
@@ -7324,7 +7344,7 @@ const FORM_DEF = {
   supl_vaq2:"",   dosis_vaq2:"0",
   supl_vaq1:"",   dosis_vaq1:"0",
   supl_ternero:"",dosis_ternero:"0",
-  // ── Stock de alimentos (nuevo v15) ─────────────────────────────
+  // ── Stock de alimentos (nuevo v1) ─────────────────────────────
   stockAlim:[],  // [{ alimento, toneladas }]
   // ── Sanidad ────────────────────────────────────────────────────
   sanVacunas:"si", sanBrucelosis:"si", sanAftosa:"si",
@@ -7334,14 +7354,14 @@ const FORM_DEF = {
   enso:"neutro",
   // ── Agua ───────────────────────────────────────────────────────
   aguaTDS:"", aguaTipoSal:"Mixta/Desconocida", aguaFuente:"",
-  // ── Visitas de campo (seguimiento temporal — nuevo v15) ────────
+  // ── Visitas de campo (seguimiento temporal — nuevo v1) ────────
   visitasCampo:[],  // [{ fecha, ccObservada, observacion }]
   // ── Consulta ───────────────────────────────────────────────────
   consultaEspecifica:"",
 };
 
 // ─── SYSTEM PROMPT ───────────────────────────────────────────────
-const SYS_FULL = `Sos un asesor técnico ganadero con 20 años de campo en cría bovina extensiva en NEA, NOA, Paraguay, Bolivia y Brasil. El motor técnico de AgroMind Pro ya calculó el diagnóstico completo — score por dimensión, fase del ciclo, balance forrajero mensual, trayectoria CC, estado de vaquillona, sanidad y GEI. Tu trabajo es TOMAR ese diagnóstico, identificar los 2–3 cuellos de botella reales ordenados por impacto en preñez y kilos de ternero, y proponer mejoras concretas con cuantificación del beneficio si se actúa.
+const SYS_FULL = `Sos un asesor técnico ganadero con 20 años de campo en cría bovina extensiva en NEA, NOA, Paraguay, Bolivia y Brasil. El motor técnico de Calf AI ya calculó el diagnóstico completo — score por dimensión, fase del ciclo, balance forrajero mensual, trayectoria CC, estado de vaquillona, sanidad y GEI. Tu trabajo es TOMAR ese diagnóstico, identificar los 2–3 cuellos de botella reales ordenados por impacto en preñez y kilos de ternero, y proponer mejoras concretas con cuantificación del beneficio si se actúa.
 
 NO repitas el diagnóstico que ya está en el prompt — el técnico y el productor ya lo ven en pantalla.
 ARRANCÁ directamente con el punto crítico más importante y qué hacer.
@@ -7409,12 +7429,12 @@ Referencias disponibles:
 export default function Page() {
   return (
     <SessionProvider>
-      <AgroMindPro />
+      <Calf AIPro />
     </SessionProvider>
   );
 }
 
-function AgroMindPro() {
+function Calf AIPro() {
   const { data: session } = useSession();
 
   // Estado principal
@@ -7437,7 +7457,7 @@ function AgroMindPro() {
 
   // ── LEER DATOS DEL PRODUCTOR DESDE URL ───────────────────────
   // El formulario del productor genera: /?productor=BASE64
-  // Al abrir AgroMind con ese link, los datos se autocargan
+  // Al abrir Calf AI con ese link, los datos se autocargan
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -7474,7 +7494,7 @@ function AgroMindPro() {
     }
   }, []);
 
-  // ── MOTOR DE INFERENCIA v16 ──────────────────────────────────
+  // ── MOTOR DE INFERENCIA v1 ──────────────────────────────────
   // Un único hook que propaga todos los cambios en cascada
   const motor = useMotor(form, sat, potreros, usaPotreros);
 
@@ -7877,7 +7897,7 @@ function AgroMindPro() {
       doc.setFillColor(45, 106, 31);
       doc.roundedRect(ML, y, AU, 14, 3, 3, "F");
       doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-      doc.text("AGROMIND PRO v16 - Informe Tecnico Ganadero", ML+4, y+9);
+      doc.text("CALF AI — Informe Técnico de Cría", ML+4, y+9);
       salto(18);
 
       // Subtítulo
@@ -8063,11 +8083,11 @@ function AgroMindPro() {
       for (let p = 1; p <= tot; p++) {
         doc.setPage(p);
         doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(180,180,180);
-        doc.text("AgroMind Pro v14 · INTA Colonia Benitez 2025 · Peruchena 2003 · Selk 1988 · Short et al. 1990 · NASSEM 2010", ML, 292);
+        doc.text("Calf AI v1 · INTA Colonia Benitez 2025 · Peruchena 2003 · Selk 1988 · Short et al. 1990 · NASSEM 2010", ML, 292);
         doc.text(`${p}/${tot}`, W-MR, 292, { align:"right" });
       }
 
-      doc.save(`agromind_${(form.nombreProductor||"informe").replace(/\s/g,"_")}_${new Date().toISOString().slice(0,10)}.pdf`);
+      doc.save(`calfai_${(form.nombreProductor||"informe").replace(/\s/g,"_")}_${new Date().toISOString().slice(0,10)}.pdf`);
     } catch(pdfErr) { console.error("PDF error:", pdfErr); alert("Error generando PDF. Intentá de nuevo."); }
     };
 
@@ -8278,7 +8298,7 @@ function AgroMindPro() {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href     = url;
-    a.download = `agromind_${(form.nombreProductor||"datos").replace(/\s/g,"_")}_${isoDate}.csv`;
+    a.download = `calfai_${(form.nombreProductor||"datos").replace(/\s/g,"_")}_${isoDate}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -8666,7 +8686,16 @@ function AgroMindPro() {
           );
         })()}
       </div>
-      <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:12 }}>CC AL TACTO (pre-parto) — distribución por grupo (escala 1–9 INTA)</div>
+      <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:6 }}>CC AL TACTO (pre-parto) — distribución por grupo (escala 1–9 INTA)</div>
+      <div style={{ background:C.amber+"10", border:"1px solid "+C.amber+"30", borderRadius:8,
+        padding:"8px 12px", marginBottom:10 }}>
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.amber }}>
+          ⚠ Los valores son un ejemplo típico NEA — editá con los datos reales del tacto
+        </div>
+        <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:3 }}>
+          CC promedio actual: {ccPondVal > 0 ? ccPondVal.toFixed(1) : "—"} · La suma de % debe ser 100
+        </div>
+      </div>
       <DistCC dist={form.distribucionCC} onChange={v=>setDist("distribucionCC",v)} label="" />
 
       {/* ── DESTETE — el productor ya lo tiene definido ── */}
@@ -9674,7 +9703,7 @@ function AgroMindPro() {
           if (cat.key === "vaq1" && s1 === "Semilla algodón" && d1 > cat.pv * 0.004)
             alertas.push({ tipo:"error", msg:`Semilla algodón Vaq1: máx ${(cat.pv*0.004).toFixed(1)}kg (0.4% PV) — superar daña digestibilidad` });
           if (cat.key === "vaq2" && !tieneSupl)
-            alertas.push({ tipo:"warn", msg:"Sin suplemento invernal, Vaq2 logra 120–200 g/d con pasto C4 solo — revisar si llega al peso de entore" });
+            alertas.push({ tipo:"warn", msg:"Vaq2 sin suplemento: verificar si llega al objetivo de entore (" + Math.round(parseFloat(form.pvVacaAdulta||320)*0.75) + " kg)"" });
           if (cat.key === "toros" && (s1 === "Semilla algodón" || s2 === "Semilla algodón")) {
             const dosAlg = s1==="Semilla algodón" ? d1 : d2;
             if (dosAlg > cat.pv * 0.003)
@@ -10401,8 +10430,8 @@ function AgroMindPro() {
   // ══════════════════════════════════════════════════════════════
   if (!session) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
-      <div style={{ fontFamily:C.font, fontSize:28, color:C.green, marginBottom:8, letterSpacing:2 }}>🌾 AGROMIND</div>
-      <div style={{ fontFamily:C.sans, fontSize:13, color:C.textDim, marginBottom:32 }}>PRO · v18</div>
+      <div style={{ fontFamily:C.font, fontSize:28, color:C.green, marginBottom:8, letterSpacing:2 }}>🌾 CALF AI</div>
+      <div style={{ fontFamily:C.sans, fontSize:13, color:C.textDim, marginBottom:32 }}>Diagnóstico de cría bovina</div>
       <button onClick={()=>signIn("google")} style={{ background:C.green, color:"#0b1a0c", padding:"14px 28px", borderRadius:12, border:"none", fontFamily:C.sans, fontSize:15, fontWeight:700, cursor:"pointer" }}>
         Iniciar sesión con Google
       </button>
@@ -10423,7 +10452,7 @@ function AgroMindPro() {
       {/* Header sticky */}
       <div style={{ background:C.card, borderBottom:`1px solid ${C.border}`, padding:"12px 16px", position:"sticky", top:0, zIndex:50, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div style={{ fontFamily:C.font, fontSize:14, color:C.green, letterSpacing:2, fontWeight:700 }}>
-          🌾 AGROMIND<span style={{ color:C.textDim, fontSize:10, marginLeft:6 }}>v14</span>
+          🌾 CALF AI<span style={{ color:C.textDim, fontSize:10, marginLeft:6 }}>v1</span>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           {ccPondVal > 0 && <Pill color={smf(ccPondVal,4.5,5.5)}>CC {ccPondVal.toFixed(1)}</Pill>}
