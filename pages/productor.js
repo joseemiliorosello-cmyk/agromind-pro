@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-// ─── TEMA — mismo dark que AgroMind Pro ──────────────────────────
+// ─── TEMA — mismo dark que Calf AI ──────────────────────────
 const C = {
   bg:       "#0b1a0c",
   card:     "#111f12",
@@ -170,7 +170,7 @@ export default function Productor() {
   };
 
   const compartirWhatsApp = () => {
-    const texto = "Hola! Te mando el link para completar el análisis del establecimiento con AgroMind Pro. " +
+    const texto = "Hola! Te mando el link para completar el análisis del establecimiento con Calf AI. " +
       "Son 2 minutos:\n\n" + link;
     window.open("https://wa.me/?text=" + encodeURIComponent(texto));
   };
@@ -240,7 +240,7 @@ export default function Productor() {
         padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div>
           <div style={{ fontFamily:C.font, fontSize:13, color:C.green, letterSpacing:2, fontWeight:700 }}>
-            🌾 AGROMIND
+            🌾 CALF AI
           </div>
           <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:1 }}>
             Formulario del productor
@@ -517,7 +517,7 @@ export default function Productor() {
                 ¡Listo, {datos.nombreProductor.split(" ")[0] || "productor"}!
               </div>
               <div style={{ fontFamily:C.sans, fontSize:12, color:C.textDim, lineHeight:1.6 }}>
-                Tu información está lista para que el veterinario la cargue en AgroMind Pro.
+                Tu información está lista para que el veterinario la cargue en Calf AI.
               </div>
             </div>
 
@@ -583,7 +583,7 @@ export default function Productor() {
 
                 <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint,
                   marginTop:12, textAlign:"center", lineHeight:1.6 }}>
-                  El veterinario abre este link en AgroMind Pro y tus datos se cargan automáticamente.
+                  El veterinario abre este link en Calf AI y tus datos se cargan automáticamente.
                   No necesitás instalar nada.
                 </div>
               </div>
@@ -630,7 +630,7 @@ export default function Productor() {
       {/* ── FOOTER ── */}
       <div style={{ textAlign:"center", padding:"0 20px 20px",
         fontFamily:C.font, fontSize:8, color:C.textFaint, lineHeight:1.8 }}>
-        AgroMind Pro · Formulario del productor<br/>
+        Calf AI · Formulario del productor<br/>
         Los datos se codifican en el link — no se almacenan en ningún servidor
       </div>
     </div>
