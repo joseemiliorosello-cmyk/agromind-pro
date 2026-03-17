@@ -587,6 +587,82 @@ function calcTerneros(vacasN, prenez, pctDestete, destTrad, destAntic, destHiper
   return { terneros, pvMayoPond, alertaHiper, detalle };
 }
 
+// ─── IMPACTO DE LA COLA DE PREÑEZ ────────────────────────────────
+// INTA Cuenca del Salado (Maresca 2022):
+//   Las vacas que se preñan 1 mes más tarde destetan terneros 20-25 kg más livianos
+//   Esto es porque: parto 1 mes más tarde → ternero nace con 30d menos de pasto de verano
+//   → 30d × 700g/d GDP al pie = ~21 kg menos al destete
+//   Cabeza de parición = % de vacas preñadas en el 1° mes de servicio
+//
+// Esta función calcula:
+//   - Peso promedio al destete dado la distribución de preñez
+//   - Cuántos kg se pierden si la cabeza baja X puntos porcentuales
+//   - Total de kg de ternero producidos y la diferencia
+function calcImpactoCola(prenezTotal, cabezaPct, vacasN, pctDestete, mesesServicio) {
+  const vN  = parseInt(vacasN)        || 0;
+  const pr  = parseFloat(prenezTotal) || 0;
+  const pd  = parseFloat(pctDestete)  || 88;
+  const ms  = Math.min(4, mesesServicio || 3); // meses de servicio (máx 4)
+  if (!vN || !pr) return null;
+
+  // Distribución de preñez por mes de servicio
+  // Con una cabeza de parición dada, el resto se distribuye en los meses siguientes
+  // Patrón típico NEA: 50-60% mes 1, 25-30% mes 2, resto mes 3-4
+  const cabeza = Math.min(pr, Math.max(10, cabezaPct || Math.round(pr * 0.55)));
+  const resto  = pr - cabeza;
+  const mes2   = Math.min(resto, Math.round(resto * 0.55));
+  const mes3   = Math.min(resto - mes2, Math.round(resto * 0.35));
+  const mes4   = Math.max(0, resto - mes2 - mes3);
+
+  // Peso al destete por mes de preñez (base: destete tradicional 180d, GDP 700g/d)
+  // Parto mes 1 → destete ~septiembre-octubre → 180d × 700g/d + 35kg nacer = 161 kg
+  // Cada mes de atraso = 21 kg menos (30d × 700g/d)
+  const PV_BASE_DESTETE = 161; // kg, ternero de vaca preñada en mes 1 del servicio
+  const KG_POR_MES_ATRASO = 21; // INTA Maresca 2022: 20-25 kg
+
+  const pvMes = [
+    PV_BASE_DESTETE,
+    PV_BASE_DESTETE - KG_POR_MES_ATRASO,
+    PV_BASE_DESTETE - KG_POR_MES_ATRASO * 2,
+    PV_BASE_DESTETE - KG_POR_MES_ATRASO * 3,
+  ];
+
+  const distPct  = [cabeza, mes2, mes3, mes4];
+  const terneros = Math.round(vN * pr / 100 * pd / 100);
+
+  // Peso promedio ponderado al destete
+  const pvProm = distPct.reduce((s, p, i) => s + (p / Math.max(1, pr)) * pvMes[i], 0);
+
+  // Escenario objetivo: cabeza ≥ 60%
+  const cabezaObj = Math.min(pr, 60);
+  const restoObj  = pr - cabezaObj;
+  const pvPromObj = cabezaObj/pr * pvMes[0] + (restoObj/pr) * pvMes[1];
+
+  const kgDifPorTernero = Math.round(pvPromObj - pvProm);
+  const kgDifTotal      = Math.round(kgDifPorTernero * terneros);
+
+  // Cabeza de parición óptima si la preñez total >= 60%
+  const cabezaOptima    = pr >= 60 ? cabeza >= 60 : null;
+
+  return {
+    cabeza:           Math.round(cabeza),
+    pvPromDestete:    Math.round(pvProm),
+    pvPromObj:        Math.round(pvPromObj),
+    kgDifPorTernero,
+    kgDifTotal,
+    terneros,
+    cabezaOptima,
+    distPct:          distPct.map(p => Math.round(p)),
+    pvMes,
+    // Mensaje para el dashboard
+    msg: kgDifPorTernero > 0
+      ? `Subir cabeza de parición de ${Math.round(cabeza)}% a 60%: +${kgDifPorTernero} kg/ternero (+${kgDifTotal} kg total)`
+      : cabeza >= 60
+        ? `Cabeza de parición ${Math.round(cabeza)}% — distribución de preñez óptima`
+        : null,
+  };
+}
+
 // ─── VAQUILLONA 1° INVIERNO ───────────────────────────────────────
 // Objetivo: 60% PV adulta en agosto (~90d mayo→agosto)
 // NRC 2000; INTA Rafaela; Lippke 1980; Detmann 2010
@@ -630,9 +706,36 @@ function calcDisponibilidadMS(altPasto, tipoPasto) {
 //
 // Urea: SIEMPRE diario — pico amonio si se da en bolo cada 2–3 días
 function calcVaq1(pvEntrada, pvAdulta, ndvi, edadMayo, tipoDestete, disponMS, fenologia, suplReal, dosisRealKg) {
-  const pv   = parseFloat(pvEntrada) || 0;
   const pva  = parseFloat(pvAdulta)  || 320;
-  if (!pv) return { mensaje:"Ingresá el PV de entrada para calcular suplementación." };
+
+  // ── Estimar PV de entrada si no fue ingresado ──────────────────
+  // Curva de crecimiento de ternero NEA desde nacimiento (35 kg)
+  // GDP promedio al pie de la madre hasta destete: 600-700 g/d
+  // GDP post-destete hasta mayo: 350-450 g/d según tipo de destete y calidad de pasto
+  let pvEstimado = parseFloat(pvEntrada) || 0;
+  const edadM = parseFloat(edadMayo) || 0;
+
+  if (!pvEstimado && edadM > 0) {
+    // Estimación desde la edad en mayo
+    // Nacimiento ~35 kg. Crecimiento por mes según tipo de destete:
+    const gdpPorMes = {
+      hiper:  18,   // hiperprecoz (<2 meses): 18 kg/mes post-destete
+      antic:  20,   // anticipado (3 meses): 20 kg/mes
+      trad:   22,   // tradicional (6 meses): 22 kg/mes al pie + pos-destete
+      "":     20,   // sin dato: promedio
+    }[tipoDestete || ""] || 20;
+    pvEstimado = Math.round(35 + edadM * gdpPorMes);
+    // Ajuste por disponibilidad de pasto
+    if (disponMS?.nivel === "baja") pvEstimado = Math.round(pvEstimado * 0.88);
+  }
+
+  if (!pvEstimado) {
+    // Sin edad ni PV: usar 40% del PV adulto como aproximación mínima
+    pvEstimado = Math.round(pva * 0.40);
+  }
+
+  const pv = pvEstimado;
+  const pvFuenteDato = parseFloat(pvEntrada) > 0 ? "real" : edadM > 0 ? "estimado_por_edad" : "estimado_por_pv_adulto";
 
   // Objetivo Vaq1: ganar MÍNIMO 65 kg entre mayo e inicio de septiembre (122 días)
   // GDP mínimo = 65000g / 122d = 532 g/d
@@ -749,11 +852,12 @@ function calcVaq1(pvEntrada, pvAdulta, ndvi, edadMayo, tipoDestete, disponMS, fe
     advertencia, alertaAlgodon,
     nivelMS, msHa, gdpPasto, calidadBaja,
     sinSupl, gdpConSuplReal, mcalSuplReal,
+    pvEntrada: pv, pvFuenteDato,  // para que la UI muestre si el PV es real o estimado
     // Alerta explícita si no hay suplemento o es insuficiente
     alertaSinSupl: sinSupl
-      ? `⚠️ Sin suplemento: GDP pasto solo ${gdpBase}g/d en invierno NEA. Sin intervención el PV agosto estimado es ${Math.round(pv + gdpBase*diasInv/1000)}kg — ${Math.round(pv + gdpBase*diasInv/1000) < objetivo ? "NO llega al objetivo de "+objetivo+"kg" : "llega al objetivo pero sin margen"}.`
+      ? "⚠️ Sin suplemento: GDP pasto solo " + gdpBase + "g/d en invierno NEA. Sin intervención el PV agosto estimado es " + Math.round(pv + gdpBase*diasInv/1000) + "kg — " + (Math.round(pv + gdpBase*diasInv/1000) < objetivo ? "NO llega al objetivo de "+objetivo+"kg" : "llega al objetivo pero sin margen") + "."
       : gdpConSuplReal < gdpNecesario
-      ? `⚠️ Suplemento insuficiente: con ${dosisRealKg}kg/día de ${suplReal} el GDP estimado es ${Math.round(gdpConSuplReal)}g/d — faltante ${Math.round(gdpNecesario-gdpConSuplReal)}g/d para cubrir el objetivo.`
+      ? "⚠️ Suplemento insuficiente: con " + dosisRealKg + "kg/día de " + suplReal + " el GDP estimado es " + Math.round(gdpConSuplReal) + "g/d — faltante " + Math.round(gdpNecesario-gdpConSuplReal) + "g/d para cubrir el objetivo."
       : null,
   };
 }
@@ -1293,6 +1397,23 @@ const ccPond = (dist) => {
   (dist || []).forEach(d => { const p = parseFloat(d.pct)||0, c = parseFloat(d.cc)||0; s += p*c; t += p; });
   return t > 0 ? s / t : 0;
 };
+// ─── CONVERSIÓN DE ESCALA CC ──────────────────────────────────────
+// escala "5" → "9": multiplica por 1.8 (Lowman→Wagner/Selk)
+// escala "9" → interna: sin cambio
+// Referencias: Lowman (1976) escala 1-5 · Wagner & Selk (1995) escala 1-9
+// Equivalencias clínicas: CC3.0(1-5) = CC5.4(1-9) · CC2.5(1-5) = CC4.5(1-9)
+const cc9 = (val, escala) => {
+  const v = parseFloat(val);
+  if (!v || isNaN(v)) return v;
+  if (escala === "5") return Math.min(9, Math.round(v * 1.8 * 10) / 10);
+  return v; // ya en escala 1-9
+};
+const cc5 = (val9) => {
+  const v = parseFloat(val9);
+  if (!v || isNaN(v)) return "—";
+  return (Math.round(v / 1.8 * 10) / 10).toFixed(1);
+};
+
 const fmtFecha = (d) => {
   if (!d || isNaN(new Date(d))) return "—";
   return new Date(d).toLocaleDateString("es-AR", { day:"2-digit", month:"2-digit", year:"2-digit" });
@@ -1654,9 +1775,38 @@ function correrMotor(form, sat, potreros, usaPotreros) {
     form.destTrad, form.destAntic, form.destHiper, cadena
   );
 
-  // ── 2.2 Vaquillona 1° invierno ───────────────────────────────
-  // PV de entrada: prioridad al PV de ternero calculado; luego manual
-  const pvEntVaq1 = tcSave?.pvMayoPond || parseFloat(form.vaq1PV) || 0;
+  // ── Impacto cola de preñez — kg de ternero por distribución de preñez ──
+  // Usa la preñez proyectada del motor (tray) si está disponible, si no la histórica
+  // Se calcula aquí para tenerlo disponible en Dashboard y Diagnóstico
+  const prenezParaImpacto = tray?.grupos?.[0]?.pr ?? parseFloat(form.prenez) ?? 0;
+  const cabezaEstimada    = tray?.grupos?.[0]?.pr != null
+    ? Math.round(prenezParaImpacto * 0.55)  // estimar cabeza como 55% de la preñez total
+    : null;
+  const impactoCola = prenezParaImpacto > 0
+    ? calcImpactoCola(prenezParaImpacto, cabezaEstimada, form.vacasN, form.pctDestete, cadena?.diasServ ? Math.round(cadena.diasServ/30) : 3)
+    : null;
+
+
+  // PV de entrada: prioridad 1) dato manual, 2) calculado de tcSave, 3) ESTIMADO por biotipo+edad
+  const pvEntVaq1Estimado = (() => {
+    // Estimar PV mayo a partir de biotipo + edad en mayo + tipo de pasto
+    const edadMes  = parseFloat(form.edadVaqMayo) || 8;   // meses en mayo
+    const pvAdulta = parseFloat(form.pvVacaAdulta) || 320;
+    const bt       = getBiotipo(form.biotipo);
+    // Peso al nacimiento NEA: ~32-36 kg según biotipo
+    const pvNac    = Math.round(pvAdulta * 0.09);
+    // Crecimiento promedio pre-mayo: 450-550 g/d con la madre + post-destete campo
+    // Ajuste por tipo de pasto — en pastizal natural limita vs megatérmicas
+    const gdpPreMayo = form.vegetacion?.includes("Megatérmicas") ? 500
+      : form.vegetacion?.includes("Mixta") ? 480
+      : form.vegetacion?.includes("Bosque") ? 380
+      : 430; // pastizal natural NEA
+    const diasTotal = edadMes * 30.4;
+    return Math.round(pvNac + gdpPreMayo * diasTotal / 1000);
+  })();
+
+  const pvEntVaq1 = parseFloat(form.vaq1PV) || tcSave?.pvMayoPond || pvEntVaq1Estimado;
+  const pvEntVaq1EsFallback = !form.vaq1PV && !tcSave?.pvMayoPond; // para marcar en UI
   const suplVaq1Real  = form.supl_vaq1  || "";
   const dosisVaq1Real = parseFloat(form.dosis_vaq1) || 0;
   // Tipo de destete de origen: derivado del mix real cargado por el usuario.
@@ -2094,6 +2244,7 @@ function correrMotor(form, sat, potreros, usaPotreros) {
     nVacas, nToros, nV2s, nVaq2, nVaq1, totalEV,
     // Nivel 2
     tcSave, pvEntVaq1, vaq1E, pvSalidaVaq1, pvEntradaVaq2, vaq2E,
+    impactoCola,
     tray, dist, ccPondVal, baseParams,
     balanceMensual, suplRodeoMcalDia,
     sanidad, toroDxn, stockStatus, demandaAlim,
@@ -2280,10 +2431,27 @@ const BtnSel = ({ active, onClick, children, style: st }) => (
 );
 
 // ─── DIST CC ─────────────────────────────────────────────────────
-function DistCC({ dist, onChange, label }) {
+function DistCC({ dist, onChange, label, escala }) {
+  // dist siempre en escala 1-9 internamente
+  // escala = "5" o "9" — define cómo se muestran y se ingresan los valores
+  const esc = escala || "9";
+
+  // Opciones de CC según escala
+  const opcionesCC9 = ["3.0","3.5","4.0","4.5","5.0","5.5","6.0","6.5","7.0","7.5","8.0"];
+  const opcionesCC5 = ["1.5","2.0","2.5","3.0","3.5","4.0","4.5","5.0"];
+
+  // Mostrar valor en la escala elegida (internamente siempre 1-9)
+  const mostrar = (v9) => esc === "5" ? String(Math.round(parseFloat(v9) / 1.8 * 10) / 10) : v9;
+  // Guardar: convertir de escala elegida a 1-9
+  const guardar = (v) => esc === "5" ? String(Math.min(9, Math.round(parseFloat(v) * 1.8 * 10) / 10)) : v;
+
   const addRow = () => onChange([...(dist || []), { cc:"4.5", pct:"" }]);
   const delRow = (i) => onChange((dist || []).filter((_, j) => j !== i));
-  const upd    = (i, k, v) => { const n = [...(dist||[])]; n[i] = { ...n[i], [k]:v }; onChange(n); };
+  const upd    = (i, k, v) => {
+    const n = [...(dist||[])];
+    n[i] = { ...n[i], [k]: k === "cc" ? guardar(v) : v };
+    onChange(n);
+  };
   const total  = (dist || []).reduce((s, d) => s + (parseFloat(d.pct)||0), 0);
 
   return (
@@ -2292,14 +2460,18 @@ function DistCC({ dist, onChange, label }) {
       {(dist || []).map((d, i) => (
         <div key={i} style={{ display:"flex", gap:8, marginBottom:8, alignItems:"center" }}>
           <div style={{ flex:1 }}>
-            <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginBottom:3 }}>CC</div>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginBottom:3 }}>
+              CC {esc === "5" ? "(escala 1-5)" : "(escala 1-9)"}
+            </div>
             <select
-              value={d.cc} onChange={e => upd(i, "cc", e.target.value)}
+              value={mostrar(d.cc)} onChange={e => upd(i, "cc", e.target.value)}
               style={{ width:"100%", background:T.card, border:`1px solid ${T.border}`, borderRadius:8, color:T.text, padding:"9px 10px", fontFamily:T.font, fontSize:13 }}
             >
-              {["3.0","3.5","4.0","4.5","5.0","5.5","6.0","6.5","7.0"].map(v => (
-                <option key={v} value={v}>CC {v}</option>
-              ))}
+              {(esc === "5" ? opcionesCC5 : opcionesCC9).map(v => {
+                const n = parseFloat(v);
+                const ref = n >= 5.5 ? "Muy buena" : n >= 5.0 ? "Buena ✓" : n >= 4.5 ? "Aceptable" : n >= 4.0 ? "Baja ⚠" : "Crítica 🔴";
+                return <option key={v} value={v}>CC {v} — {ref}</option>;
+              })}
             </select>
           </div>
           <div style={{ flex:1 }}>
@@ -2319,6 +2491,30 @@ function DistCC({ dist, onChange, label }) {
         <span style={{ fontFamily:T.font, fontSize:11, color: total === 100 ? T.green : T.amber }}>
           {total}%{total !== 100 ? " ⚠" : ""}
         </span>
+      </div>
+      {/* Referencia rápida escala 1-9 INTA */}
+      <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 10px", marginTop:8 }}>
+        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:5 }}>
+          REFERENCIA ESCALA 1–9 (INTA EEA Colonia Benítez · Stahringer 2003)
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:3 }}>
+          {[
+            ["≤3.0","Crítica","Costillas y vértebras visibles",T.red],
+            ["4.0","Baja","Costillas palpables con presión leve",T.amber],
+            ["4.5","Aceptable","Costillas palpables con presión firme",T.amber],
+            ["5.0","Buena ✓","Costillas no visibles — óptima al servicio",T.green],
+            ["5.5","Muy buena","Algo de grasa en costillas",T.green],
+            ["6.0","Llena","Grasa visible en cadera",T.textDim],
+            ["≥7.0","Exceso","Grasa acumulada — improductiva",T.textDim],
+            ["1-5 ≈","Equiv.","× 1.8 → escala 1-9",T.textFaint],
+          ].map(([cc,est,desc,color]) => (
+            <div key={cc} style={{ padding:"3px 4px", borderRadius:4, background:color+"10" }}>
+              <div style={{ fontFamily:T.font, fontSize:9, color:color, fontWeight:700 }}>{cc}</div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:color }}>{est}</div>
+              <div style={{ fontFamily:T.font, fontSize:7, color:T.textFaint, lineHeight:1.3 }}>{desc}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -6467,6 +6663,8 @@ function DashboardEstablecimiento({ motor, form, sat, score, onTab }) {
   const mesHoy  = hoy.getMonth();
   const MESES   = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
+  const impactoCola = motor?.impactoCola ?? null;
+
   // Fase del ciclo
   const cadena    = motor?.cadena ?? (form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null);
   const faseCiclo = cadena ? calcFaseCiclo(cadena, form, {
@@ -6595,6 +6793,54 @@ function DashboardEstablecimiento({ motor, form, sat, score, onTab }) {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── IMPACTO COLA DE PREÑEZ ── */}
+      {impactoCola && impactoCola.kgDifPorTernero > 0 && (
+        <div style={{ background:C.amber+"0d", border:"1px solid "+C.amber+"35",
+          borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, letterSpacing:1, marginBottom:6 }}>
+            📈 IMPACTO DISTRIBUCIÓN DE PREÑEZ
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div>
+              <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:2 }}>
+                Cabeza de parición estimada
+              </div>
+              <div style={{ fontFamily:C.font, fontSize:20, fontWeight:700,
+                color: impactoCola.cabeza >= 55 ? C.green : impactoCola.cabeza >= 40 ? C.amber : C.red,
+                lineHeight:1 }}>
+                {impactoCola.cabeza}%
+              </div>
+              <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>
+                objetivo: ≥60%
+              </div>
+            </div>
+            <div>
+              <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:2 }}>
+                Peso prom. al destete
+              </div>
+              <div style={{ fontFamily:C.font, fontSize:20, fontWeight:700, color:C.text, lineHeight:1 }}>
+                {impactoCola.pvPromDestete} kg
+              </div>
+              <div style={{ fontFamily:C.font, fontSize:8, color:C.green, marginTop:2 }}>
+                con 60% cabeza: {impactoCola.pvPromObj} kg
+              </div>
+            </div>
+          </div>
+          {impactoCola.kgDifPorTernero > 0 && (
+            <div style={{ marginTop:8, background:C.green+"0a", border:"1px solid "+C.green+"25",
+              borderRadius:8, padding:"6px 10px" }}>
+              <span style={{ fontFamily:C.font, fontSize:10, color:C.green }}>
+                ↑ Subir cabeza al 60% → +{impactoCola.kgDifPorTernero} kg/ternero
+                · +{impactoCola.kgDifTotal} kg en {impactoCola.terneros} terneros
+              </span>
+              <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>
+                INTA Cuenca del Salado: cada mes de atraso en la preñez = −21 kg al destete
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -7303,7 +7549,7 @@ function PanelRecomendaciones({ motor, form }) {
 
 const FORM_DEF = {
   // ── Ubicación ──────────────────────────────────────────────────
-  nombreProductor:"", zona:"", provincia:"", localidad:"",
+  nombreProductor:"", zona:"", provincia:"", localidad:"", escalaCC:"9",  // "5" o "9"
   // ── Rodeo ──────────────────────────────────────────────────────
   biotipo:"", primerParto:false,
   vacasN:"", torosN:"", pvVacaAdulta:"", pvToros:"",
@@ -7504,6 +7750,7 @@ function CalfAIPro() {
   const ccPondVal      = motor?.ccPondVal      ?? ccPond(form.distribucionCC);
   const ndviN          = motor?.ndviN          ?? (sat?.ndvi || 0.45);
   const tcSave         = motor?.tcSave         ?? null;
+  const impactoCola    = motor?.impactoCola    ?? null;
   const vaq1E          = motor?.vaq1E          ?? null;
   const pvSalidaVaq1   = motor?.pvSalidaVaq1   ?? "";
   const pvEntradaVaq2  = motor?.pvEntradaVaq2  ?? "";
@@ -7765,6 +8012,11 @@ function CalfAIPro() {
 
     t += `VAQ1: ${nVaqRepos} cab (${form.pctReposicion||20}% repos)`;
     if (form.edadVaqMayo) t += ` · Edad mayo: ${form.edadVaqMayo}m · Destete: ${form.tipoDesteteVaq}`;
+    if (form.vaq1PV) {
+      t += ` · PV actual REGISTRADO: ${form.vaq1PV}kg (dato real del campo)`;
+    } else if (motor?.pvEntVaq1 > 0) {
+      t += ` · PV entrada estimado: ${motor.pvEntVaq1}kg (calculado desde ternero — NO registrado por usuario)`;
+    }
     if (vaq1E && vaq1E.esc !== "—") t += `\n  Esc${vaq1E.esc}: Prot${vaq1E.prot}kg Energ${vaq1E.energ||0}kg ${vaq1E.freq} GDP${vaq1E.gdpReal}g/d → PV${vaq1E.pvSal}kg${vaq1E.nota ? " · " + vaq1E.nota : ""}`;
     t += "\n";
 
@@ -8518,10 +8770,33 @@ function CalfAIPro() {
           else set(campo, "");
         };
 
+        // Auto-corregir año de fin cuando el mes de fin < mes de inicio (servicio cruza año)
+        // Ej: inicio oct 2026, fin feb 2026 → fin debe ser feb 2027
+        const autoCorregirAnioFin = (iniM, iniA, finM, finA) => {
+          if (!iniM || !iniA || !finM || !finA) return finA;
+          const ini = new Date(iniA + "-" + iniM + "-01T12:00:00");
+          const fin = new Date(finA + "-" + finM + "-01T12:00:00");
+          if (fin <= ini) {
+            // fin está antes que ini — año de fin debe ser ini+1
+            return String(parseInt(iniA) + 1);
+          }
+          return finA;
+        };
+
         const iniMes  = getMes(form.iniServ);
         const iniAnio = getAnio(form.iniServ);
         const finMes  = getMes(form.finServ);
         const finAnio = getAnio(form.finServ);
+
+        const cadenaCalc = form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null;
+        // Año corregido para fin (si fin < ini, fin es año siguiente)
+        const finAnioCorr = autoCorregirAnioFin(iniMes, iniAnio, finMes, finAnio || String(anioAct));
+        // Si el año se auto-corrigió, guardar en el form
+        React.useEffect(() => {
+          if (finMes && iniMes && finAnioCorr !== finAnio) {
+            setFecha("finServ", finMes, finAnioCorr);
+          }
+        }, [iniMes, iniAnio, finMes]);
 
         const cadenaCalc = form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null;
         const diasServ   = cadenaCalc?.diasServ;
@@ -8534,6 +8809,14 @@ function CalfAIPro() {
             <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
               📅 FECHAS DE SERVICIO
             </div>
+            {finAnioCorr !== finAnio && finMes && iniMes && (
+              <div style={{ background:C.blue+"10", border:"1px solid "+C.blue+"30", borderRadius:8,
+                padding:"6px 10px", marginBottom:8 }}>
+                <span style={{ fontFamily:C.font, fontSize:9, color:C.blue }}>
+                  ℹ El fin del servicio cruza el año — ajustado a {finAnioCorr} automáticamente
+                </span>
+              </div>
+            )}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
               {/* Inicio */}
               <div>
@@ -8555,12 +8838,12 @@ function CalfAIPro() {
               <div>
                 <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:4 }}>FIN</div>
                 <div style={{ display:"flex", gap:4 }}>
-                  <select value={finMes} onChange={e => setFecha("finServ", e.target.value, finAnio||String(anioAct))}
+                  <select value={finMes} onChange={e => setFecha("finServ", e.target.value, autoCorregirAnioFin(iniMes, iniAnio||String(anioAct), e.target.value, finAnio||String(anioAct)))}
                     style={{ flex:2, background:C.card2, border:"1px solid "+C.border, borderRadius:8, color:C.text, padding:"10px 8px", fontFamily:C.font, fontSize:12 }}>
                     <option value="">Mes</option>
                     {MESES_OPT.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
-                  <select value={finAnio} onChange={e => setFecha("finServ", finMes||"01", e.target.value)}
+                  <select value={finAnioCorr} onChange={e => setFecha("finServ", finMes||"01", e.target.value)}
                     style={{ flex:1, background:C.card2, border:"1px solid "+C.border, borderRadius:8, color:C.text, padding:"10px 8px", fontFamily:C.font, fontSize:12 }}>
                     <option value="">Año</option>
                     {ANIOS.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
@@ -8642,9 +8925,42 @@ function CalfAIPro() {
         <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>
           ¿CUÁNDO SE HIZO EL TACTO?
         </div>
+
+        {/* ── Selector de escala CC — crítico para la conversión correcta ── */}
+        <div style={{ marginBottom:10 }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:5 }}>
+            ESCALA DE CC QUE USÁS
+          </div>
+          <div style={{ display:"flex", gap:6 }}>
+            {[["9","1 a 9 — INTA / Wagner-Selk (Brangus, Braford, Cebú)"],["5","1 a 5 — Lowman (Hereford, Angus, razas británicas)"]].map(([val,lbl]) => {
+              const sel = (form.escalaCC||"9") === val;
+              return (
+                <button key={val} onClick={() => set("escalaCC", val)}
+                  style={{ flex:1, padding:"8px 6px", borderRadius:8, cursor:"pointer", textAlign:"left",
+                    fontFamily:C.font, fontSize:9, fontWeight:sel?700:400, lineHeight:1.4,
+                    background: sel ? C.green+"15" : "transparent",
+                    border:"1px solid "+(sel ? C.green+"60" : C.border),
+                    color: sel ? C.green : C.textDim }}>
+                  <span style={{ fontSize:13, display:"block", marginBottom:2 }}>
+                    {val === "9" ? "1 — 9" : "1 — 5"}
+                  </span>
+                  {lbl.split("— ")[1]}
+                </button>
+              );
+            })}
+          </div>
+          {form.escalaCC === "5" && (
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginTop:6 }}>
+              ℹ Los valores que ingresás se convierten automáticamente a escala 1-9 para los cálculos.
+              Ej: CC 3.0 (1-5) = CC 5.4 (1-9)
+            </div>
+          )}
+        </div>
+
         <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, lineHeight:1.6, marginBottom:8 }}>
           La CC se mide al tacto, 60–90 días antes del parto. Como la vaca preñada sin ternero al pie no moviliza reservas,
-          esta CC <strong style={{color:C.text}}>es prácticamente la CC al parto</strong>. Ingresala en escala 1–9 (INTA).
+          esta CC <strong style={{color:C.text}}>es prácticamente la CC al parto</strong>.
+          Ingresala en escala {form.escalaCC === "5" ? "1–5 (Lowman)" : "1–9 (INTA/Wagner-Selk)"}.
         </div>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
           {[["feb","Feb"],["mar","Mar"],["abr","Abr"],["may","May"],["jun","Jun"],["otro","Otro mes"]].map(([val,lbl]) => {
@@ -8693,10 +9009,29 @@ function CalfAIPro() {
           ⚠ Los valores son un ejemplo típico NEA — editá con los datos reales del tacto
         </div>
         <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:3 }}>
-          CC promedio actual: {ccPondVal > 0 ? ccPondVal.toFixed(1) : "—"} · La suma de % debe ser 100
+          CC promedio actual: {ccPondVal > 0
+            ? (form.escalaCC === "5"
+                ? ccPondVal.toFixed(1) + " (escala 1-9) = " + cc5(ccPondVal) + " (escala 1-5)"
+                : ccPondVal.toFixed(1))
+            : "—"} · La suma de % debe ser 100
         </div>
       </div>
-      <DistCC dist={form.distribucionCC} onChange={v=>setDist("distribucionCC",v)} label="" />
+      <DistCC
+        dist={form.distribucionCC}
+        escala={form.escalaCC || "9"}
+        onChange={v => {
+          // Si el usuario usa escala 1-5, convertir los valores a 1-9 antes de guardar
+          if ((form.escalaCC || "9") === "5") {
+            const convertido = v.map(d => ({
+              ...d,
+              cc: d.cc ? String(Math.min(9, Math.round(parseFloat(d.cc) * 1.8 * 10) / 10)) : d.cc
+            }));
+            setDist("distribucionCC", convertido);
+          } else {
+            setDist("distribucionCC", v);
+          }
+        }}
+        label="" />
 
       {/* ── DESTETE — el productor ya lo tiene definido ── */}
       <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginTop:14 }}>
@@ -8896,12 +9231,29 @@ function CalfAIPro() {
               value={form.edadVaqMayo} onChange={v=>set("edadVaqMayo",v)} placeholder="" type="number"
               sub="Define objetivo de entore" />
           </div>
-          {tcSave?.pvMayoPond > 0 && (
-            <div style={{ background:`${C.green}08`, border:`1px solid ${C.green}25`, borderRadius:10, padding:10, marginBottom:10 }}>
-              <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, marginBottom:3 }}>PV entrada mayo 1°inv</div>
+          {tcSave?.pvMayoPond > 0 ? (
+            <div style={{ background:C.green+"08", border:"1px solid "+C.green+"25", borderRadius:10, padding:10, marginBottom:10 }}>
+              <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, marginBottom:3 }}>PV entrada mayo 1°inv — calculado del destete</div>
               <div style={{ fontFamily:C.font, fontSize:22, color:C.green, fontWeight:700 }}>{tcSave.pvMayoPond} kg</div>
             </div>
-          )}
+          ) : vaq1E?.pvEntrada > 0 ? (
+            <div style={{ background:(vaq1E.pvFuenteDato==="real" ? C.green : C.amber)+"08",
+              border:"1px solid "+(vaq1E.pvFuenteDato==="real" ? C.green : C.amber)+"25",
+              borderRadius:10, padding:10, marginBottom:10 }}>
+              <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, marginBottom:3 }}>
+                PV mayo 1°inv — {vaq1E.pvFuenteDato === "real" ? "dato real" : vaq1E.pvFuenteDato === "estimado_por_edad" ? "estimado por edad" : "estimado (40% PV adulto)"}
+              </div>
+              <div style={{ fontFamily:C.font, fontSize:22,
+                color:vaq1E.pvFuenteDato==="real" ? C.green : C.amber, fontWeight:700 }}>
+                {vaq1E.pvEntrada} kg
+              </div>
+              {vaq1E.pvFuenteDato !== "real" && (
+                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:3 }}>
+                  ↑ Ingresá el PV real en el campo "PV ACTUAL VAQ1" para mayor precisión
+                </div>
+              )}
+            </div>
+          ) : null}
           {vaq1E && vaq1E.mensaje && <Alerta tipo="ok">{vaq1E.mensaje}</Alerta>}
           {vaq1E && vaq1E.alertaSinSupl && <Alerta tipo="error">{vaq1E.alertaSinSupl}</Alerta>}
           {vaq1E && !vaq1E.sinSupl && vaq1E.alertaSinSupl === null && vaq1E.mcalSuplReal > 0 && (parseFloat(vaq1E.gdpConSuplReal) < 400) && (
@@ -10237,6 +10589,9 @@ function CalfAIPro() {
                       ["Ini. servicio",    form.iniServ ? new Date(form.iniServ+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}) : "—", null, ""],
                       ["Fin servicio",     form.finServ ? new Date(form.finServ+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}) : "—", null, ""],
                       ["Duración servicio", cadena?.diasServ ? cadena.diasServ + " días" : "—", cadena?.diasServ ? (cadena.diasServ >= 75 && cadena.diasServ <= 90 ? C.green : C.amber) : null, cadena?.diasServ > 90 ? "Servicio largo → cola de preñez pesada" : ""],
+                      ["Cabeza de parición", impactoCola ? impactoCola.cabeza + "%" : "—", impactoCola ? (impactoCola.cabeza >= 55 ? C.green : impactoCola.cabeza >= 40 ? C.amber : C.red) : null, impactoCola && impactoCola.cabeza < 55 ? "Subir al 60% → +" + impactoCola.kgDifPorTernero + " kg/ternero" : ""],
+                      ["Peso dest. estimado", impactoCola ? impactoCola.pvPromDestete + " kg" : "—", null, impactoCola && impactoCola.kgDifPorTernero > 0 ? "Con 60% cabeza: " + impactoCola.pvPromObj + " kg (+"+impactoCola.kgDifPorTernero+" kg)" : ""],
+                      ["Kg totales destete", impactoCola ? Math.round(impactoCola.pvPromDestete * impactoCola.terneros) + " kg" : "—", null, impactoCola && impactoCola.kgDifTotal > 0 ? "Potencial sin capturar: +" + impactoCola.kgDifTotal + " kg" : ""],
                     ]
                   },
                   {
