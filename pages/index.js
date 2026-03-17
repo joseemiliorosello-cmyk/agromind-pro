@@ -1728,7 +1728,22 @@ function correrMotor(form, sat, potreros, usaPotreros) {
   // es menor → la presión sobre la pastura se reduce. Estimamos qué % del req total
   // cubre el suplemento y escalamos la carga efectiva proporcionalmente.
   // Referencia: Lippke 1980 — "substitution rate" suplemento-pastoreo
-  const suplMcalTotalDia = suplRodeoMcalDia; // Mcal/día que aporta el suplemento al rodeo
+  // suplRodeoMcalDia se declara más adelante — calcular aquí de forma provisional
+  // para determinar factorCargaSusp (cuánto alivia el suplemento la presión sobre el pasto)
+  const suplMcalTotalDia = (() => {
+    const cats = [
+      { sk:"supl_vacas", dk:"dosis_vacas", n:nVacas },
+      { sk:"supl_toros", dk:"dosis_toros", n:nToros },
+      { sk:"supl_v2s",   dk:"dosis_v2s",   n:nV2s   },
+      { sk:"supl_vaq2",  dk:"dosis_vaq2",  n:nVaq2  },
+      { sk:"supl_vaq1",  dk:"dosis_vaq1",  n:nVaq1  },
+    ];
+    return cats.reduce((acc,c) => {
+      const s = SUPLEMENTOS[form[c.sk]];
+      const d = parseFloat(form[c.dk]) || 0;
+      return acc + (s ? s.em*d*c.n : 0);
+    }, 0);
+  })();
   // requerimiento medio del rodeo sin suplemento (estimado como promedio anual)
   const reqRodeoEstim = (nVacas*14 + nToros*20 + nV2s*16 + nVaq2*10 + nVaq1*7) || 1;
   const fracSuplReq = Math.min(0.35, suplMcalTotalDia / reqRodeoEstim); // máx 35% sustitución
@@ -4765,10 +4780,10 @@ const MSGS = [
 ];
 
 const PASOS = [
-  { id:"campo",    icon:"🌾", label:"El campo"   },  // Ubicación + Forraje + Suplementación + Agua
-  { id:"rodeo",    icon:"🐄", label:"El rodeo"   },  // Rodeo + CC + Categorías
-  { id:"manejo",   icon:"🩺", label:"Manejo"     },  // Sanidad + Destete + Toros
-  { id:"analisis", icon:"⚡", label:"Análisis"   },  // Dashboard + Balance + Cerebro
+  { id:"campo",    icon:"🐄", label:"Rodeo y CC"  },  // Ubicación + Rodeo + CC
+  { id:"rodeo",    icon:"🌾", label:"El campo"    },  // Forraje + Suplementación + Categorías
+  { id:"manejo",   icon:"🩺", label:"Sanidad"     },  // Sanidad
+  { id:"analisis", icon:"⚡", label:"Análisis"    },  // Dashboard + Balance + Cerebro
 ];
 
 // ─── FORM DEFAULT ────────────────────────────────────────────────
@@ -8795,13 +8810,8 @@ function CalfAIPro() {
         const finAnio = getAnio(form.finServ);
 
         // Año corregido para fin (si fin < ini, fin es año siguiente)
+        // La auto-corrección se aplica directamente al cambiar el mes de fin
         const finAnioCorr = autoCorregirAnioFin(iniMes, iniAnio, finMes, finAnio || String(anioAct));
-        // Si el año se auto-corrigió, guardar en el form
-        React.useEffect(() => {
-          if (finMes && iniMes && finAnioCorr !== finAnio) {
-            setFecha("finServ", finMes, finAnioCorr);
-          }
-        }, [iniMes, iniAnio, finMes]);
 
         const cadenaCalc = form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null;
         const diasServ   = cadenaCalc?.diasServ;
@@ -11084,38 +11094,43 @@ function CalfAIPro() {
   };
 
 
-  // Paso 0 — El campo: Ubicación + Forraje + Suplementación + Agua
+  // ── PASOS REDISEÑADOS ─────────────────────────────────────────
+  // Flujo del técnico en campo:
+  // Paso 0: Lo que ves al llegar — ubicación + el rodeo + CC (los 3 datos que cambian todo)
+  // Paso 1: El campo — forraje, suplementación, agua (lo que tiene disponible)
+  // Paso 2: Manejo y sanidad — destete, toros, vacunas
+
   const renderCampo = () => (
     <div>
       <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
-        DATOS OBLIGATORIOS — el motor no puede correr sin estos
+        UBICACIÓN Y RODEO — datos mínimos para el diagnóstico
       </div>
       {renderUbicacion()}
       <div style={{ height:1, background:C.border, margin:"16px 0" }} />
+      <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:6 }}>
+        🐄 EL RODEO
+      </div>
+      {renderRodeo()}
+      <div style={{ height:1, background:C.border, margin:"16px 0" }} />
+      <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:6 }}>
+        📊 CONDICIÓN CORPORAL — escala 1-9 INTA
+      </div>
+      {renderCC()}
+    </div>
+  );
+
+  // Paso 1 — El campo: Forraje + Suplementación + Agua
+  const renderRodeoCompleto = () => (
+    <div>
       <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
-        FORRAJE Y SUPLEMENTACIÓN
+        FORRAJE Y SUPLEMENTACIÓN — qué come el rodeo y cuánto pasto tiene
       </div>
       {renderForraje()}
       <div style={{ height:1, background:C.border, margin:"16px 0" }} />
       {renderSuplAgua()}
-    </div>
-  );
-
-  // Paso 1 — El rodeo: Rodeo + CC + Categorías
-  const renderRodeoCompleto = () => (
-    <div>
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
-        DATOS DEL RODEO — biotipo, vacas y CC son obligatorios
-      </div>
-      {renderRodeo()}
       <div style={{ height:1, background:C.border, margin:"16px 0" }} />
       <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
-        CONDICIÓN CORPORAL
-      </div>
-      {renderCC()}
-      <div style={{ height:1, background:C.border, margin:"16px 0" }} />
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
-        CATEGORÍAS (opcional — enriquece el diagnóstico)
+        CATEGORÍAS — vaquillona y V2S (opcional, enriquece el diagnóstico)
       </div>
       {renderCategorias()}
     </div>
