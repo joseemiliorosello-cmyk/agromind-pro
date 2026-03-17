@@ -4048,26 +4048,36 @@ function GraficoBalance({ form, sat, cadena, tray, motor }) {
   const faltaVacas   = !form?.vacasN || parseInt(form.vacasN) <= 0;
   const faltaProv    = !form?.provincia;
 
+  // Si no hay balance del motor aún, mostrar panel de datos faltantes
+  const faltantes = [];
+  if (faltaProv)  faltantes.push("provincia");
+  if (faltaVacas) faltantes.push("cantidad de vacas");
+  if (faltaSupHa) faltantes.push("superficie (ha)");
+  const sinSupHa = faltaSupHa;
+  const esDatoEstimado = faltantes.length > 0;
+
   if (!bm || bm.length === 0) {
-    const faltantes = [];
-    if (faltaProv)  faltantes.push("provincia");
-    if (faltaVacas) faltantes.push("cantidad de vacas");
-    if (faltaSupHa) faltantes.push("superficie (ha)");
     return (
-      <div style={{ padding:20, background:C.card2, border:"1px solid "+C.border, borderRadius:12, textAlign:"center" }}>
-        <div style={{ fontFamily:T.font, fontSize:20, marginBottom:8 }}>📊</div>
-        <div style={{ fontFamily:T.font, fontSize:11, color:T.text, marginBottom:6 }}>
-          Falta completar para ver el balance
+      <div style={{ padding:20, background:C.card2, border:"1px solid "+C.amber+"40", borderRadius:12 }}>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.text, marginBottom:10, fontWeight:700 }}>
+          📊 Balance forrajero
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:10, color:T.amber, marginBottom:8 }}>
+          Completá estos datos para ver el balance energético:
         </div>
         {faltantes.map(f => (
-          <div key={f} style={{ fontFamily:T.font, fontSize:10, color:T.amber }}>⚠ {f}</div>
+          <div key={f} style={{ fontFamily:T.font, fontSize:10, color:T.amber, marginBottom:4 }}>
+            ⚠ Falta: {f}
+          </div>
         ))}
+        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginTop:8, lineHeight:1.6 }}>
+          El balance compara la energía que ofrece el pasto (según NDVI, tipo y superficie)
+          contra la demanda del rodeo (según categorías y estado fisiológico) mes a mes.
+          Con estos datos el sistema puede calcular cuándo hay déficit y cuánto suplemento se necesita.
+        </div>
       </div>
     );
   }
-
-  // Si hay balance pero sin superficie, mostrar aviso
-  const sinSupHa = faltaSupHa;
 
   // ── Construir datos por categoría ────────────────────────────
   // Cada mes: oferta pasto/cabeza vs requerimiento/cabeza, por categoría
@@ -4755,14 +4765,10 @@ const MSGS = [
 ];
 
 const PASOS = [
-  { id:"ubicacion",  icon:"📍", label:"Ubicación"  },
-  { id:"rodeo",      icon:"🐄", label:"Rodeo"      },
-  { id:"cc",         icon:"📊", label:"CC"         },
-  { id:"categorias", icon:"🐮", label:"Categ."     },
-  { id:"forraje",    icon:"🌾", label:"Forraje"    },
-  { id:"supl",       icon:"💊", label:"Supl/Agua"  },
-  { id:"sanidad",    icon:"🩺", label:"Sanidad"    },
-  { id:"analisis",   icon:"⚡", label:"Análisis"   },
+  { id:"campo",    icon:"🌾", label:"El campo"   },  // Ubicación + Forraje + Suplementación + Agua
+  { id:"rodeo",    icon:"🐄", label:"El rodeo"   },  // Rodeo + CC + Categorías
+  { id:"manejo",   icon:"🩺", label:"Manejo"     },  // Sanidad + Destete + Toros
+  { id:"analisis", icon:"⚡", label:"Análisis"   },  // Dashboard + Balance + Cerebro
 ];
 
 // ─── FORM DEFAULT ────────────────────────────────────────────────
@@ -8788,7 +8794,6 @@ function CalfAIPro() {
         const finMes  = getMes(form.finServ);
         const finAnio = getAnio(form.finServ);
 
-        const cadenaCalc = form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null;
         // Año corregido para fin (si fin < ini, fin es año siguiente)
         const finAnioCorr = autoCorregirAnioFin(iniMes, iniAnio, finMes, finAnio || String(anioAct));
         // Si el año se auto-corrigió, guardar en el form
@@ -10713,6 +10718,159 @@ function CalfAIPro() {
           {/* ═══ TAB BALANCE ═══ */}
           {tab === "balance" && (
             <div>
+              {/* ── Balance — siempre visible, usa motor si está listo o recalcula ── */}
+              {(() => {
+                // Usar motor si está listo, si no recalcular directamente
+                const bm = motor?.balanceMensual?.length > 0
+                  ? motor.balanceMensual
+                  : null;
+
+                const MESES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+                const mesHoy  = new Date().getMonth();
+
+                if (!bm) {
+                  // Motor aún no corrió — mostrar qué falta
+                  const falta = [];
+                  if (!form.provincia) falta.push("provincia");
+                  if (!form.vacasN)    falta.push("cantidad de vacas");
+                  if (!form.supHa)     falta.push("superficie (ha)");
+                  return (
+                    <div style={{ background:C.card2, border:"1px solid "+C.amber+"40",
+                      borderRadius:12, padding:"16px 14px", marginBottom:12 }}>
+                      <div style={{ fontFamily:C.font, fontSize:11, color:C.amber, marginBottom:8, fontWeight:700 }}>
+                        📊 Balance forrajero energético
+                      </div>
+                      <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, marginBottom:8 }}>
+                        {falta.length > 0
+                          ? "Para ver el balance completá: " + falta.join(", ")
+                          : "Calculando balance..."}
+                      </div>
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, lineHeight:1.7 }}>
+                        El balance compara la energía que ofrece el pasto (NDVI + tipo + superficie)
+                        contra la demanda real del rodeo por categoría y estado fisiológico, mes a mes.
+                      </div>
+                    </div>
+                  );
+                }
+
+                const vals   = bm.map(m => m.balance ?? 0);
+                const maxAbs = Math.max(1, ...vals.map(Math.abs));
+                const W = 340, H = 130, padX = 24, barW = (W - padX*2) / 12 - 2;
+
+                // Calcular resumen invernal
+                const invMeses = [5,6,7].map(i => ({ mes:MESES_C[i], i, bal:bm[i]?.balance ?? null }));
+                const mesesDef = invMeses.filter(m => m.bal !== null && m.bal < 0).length;
+                const peorInv  = invMeses.reduce((mn, m) => (m.bal !== null && (mn.bal === null || m.bal < mn.bal)) ? m : mn, invMeses[0]);
+
+                return (
+                  <div>
+                    {/* ── Gráfico de barras 12 meses ── */}
+                    <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:12,
+                      padding:"12px 14px", marginBottom:12 }}>
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>
+                        BALANCE ENERGÉTICO MENSUAL — Mcal/día (oferta − demanda)
+                      </div>
+                      <svg viewBox={"0 0 "+W+" "+H} style={{ width:"100%", display:"block" }}>
+                        {/* Fondo del mes actual */}
+                        {(() => {
+                          const x = padX + mesHoy * ((W-padX*2)/12);
+                          return <rect x={x-1} y={2} width={barW+4} height={H-14} fill={C.green+"07"} rx={3} />;
+                        })()}
+                        {/* Línea cero */}
+                        <line x1={padX} y1={H/2-4} x2={W-padX} y2={H/2-4}
+                          stroke={C.border} strokeWidth="1" />
+                        {/* Etiqueta "0" */}
+                        <text x={padX-4} y={H/2} textAnchor="end"
+                          style={{ fontFamily:C.font, fontSize:"6px", fill:C.textFaint }}>0</text>
+                        {/* Barras */}
+                        {bm.map((m, i) => {
+                          const x   = padX + i * ((W-padX*2)/12);
+                          const pct = Math.min(1, Math.abs(m.balance ?? 0) / maxAbs);
+                          const pos = (m.balance ?? 0) >= 0;
+                          const bH  = Math.max(2, pct * (H/2 - 18));
+                          const y   = pos ? H/2 - 4 - bH : H/2 - 4;
+                          const col = pos ? C.green : C.red;
+                          const esc = i === mesHoy;
+                          const esInv = [5,6,7].includes(i);
+                          return (
+                            <g key={i}>
+                              {esInv && (
+                                <rect x={x} y={4} width={barW+2} height={H-18}
+                                  fill={col+"06"} rx={0} />
+                              )}
+                              <rect x={x+1} y={y} width={barW} height={bH}
+                                fill={col+(esc?"ee":"bb")} rx={2}
+                                stroke={esc ? col : "none"} strokeWidth={esc?"1":"0"} />
+                              {bH > 12 && (
+                                <text x={x+barW/2} y={pos ? y+9 : y+bH-3}
+                                  textAnchor="middle"
+                                  style={{ fontFamily:C.font, fontSize:"6px", fill:"#fff", fontWeight:"700" }}>
+                                  {Math.abs(Math.round(m.balance??0))}
+                                </text>
+                              )}
+                              <text x={x+barW/2} y={H-2} textAnchor="middle"
+                                style={{ fontFamily:C.font, fontSize:"6px",
+                                  fill: esc ? C.green : esInv ? C.amber : C.textFaint,
+                                  fontWeight: esc ? "700" : "400" }}>
+                                {MESES_C[i]}
+                              </text>
+                            </g>
+                          );
+                        })}
+                        {/* Leyenda */}
+                        <text x={padX} y={12} style={{ fontFamily:C.font, fontSize:"7px", fill:C.green }}>▲ Superávit</text>
+                        <text x={W-padX} y={12} textAnchor="end" style={{ fontFamily:C.font, fontSize:"7px", fill:C.red }}>▼ Déficit</text>
+                        <text x={W/2} y={H-2} textAnchor="middle" style={{ fontFamily:C.font, fontSize:"6px", fill:C.amber }}>
+                          ■ Invierno crítico (Jun-Ago)
+                        </text>
+                      </svg>
+
+                      {/* Tarjetas invernales */}
+                      <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                        {invMeses.map(({ mes, bal }) => {
+                          const ok = bal !== null && bal >= 0;
+                          const color = bal === null ? C.textFaint : ok ? C.green : C.red;
+                          return (
+                            <div key={mes} style={{ flex:1, background:color+"10",
+                              border:"1px solid "+color+"40", borderRadius:8,
+                              padding:"6px 4px", textAlign:"center" }}>
+                              <div style={{ fontFamily:C.font, fontSize:9, color, fontWeight:700 }}>{mes}</div>
+                              <div style={{ fontFamily:C.font, fontSize:11, color, fontWeight:700, marginTop:2 }}>
+                                {bal !== null ? (bal>0?"+":"")+Math.round(bal)+" M" : "—"}
+                              </div>
+                              <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, marginTop:1 }}>
+                                {bal === null ? "sin dato" : ok ? "superávit" : "DÉFICIT"}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {/* Resumen */}
+                        <div style={{ flex:1.5, background:mesesDef===0?C.green+"10":C.red+"10",
+                          border:"1px solid "+(mesesDef===0?C.green:C.red)+"40",
+                          borderRadius:8, padding:"6px 8px" }}>
+                          <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>INVIERNO</div>
+                          <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700,
+                            color:mesesDef===0?C.green:mesesDef===1?C.amber:C.red }}>
+                            {mesesDef === 0 ? "✓ OK" : mesesDef+"/3 meses"}
+                          </div>
+                          <div style={{ fontFamily:C.font, fontSize:8,
+                            color:mesesDef===0?C.green:C.red, marginTop:2 }}>
+                            {mesesDef === 0 ? "Sin déficit" : "Déficit — suplementar"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {(!form.supHa || !form.vacasN) && (
+                        <div style={{ fontFamily:C.font, fontSize:8, color:C.amber, marginTop:6 }}>
+                          ⚠ Estimación parcial — completá superficie y vacas para mayor precisión
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── Gráfico detallado completo ── */}
               <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />
               <TrayectoriaVaquillona motor={motor} form={form} />
               {tray && cadena && (
@@ -10735,15 +10893,139 @@ function CalfAIPro() {
           {/* ═══ TAB CEREBRO ═══ */}
           {tab === "cerebro" && (
             <div>
+
+              {/* ── 1. RESUMEN DE DATOS CARGADOS — qué sabe el sistema ── */}
+              <div style={{ background:C.card2, border:"1px solid "+C.border,
+                borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint,
+                  letterSpacing:1, marginBottom:8 }}>
+                  DATOS CARGADOS — lo que alimenta el análisis
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 12px" }}>
+                  {[
+                    ["Establecimiento", form.nombreProductor || "—"],
+                    ["Provincia", form.provincia || "⚠ sin dato"],
+                    ["Biotipo", form.biotipo || "⚠ sin dato"],
+                    ["Vacas", form.vacasN ? form.vacasN+" cab" : "⚠ sin dato"],
+                    ["PV adulto", form.pvVacaAdulta ? form.pvVacaAdulta+" kg" : "estimado 320 kg *"],
+                    ["CC ponderada", motor?.ccPondVal > 0 ? motor.ccPondVal.toFixed(1)+" (escala 1-9)" : "⚠ sin dato"],
+                    ["Servicio", (form.iniServ && form.finServ)
+                      ? new Date(form.iniServ+"T12:00").toLocaleDateString("es-AR",{month:"short"})+" → "+
+                        new Date(form.finServ+"T12:00").toLocaleDateString("es-AR",{month:"short",year:"2-digit"})
+                      : "⚠ sin fechas"],
+                    ["Superficie", form.supHa ? form.supHa+" ha" : "estimada *"],
+                    ["Vegetación", form.vegetacion || "⚠ sin dato"],
+                    ["NDVI hoy", sat?.ndvi ? sat.ndvi+" ("+sat.condForr+")" : "sin GPS/provincia"],
+                    ["Supl. cargado", (form.supl1||form.supl_vacas) ? "Sí" : "No"],
+                    ["Vaquillona", (form.edadVaqMayo||form.vaq1PV) ? "Con datos" : "Sin datos *"],
+                  ].map(([k,v]) => (
+                    <div key={k} style={{ display:"flex", justifyContent:"space-between",
+                      padding:"3px 0", borderBottom:"1px solid "+C.border+"50" }}>
+                      <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>{k}</span>
+                      <span style={{ fontFamily:C.font, fontSize:9,
+                        color: v.includes("⚠") ? C.amber : v.includes("*") ? C.textDim : C.text }}>
+                        {v}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {(!form.pvVacaAdulta || !form.supHa || !form.edadVaqMayo) && (
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:6 }}>
+                    * Datos marcados se estimaron con valores típicos NEA — cargalos para mayor precisión
+                  </div>
+                )}
+              </div>
+
+              {/* ── 2. BALANCE INVERNAL — mini gráfico siempre visible ── */}
+              {motor?.balanceMensual?.length > 0 && (() => {
+                const bm = motor.balanceMensual;
+                const MESES_C2 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+                const mesHoyC  = new Date().getMonth();
+                const vals2    = bm.map(m => m.balance ?? 0);
+                const maxAbs2  = Math.max(1, ...vals2.map(Math.abs));
+                const W2=320, H2=90, pad2=16, barW2=(W2-pad2*2)/12-2;
+                return (
+                  <div style={{ background:C.card2, border:"1px solid "+C.border,
+                    borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint,
+                      letterSpacing:1, marginBottom:6 }}>
+                      BALANCE FORRAJERO MENSUAL (Mcal/día)
+                    </div>
+                    <svg viewBox={"0 0 "+W2+" "+H2} style={{ width:"100%", display:"block" }}>
+                      <line x1={pad2} y1={H2/2} x2={W2-pad2} y2={H2/2}
+                        stroke={C.border} strokeWidth="1" />
+                      {bm.map((m,i) => {
+                        const x2   = pad2 + i*((W2-pad2*2)/12);
+                        const pct2 = Math.min(1, Math.abs(m.balance??0)/maxAbs2);
+                        const pos2 = (m.balance??0) >= 0;
+                        const bH2  = Math.max(2, pct2*(H2/2-8));
+                        const y2   = pos2 ? H2/2-bH2 : H2/2;
+                        const col2 = pos2 ? C.green : C.red;
+                        const cur2 = i === mesHoyC;
+                        return (
+                          <g key={i}>
+                            {cur2 && <rect x={x2-1} y={4} width={barW2+4} height={H2-10}
+                              fill={C.green+"08"} rx={2} />}
+                            <rect x={x2+1} y={y2} width={barW2} height={bH2}
+                              fill={col2+(cur2?"ff":"88")} rx={2} />
+                            <text x={x2+barW2/2} y={H2-2} textAnchor="middle"
+                              style={{ fontFamily:C.font, fontSize:"6px",
+                                fill: cur2 ? C.green : C.textFaint }}>
+                              {MESES_C2[i]}
+                            </text>
+                          </g>
+                        );
+                      })}
+                      <text x={pad2} y={10} style={{ fontFamily:C.font, fontSize:"7px", fill:C.green }}>
+                        ▲ Superávit
+                      </text>
+                      <text x={W2-pad2} y={H2-10} textAnchor="end"
+                        style={{ fontFamily:C.font, fontSize:"7px", fill:C.red }}>
+                        ▼ Déficit
+                      </text>
+                    </svg>
+                    <div style={{ display:"flex", gap:4, marginTop:6 }}>
+                      {[5,6,7].map(i => {
+                        const b2 = bm[i];
+                        const ok2 = (b2?.balance??0) >= 0;
+                        const MESES_C2b = ["Jun","Jul","Ago"];
+                        return (
+                          <div key={i} style={{ flex:1, background:(ok2?C.green:C.red)+"12",
+                            border:"1px solid "+(ok2?C.green:C.red)+"40",
+                            borderRadius:6, padding:"4px 6px", textAlign:"center" }}>
+                            <div style={{ fontFamily:C.font, fontSize:8,
+                              color:ok2?C.green:C.red, fontWeight:700 }}>
+                              {MESES_C2b[i-5]}
+                            </div>
+                            <div style={{ fontFamily:C.font, fontSize:9,
+                              color:ok2?C.green:C.red, fontWeight:700 }}>
+                              {b2 ? (b2.balance>0?"+":"")+Math.round(b2.balance) : "—"}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── 3. TARJETAS POR DIMENSIÓN — estado del sistema ── */}
               <TabCerebro motor={motor} form={form} sat={sat} />
+
+              {/* ── 4. INFORME IA ── */}
               <div style={{ marginTop:14 }}>
                 {!result && !loading && (
                   <div>
-                    <button onClick={runAnalysis} style={{ width:"100%", background:C.green, color:"#0b1a0c", padding:16, borderRadius:14, border:"none", fontFamily:C.font, fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:1, marginBottom:8 }}>
+                    <button onClick={runAnalysis}
+                      style={{ width:"100%", background:C.green, color:"#0b1a0c",
+                        padding:16, borderRadius:14, border:"none",
+                        fontFamily:C.font, fontSize:14, fontWeight:700,
+                        cursor:"pointer", letterSpacing:1, marginBottom:8 }}>
                       ⚡ GENERAR INFORME TÉCNICO COMPLETO
                     </button>
                     <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, textAlign:"center" }}>
-                      La IA analiza score, fase del ciclo, balance, GEI y datos del rodeo — produce el diagnóstico integrado con cuantificación de mejoras
+                      La IA analiza score, fase del ciclo, balance, vaquillona y sanidad —
+                      produce el diagnóstico integrado con cuantificación de mejoras
                     </div>
                   </div>
                 )}
@@ -10752,19 +11034,43 @@ function CalfAIPro() {
                   <div>
                     <RenderInforme texto={result} />
                     <details style={{ marginTop:12 }}>
-                      <summary style={{ fontFamily:C.font, fontSize:10, color:C.textDim, cursor:"pointer", padding:"10px 14px", background:C.card2, borderRadius:10, border:"1px solid "+C.border, listStyle:"none", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                        <span>🎯 Planes de acción detallados con dosis y fundamento</span><span>▼</span>
+                      <summary style={{ fontFamily:C.font, fontSize:10, color:C.textDim,
+                        cursor:"pointer", padding:"10px 14px", background:C.card2,
+                        borderRadius:10, border:"1px solid "+C.border,
+                        listStyle:"none", display:"flex", alignItems:"center",
+                        justifyContent:"space-between" }}>
+                        <span>🎯 Planes de acción detallados con dosis y fundamento</span>
+                        <span>▼</span>
                       </summary>
                       <div style={{ marginTop:6 }}>
                         <PanelRecomendaciones motor={motor} form={form} />
                       </div>
                     </details>
                     <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                      <button onClick={() => { descargarPDF(); setTimeout(descargarCSV, 800); }} style={{ flex:2, background:C.green, color:"#0b1a0c", padding:13, borderRadius:10, border:"none", fontFamily:C.font, fontSize:13, fontWeight:700, cursor:"pointer" }}>📤 Compartir (PDF + CSV)</button>
-                      <button onClick={descargarPDF} style={{ flex:1, background:C.blue+"12", border:"1px solid "+C.blue+"35", borderRadius:10, color:C.blue, padding:13, fontFamily:C.font, fontSize:12, cursor:"pointer" }}>PDF</button>
-                      <button onClick={descargarCSV} style={{ flex:1, background:C.green+"10", border:"1px solid "+C.green+"35", borderRadius:10, color:C.green, padding:13, fontFamily:C.font, fontSize:12, cursor:"pointer" }}>CSV</button>
+                      <button onClick={() => { descargarPDF(); setTimeout(descargarCSV,800); }}
+                        style={{ flex:2, background:C.green, color:"#0b1a0c", padding:13,
+                          borderRadius:10, border:"none", fontFamily:C.font, fontSize:13,
+                          fontWeight:700, cursor:"pointer" }}>
+                        📤 Compartir (PDF + CSV)
+                      </button>
+                      <button onClick={descargarPDF}
+                        style={{ flex:1, background:C.blue+"12", border:"1px solid "+C.blue+"35",
+                          borderRadius:10, color:C.blue, padding:13,
+                          fontFamily:C.font, fontSize:12, cursor:"pointer" }}>
+                        PDF
+                      </button>
+                      <button onClick={descargarCSV}
+                        style={{ flex:1, background:C.green+"10", border:"1px solid "+C.green+"35",
+                          borderRadius:10, color:C.green, padding:13,
+                          fontFamily:C.font, fontSize:12, cursor:"pointer" }}>
+                        CSV
+                      </button>
                     </div>
-                    <button onClick={runAnalysis} style={{ width:"100%", background:C.green+"06", border:"1px solid "+C.border, borderRadius:10, color:C.textDim, padding:10, fontFamily:C.font, fontSize:12, cursor:"pointer", marginTop:8 }}>
+                    <button onClick={runAnalysis}
+                      style={{ width:"100%", background:C.green+"06",
+                        border:"1px solid "+C.border, borderRadius:10,
+                        color:C.textDim, padding:10, fontFamily:C.font,
+                        fontSize:12, cursor:"pointer", marginTop:8 }}>
                       🔄 Regenerar informe
                     </button>
                   </div>
@@ -10778,7 +11084,51 @@ function CalfAIPro() {
   };
 
 
-  const RENDERS = [renderUbicacion, renderRodeo, renderCC, renderCategorias, renderForraje, renderSuplAgua, renderSanidad, renderAnalisis];
+  // Paso 0 — El campo: Ubicación + Forraje + Suplementación + Agua
+  const renderCampo = () => (
+    <div>
+      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
+        DATOS OBLIGATORIOS — el motor no puede correr sin estos
+      </div>
+      {renderUbicacion()}
+      <div style={{ height:1, background:C.border, margin:"16px 0" }} />
+      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
+        FORRAJE Y SUPLEMENTACIÓN
+      </div>
+      {renderForraje()}
+      <div style={{ height:1, background:C.border, margin:"16px 0" }} />
+      {renderSuplAgua()}
+    </div>
+  );
+
+  // Paso 1 — El rodeo: Rodeo + CC + Categorías
+  const renderRodeoCompleto = () => (
+    <div>
+      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
+        DATOS DEL RODEO — biotipo, vacas y CC son obligatorios
+      </div>
+      {renderRodeo()}
+      <div style={{ height:1, background:C.border, margin:"16px 0" }} />
+      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
+        CONDICIÓN CORPORAL
+      </div>
+      {renderCC()}
+      <div style={{ height:1, background:C.border, margin:"16px 0" }} />
+      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
+        CATEGORÍAS (opcional — enriquece el diagnóstico)
+      </div>
+      {renderCategorias()}
+    </div>
+  );
+
+  // Paso 2 — Manejo: Sanidad
+  const renderManejo = () => (
+    <div>
+      {renderSanidad()}
+    </div>
+  );
+
+  const RENDERS = [renderCampo, renderRodeoCompleto, renderManejo, renderAnalisis];
 
   // ══════════════════════════════════════════════════════════════
   // RENDER PRINCIPAL
