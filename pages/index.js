@@ -9703,7 +9703,7 @@ function CalfAIPro() {
           if (cat.key === "vaq1" && s1 === "Semilla algodón" && d1 > cat.pv * 0.004)
             alertas.push({ tipo:"error", msg:`Semilla algodón Vaq1: máx ${(cat.pv*0.004).toFixed(1)}kg (0.4% PV) — superar daña digestibilidad` });
           if (cat.key === "vaq2" && !tieneSupl)
-            alertas.push({ tipo:"warn", msg:"Vaq2 sin suplemento: verificar si llega al objetivo de entore (" + Math.round(parseFloat(form.pvVacaAdulta||320)*0.75) + " kg)"" });
+            alertas.push({ tipo:"warn", msg:"Vaq2 sin suplemento: verificar si llega al objetivo de entore (" + Math.round(parseFloat(form.pvVacaAdulta||320)*0.75) + " kg)" });
           if (cat.key === "toros" && (s1 === "Semilla algodón" || s2 === "Semilla algodón")) {
             const dosAlg = s1==="Semilla algodón" ? d1 : d2;
             if (dosAlg > cat.pv * 0.003)
