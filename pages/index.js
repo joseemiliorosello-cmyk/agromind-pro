@@ -38,16 +38,30 @@ const getBiotipo = (k) => BIOTIPOS[k] || BIOTIPO_DEF;
 
 // ─── SUPLEMENTOS ──────────────────────────────────────────────────
 const SUPLEMENTOS = {
-  "Expeller soja":      { pb:44,  em:2.80, degProt:65, degEner:75, precio:1.0, label:"Expeller soja" },
-  "Expeller girasol":   { pb:36,  em:2.60, degProt:60, degEner:72, precio:0.7, label:"Expeller girasol" },
-  "Expeller algodón":   { pb:36,  em:2.70, degProt:60, degEner:72, precio:0.75, label:"Expeller algodón" },
-  "Semilla algodón":    { pb:23,  em:2.95, degProt:55, degEner:78, precio:0.9,  label:"Semilla de algodón (proteína bypass + grasa)" },
-  "Urea tamponada":     { pb:280, em:0.00, degProt:100,degEner:0,  precio:1.2, label:"Urea tamponada" },
-  "Maíz grano":         { pb:9,   em:3.30, degProt:50, degEner:82, precio:0.6, label:"Maíz grano" },
-  "Sorgo grano":        { pb:10,  em:3.10, degProt:52, degEner:80, precio:0.5, label:"Sorgo grano" },
-  "Rollo silaje maíz":  { pb:8,   em:2.50, degProt:58, degEner:68, precio:0.3, label:"Rollo/Silaje maíz" },
-  "Pellet trigo":       { pb:16,  em:3.00, degProt:62, degEner:78, precio:0.8, label:"Pellet de trigo" },
-  "Mix proteico-energ": { pb:28,  em:2.90, degProt:65, degEner:76, precio:0.9, label:"Mix proteico-energético" },
+  // ── PROTEICOS PUROS (PB ≥30%) ───────────────────────────────────
+  // Indicación: pasto con PB <7% (C4 encañado >25% floración) — activan microflora ruminal
+  // Efecto Detmann/NASSEM 2010: +0.4–1.0 kg MS pasto consumida por kg de suplemento proteico
+  "Expeller soja":      { pb:44,  em:2.80, tipo:"P",  degProt:65, degEner:75, label:"Expeller soja" },
+  "Expeller girasol":   { pb:36,  em:2.60, tipo:"P",  degProt:60, degEner:72, label:"Expeller girasol" },
+  "Expeller algodón":   { pb:36,  em:2.70, tipo:"P",  degProt:60, degEner:72, label:"Expeller algodón" },
+  "Semilla algodón":    { pb:23,  em:2.95, tipo:"EP", degProt:55, degEner:78, label:"Semilla algodón (bypass + grasa)" },
+  "Urea tamponada":     { pb:280, em:0.00, tipo:"P",  degProt:100,degEner:0,  label:"Urea tamponada (+ azufre siempre)" },
+  "Pellet girasol":     { pb:34,  em:2.55, tipo:"P",  degProt:60, degEner:70, label:"Pellet girasol" },
+  "Harina sangre":      { pb:80,  em:2.20, tipo:"P",  degProt:80, degEner:60, label:"Harina de sangre (PB alta)" },
+  // ── ENERGÉTICOS PUROS (PB <12%) ─────────────────────────────────
+  // Indicación: pasto con PB ≥8% pero déficit energético — carga alta, alta producción
+  // Frecuencia: DIARIO obligatorio (almidón — riesgo acidosis si intermitente)
+  "Maíz grano":         { pb:9,   em:3.30, tipo:"E",  degProt:50, degEner:82, label:"Maíz grano (diario - acidosis si bolo)" },
+  "Sorgo grano":        { pb:10,  em:3.10, tipo:"E",  degProt:52, degEner:80, label:"Sorgo grano (diario)" },
+  "Afrechillo trigo":   { pb:15,  em:2.85, tipo:"E",  degProt:60, degEner:76, label:"Afrechillo de trigo" },
+  "Burlanda húmeda":    { pb:26,  em:2.40, tipo:"EP", degProt:58, degEner:68, label:"Burlanda húmeda (EP - usar fresca)" },
+  "Rollo silaje maíz":  { pb:8,   em:2.50, tipo:"E",  degProt:58, degEner:68, label:"Rollo/Silaje maíz" },
+  // ── ENERGÉTICO-PROTEICOS (PB 12–30%) ───────────────────────────
+  // Indicación: déficit mixto — pasto de baja calidad y baja cantidad simultáneamente
+  "Pellet trigo":       { pb:16,  em:3.00, tipo:"EP", degProt:62, degEner:78, label:"Pellet trigo (EP - 2-3x/sem)" },
+  "Mix proteico-energ": { pb:28,  em:2.90, tipo:"EP", degProt:65, degEner:76, label:"Mix proteico-energético" },
+  "Núcleo proteico":    { pb:35,  em:2.70, tipo:"EP", degProt:68, degEner:72, label:"Núcleo proteico-mineral" },
+  "Heno alfalfa":       { pb:18,  em:2.20, tipo:"EP", degProt:55, degEner:60, label:"Heno de alfalfa (EP)" },
 };
 const getSupl = (k) => SUPLEMENTOS[k] || SUPLEMENTOS["Expeller girasol"];
 
@@ -84,6 +98,36 @@ const ndviMes = (i, ndviHoy, zona) => {
   return Math.min(0.95, Math.max(0.10, (parseFloat(ndviHoy) || 0.45) * (curva[i] / refHoy)));
 };
 const UTIL        = 0.55; // factor utilización pasto — 55% aprovechamiento real (Bavera 2005, NEA extensivo)
+
+// ── BOOST CONSUMO VOLUNTARIO POR SUPLEMENTO PROTEICO ──────────────
+// Detmann/NASSEM 2010: cuando PB pasto <7%, la microflora ruminal es el cuello de botella.
+// Agregar proteína desbloquea la digestión de fibra → el animal COME MÁS PASTO.
+// Cuantificación: +0.8 kg MS/kg supl proteico cuando PB <7% (valor medio NASSEM 2010)
+//                 +0.4 kg MS/kg supl proteico cuando PB 7–9% (efecto parcial)
+//                  0   kg MS/kg cuando PB ≥10% (pasto cubre necesidad proteica)
+// Este efecto modifica la OFERTA REAL del balance, no solo el aporte del suplemento.
+const boostConsumoPasto = (pbPasto, pbSupl, dosisKg) => {
+  if (!dosisKg || dosisKg <= 0) return 0;
+  if (pbSupl < 25) return 0;       // suplemento no es proteico — no activa microflora
+  const factBoost = pbPasto < 7  ? 0.80   // PB crítico — efecto máximo
+                  : pbPasto < 9  ? 0.40   // PB bajo — efecto parcial
+                  : pbPasto < 11 ? 0.15   // PB límite — efecto mínimo
+                  : 0;             // PB adecuado — sin efecto adicional
+  const kgMsExtra = factBoost * dosisKg;
+  return kgMsExtra; // kg MS pasto adicional consumida por el boost proteico
+};
+
+// Clasificar tipo de déficit forrajero para recomendar el suplemento correcto
+// Retorna: "proteico" | "energetico" | "mixto" | "ninguno"
+const clasificarDeficit = (pbPasto, balanceMcal, disponMsHa) => {
+  const deficiteEnergia  = balanceMcal < -2;     // déficit energético real
+  const deficiteProteina = pbPasto < 8;           // PB crítico para microflora
+  const escasezPasto     = disponMsHa < 1200;     // poca cantidad
+  if (deficiteProteina && escasezPasto)   return "mixto";
+  if (deficiteProteina && !escasezPasto)  return "proteico";   // hay pasto pero no se puede comer
+  if (!deficiteProteina && deficiteEnergia) return "energetico"; // falta energía
+  return "ninguno";
+};
 const factorT     = (t) => t>=25?1.0 : t>=20?0.80 : t>=15?0.45 : t>=10?0.15 : 0.05;
 const factorP     = (p) => p>=100?1.0 : p>=50?0.85 : p>=20?0.60 : 0.30;
 const factorN     = (ndvi) => Math.min(1.5, Math.max(0.5, 0.5 + parseFloat(ndvi||0.45)*1.2));
@@ -1790,18 +1834,6 @@ function correrMotor(form, sat, potreros, usaPotreros) {
     form.destTrad, form.destAntic, form.destHiper, cadena
   );
 
-  // ── Impacto cola de preñez — kg de ternero por distribución de preñez ──
-  // Usa la preñez proyectada del motor (tray) si está disponible, si no la histórica
-  // Se calcula aquí para tenerlo disponible en Dashboard y Diagnóstico
-  const prenezParaImpacto = tray?.grupos?.[0]?.pr ?? parseFloat(form.prenez) ?? 0;
-  const cabezaEstimada    = tray?.grupos?.[0]?.pr != null
-    ? Math.round(prenezParaImpacto * 0.55)  // estimar cabeza como 55% de la preñez total
-    : null;
-  const impactoCola = prenezParaImpacto > 0
-    ? calcImpactoCola(prenezParaImpacto, cabezaEstimada, form.vacasN, form.pctDestete, cadena?.diasServ ? Math.round(cadena.diasServ/30) : 3)
-    : null;
-
-
   // PV de entrada: prioridad 1) dato manual, 2) calculado de tcSave, 3) ESTIMADO por biotipo+edad
   const pvEntVaq1Estimado = (() => {
     // Estimar PV mayo a partir de biotipo + edad en mayo + tipo de pasto
@@ -1886,6 +1918,15 @@ function correrMotor(form, sat, potreros, usaPotreros) {
   const tray = calcTrayectoriaCC(baseParams);
   const dist = calcDistCC({ ...baseParams, ndvi: ndviN, prov: form.provincia });
   const ccPondVal = ccPond(form.distribucionCC);
+
+  // ── Impacto cola de preñez — DESPUÉS de tray (usa tray?.grupos) ──
+  const prenezParaImpacto = tray?.grupos?.[0]?.pr ?? parseFloat(form.prenez) ?? 0;
+  const cabezaEstimada    = tray?.grupos?.[0]?.pr != null
+    ? Math.round(prenezParaImpacto * 0.55) : null;
+  const impactoCola = prenezParaImpacto > 0
+    ? calcImpactoCola(prenezParaImpacto, cabezaEstimada, form.vacasN, form.pctDestete,
+        cadena?.diasServ ? Math.round(cadena.diasServ/30) : 3)
+    : null;
 
   // ── 2.5 Propagación: destete óptimo → CC al servicio ────────
   // Si la CC proyectada al servicio < 4.5 Y no hay destete precoz → alerta propagada
@@ -2083,7 +2124,24 @@ function correrMotor(form, sat, potreros, usaPotreros) {
     // Carga efectiva: en meses con suplemento el pasto tiene menos presión
     const factCargaMes = MESES_SUPL.has(i) ? factorCargaSusp : factorCarga;
     const ofPastoTotalMes = +((ofPastoVacas + ofPastoToros + ofPastoV2s + ofPastoVaq2 + ofPastoVaq1) * factCargaMes).toFixed(0);
-    const ofertaTotal = ofPastoTotalMes + ccAporte + suplAp + verdeoAp;
+
+    // ── BOOST CONSUMO VOLUNTARIO por suplemento proteico ─────────
+    // Detmann/NASSEM 2010: cuando PB pasto <8%, proteína desbloquea microflora ruminal
+    // → el animal come más pasto además de lo que aporta el suplemento
+    // Se aplica solo en meses con suplementación activa
+    let boostPastoMcal = 0;
+    if (MESES_SUPL.has(i) && suplRodeoMcalDia > 0) {
+      const suplPrinc = SUPLEMENTOS[form.supl_vacas] || SUPLEMENTOS[form.supl1];
+      if (suplPrinc && suplPrinc.tipo === "P" && pbPas < 9) {
+        // Dosis total del rodeo en kg
+        const dosisTot = (parseFloat(form.dosis_vacas) || parseFloat(form.dosis1) || 0) * nVacas;
+        const kgMsBoost = boostConsumoPasto(pbPas, suplPrinc.pb, dosisTot / Math.max(1, nVacas));
+        // Convertir kg MS extra a Mcal usando el valor energético del pasto este mes
+        boostPastoMcal = Math.round(kgMsBoost * nVacas * mcalKg * factCargaMes);
+      }
+    }
+
+    const ofertaTotal = ofPastoTotalMes + boostPastoMcal + ccAporte + suplAp + verdeoAp;
     const balance     = ofertaTotal - demanda;
 
     // Cuánto suplemento resolvería el déficit (Mcal/animal/día)
@@ -7095,6 +7153,135 @@ function TabCerebro({ motor, form, sat }) {
 
   return (
     <div>
+      {/* ══ CRONOGRAMA DE PUNTOS CRÍTICOS ══════════════════════════ */}
+      {(() => {
+        // Construir mapa de riesgo por mes — qué pasa en el sistema cada mes
+        const cadena = motor?.cadena;
+        const mesParto  = cadena?.partoTemp  ? cadena.partoTemp.getMonth()  : null;
+        const mesServIni = cadena?.ini       ? cadena.ini.getMonth()        : null;
+        const mesServFin = cadena?.fin       ? cadena.fin.getMonth()        : null;
+        const mesDestete = mesParto !== null ? (mesParto + Math.ceil(parseFloat(tray?.mesesLact||6))) % 12 : null;
+        const bm = balMen;
+
+        // Mapa mensual de eventos y riesgos
+        const MESES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+        const meses = MESES_C.map((m, i) => {
+          const eventos = [];
+          const bal = bm[i]?.balance ?? null;
+          const esInv = [5,6,7].includes(i);
+          const esCurrent = i === mesHoy;
+
+          // Hitos del ciclo
+          if (i === mesParto)   eventos.push({ tipo:"hito", icono:"🐄", txt:"Parición", color:C.amber });
+          if (i === mesServIni) eventos.push({ tipo:"hito", icono:"🐂", txt:"Inicio servicio", color:C.blue });
+          if (i === mesServFin) eventos.push({ tipo:"hito", icono:"🔒", txt:"Fin servicio", color:C.blue });
+          if (i === mesDestete) eventos.push({ tipo:"hito", icono:"🐮", txt:"Destete", color:C.green });
+
+          // Riesgos del balance
+          if (bal !== null && bal < -5)  eventos.push({ tipo:"riesgo", icono:"⚡", txt:"Déficit severo " + Math.round(bal) + "M", color:C.red });
+          else if (bal !== null && bal < 0) eventos.push({ tipo:"alerta", icono:"⚠", txt:"Déficit " + Math.round(bal) + "M", color:C.amber });
+
+          // Riesgos de CC — meses críticos
+          if (tray?.grupos?.length > 0) {
+            const grp = tray.grupos[0];
+            if (i === mesParto && grp.ccParto < 4.5) eventos.push({ tipo:"riesgo", icono:"📉", txt:"CC parto " + grp.ccParto?.toFixed(1), color:C.red });
+            if (i === mesServIni && grp.ccServ < 4.5) eventos.push({ tipo:"riesgo", icono:"📉", txt:"CC serv " + grp.ccServ?.toFixed(1), color:C.red });
+          }
+
+          // Vaquillona
+          if (vaq2E && !vaq2E.llegas && i === 4) eventos.push({ tipo:"riesgo", icono:"🐮", txt:"Vaq2 sin supl.", color:C.red });
+
+          // Sanidad
+          if (i === (mesServIni !== null ? (mesServIni - 2 + 12) % 12 : null)) {
+            if (form.sanToros !== "con_control") eventos.push({ tipo:"alerta", icono:"🩺", txt:"Rev. toros pend.", color:C.amber });
+          }
+
+          return { mes:m, i, esCurrent, esInv, bal, eventos };
+        });
+
+        const W = 340, H = 96, padX = 14;
+        const colW = (W - padX*2) / 12;
+
+        return (
+          <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:12,
+            padding:"12px 14px", marginBottom:12, overflowX:"auto" }}>
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
+              🗓 CRONOGRAMA DE RIESGOS — puntos críticos del sistema en el año
+            </div>
+
+            <svg viewBox={"0 0 "+W+" "+H} style={{ width:"100%", display:"block", minWidth:300 }}>
+              {/* Fondo invierno */}
+              {[5,6,7].map(i => (
+                <rect key={i} x={padX+i*colW} y={2} width={colW} height={H-14}
+                  fill={C.amber+"08"} />
+              ))}
+              {/* Fondo mes actual */}
+              <rect x={padX+mesHoy*colW} y={2} width={colW} height={H-14}
+                fill={C.green+"10"} rx={2} />
+
+              {/* Nivel de riesgo por mes — barra de calor */}
+              {meses.map(({ i, eventos, bal }) => {
+                const nRiesgos   = eventos.filter(e=>e.tipo==="riesgo").length;
+                const nAlertas   = eventos.filter(e=>e.tipo==="alerta").length;
+                const col = nRiesgos > 0 ? C.red : nAlertas > 0 ? C.amber : C.green;
+                const alpha = nRiesgos > 0 ? "40" : nAlertas > 0 ? "30" : "15";
+                return (
+                  <rect key={i} x={padX+i*colW+1} y={H-28} width={colW-2} height={14}
+                    fill={col+alpha} rx={2}
+                    stroke={nRiesgos>0||nAlertas>0 ? col+"60" : "none"} strokeWidth="0.5" />
+                );
+              })}
+
+              {/* Iconos de eventos */}
+              {meses.map(({ i, eventos }) =>
+                eventos.slice(0,2).map((ev, ei) => (
+                  <text key={i+"-"+ei}
+                    x={padX + i*colW + colW/2}
+                    y={12 + ei*18}
+                    textAnchor="middle"
+                    style={{ fontSize:"10px" }}>
+                    {ev.icono}
+                  </text>
+                ))
+              )}
+
+              {/* Etiquetas de meses */}
+              {meses.map(({ mes, i, esCurrent, esInv }) => (
+                <text key={i} x={padX+i*colW+colW/2} y={H-3} textAnchor="middle"
+                  style={{ fontFamily:C.font, fontSize:"6px",
+                    fill: esCurrent ? C.green : esInv ? C.amber : C.textFaint,
+                    fontWeight: esCurrent || esInv ? "700" : "400" }}>
+                  {mes}
+                </text>
+              ))}
+
+              {/* Leyenda */}
+              <text x={padX} y={H-16} style={{ fontFamily:C.font, fontSize:"6px", fill:C.red }}>■ riesgo</text>
+              <text x={padX+36} y={H-16} style={{ fontFamily:C.font, fontSize:"6px", fill:C.amber }}>■ alerta</text>
+              <text x={padX+70} y={H-16} style={{ fontFamily:C.font, fontSize:"6px", fill:C.green }}>■ ok</text>
+              <text x={W-padX-2} y={H-16} textAnchor="end" style={{ fontFamily:C.font, fontSize:"6px", fill:C.amber }}>
+                ▐ invierno
+              </text>
+            </svg>
+
+            {/* Detalle textual de eventos por mes — solo los que tienen algo */}
+            <div style={{ marginTop:6, display:"flex", flexWrap:"wrap", gap:4 }}>
+              {meses.filter(m => m.eventos.length > 0).map(({ mes, i, eventos }) => (
+                <div key={i} style={{ background:C.card, border:"1px solid "+C.border,
+                  borderRadius:6, padding:"4px 8px", minWidth:80 }}>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>{mes}</div>
+                  {eventos.map((ev,ei) => (
+                    <div key={ei} style={{ fontFamily:C.font, fontSize:8, color:ev.color }}>
+                      {ev.icono} {ev.txt}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ══ TARJETAS DE DIMENSIÓN ══════════════════════════════════ */}
       <div style={{ marginBottom:16 }}>
         <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
@@ -7628,10 +7815,34 @@ const FORM_DEF = {
 };
 
 // ─── SYSTEM PROMPT ───────────────────────────────────────────────
-const SYS_FULL = `Sos un asesor técnico ganadero con 20 años de campo en cría bovina extensiva en NEA, NOA, Paraguay, Bolivia y Brasil. El motor técnico de Calf AI ya calculó el diagnóstico completo — score por dimensión, fase del ciclo, balance forrajero mensual, trayectoria CC, estado de vaquillona, sanidad y GEI. Tu trabajo es TOMAR ese diagnóstico, identificar los 2–3 cuellos de botella reales ordenados por impacto en preñez y kilos de ternero, y proponer mejoras concretas con cuantificación del beneficio si se actúa.
+const SYS_FULL = `Sos un asesor técnico ganadero sénior con 20 años de campo en sistemas de cría extensiva de NEA, NOA, Paraguay, Bolivia y Brasil. Hablás con veterinarios asesores privados — gente técnicamente sólida que no necesita explicaciones básicas.
 
-NO repitas el diagnóstico que ya está en el prompt — el técnico y el productor ya lo ven en pantalla.
-ARRANCÁ directamente con el punto crítico más importante y qué hacer.
+El motor de Calf AI ya calculó TODO: score por dimensión, trayectoria CC, balance forrajero mensual, estado de vaquillona, cadena reproductiva, sanidad, GEI e impacto de cola de preñez. Tenés el diagnóstico completo en el prompt.
+
+TU TRABAJO es:
+1. INTEGRAR todos los datos en un diagnóstico coherente del sistema
+2. IDENTIFICAR los 2-3 cuellos de botella reales ordenados por impacto en kg de ternero
+3. CUANTIFICAR el beneficio de cada acción (en terneros adicionales, kg al destete, días menos de anestro)
+4. DAR acciones concretas con dosis, alimento específico, momento y frecuencia
+
+REGLA FUNDAMENTAL — DATO REAL vs ESTIMADO:
+El prompt marca cada dato como REAL (ingresado por el usuario) o ESTIMADO (calculado por defecto).
+- Si la CC no fue cargada: decí "sin CC registrada — el análisis asume CC estimada de [valor]"
+- Si el destete fue cargado: usá ese dato sin aclaración — es real
+- Si la suplementación fue cargada: mencioná el alimento específico que usa el productor
+- NUNCA presentés un valor estimado como si fuera un dato real del campo
+- Si el usuario cargó suplemento específico (ej: expeller girasol), recomendá ESE alimento, no pellet de trigo genérico
+
+ESTRUCTURA DEL INFORME (seguí este orden exacto, usá estos emojis):
+1️⃣ SITUACIÓN HOY — frase de la fase del ciclo + 3 números clave (CC al servicio, preñez est., balance invernal)
+2️⃣ CUELLO DE BOTELLA 1 — el limitante más importante + impacto cuantificado en terneros/kg
+3️⃣ CUELLO DE BOTELLA 2 — segundo limitante + acción concreta con dosis y alimento real
+4️⃣ VAQUILLONA — estado de la reposición + si llega o no llega al entore y por qué
+5️⃣ CRONOGRAMA — tabla: MES | ACCIÓN | CATEGORÍA | RESULTADO ESPERADO (próximos 4 meses)
+
+NO repitas datos del diagnóstico visible en pantalla. ARRANCÁ directo con la situación actual.
+Usá **negrita** para los números clave y las acciones concretas.
+Máximo 400 palabras por sección.
 
 REGLA FUNDAMENTAL — DATO REAL vs ASUMIDO:
 - Cada dato del prompt está marcado como real (ingresado por el usuario) o como valor por defecto del sistema.
@@ -7854,6 +8065,47 @@ function CalfAIPro() {
   function buildPromptFull() {
     const hoy = new Date().toLocaleDateString("es-AR", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
     let t = "ANÁLISIS — " + hoy + "\n";
+
+    // ── MARCADORES DE DATOS REALES vs ESTIMADOS ──────────────────
+    // La IA debe saber qué datos son reales y cuáles son defaults del sistema
+    t += "\n=== DATOS REALES INGRESADOS POR EL USUARIO ===\n";
+    const reales = [];
+    if (form.provincia)      reales.push("Provincia: " + form.provincia);
+    if (form.biotipo)        reales.push("Biotipo: " + form.biotipo);
+    if (form.vacasN)         reales.push("Vacas: " + form.vacasN + " cab");
+    if (form.torosN)         reales.push("Toros: " + form.torosN + " cab");
+    if (form.pvVacaAdulta)   reales.push("PV adulto: " + form.pvVacaAdulta + " kg (REAL)");
+    if (form.supHa)          reales.push("Superficie: " + form.supHa + " ha (REAL)");
+    if (form.iniServ && form.finServ) reales.push("Servicio: " + form.iniServ + " → " + form.finServ + " (REAL)");
+    if (form.prenez)         reales.push("Preñez histórica: " + form.prenez + "% (REAL)");
+    if (form.pctDestete)     reales.push("% Destete: " + form.pctDestete + "% (REAL)");
+    if (form.torosCC)        reales.push("CC toros: " + form.torosCC + " (REAL - escala 1-9)");
+    if ((parseFloat(form.destTrad)||0) + (parseFloat(form.destAntic)||0) + (parseFloat(form.destHiper)||0) > 0) {
+      reales.push("Destete: " + (form.destTrad||0) + "% trad / " + (form.destAntic||0) + "% antic / " + (form.destHiper||0) + "% hiper (REAL)");
+    }
+    if (form.supl_vacas || form.supl1)  reales.push("Suplemento vacas: " + (form.supl_vacas||form.supl1) + " " + (form.dosis_vacas||form.dosis1||0) + "kg/d (REAL)");
+    if (form.supl_vaq1)  reales.push("Suplemento Vaq1: " + form.supl_vaq1 + " " + (form.dosis_vaq1||0) + "kg/d (REAL)");
+    if (form.supl_vaq2)  reales.push("Suplemento Vaq2: " + form.supl_vaq2 + " " + (form.dosis_vaq2||0) + "kg/d (REAL)");
+    if (form.vaq1PV)     reales.push("PV Vaq1: " + form.vaq1PV + " kg (REAL - pesado en campo)");
+    if (form.edadVaqMayo) reales.push("Edad Vaq1 en mayo: " + form.edadVaqMayo + " meses (REAL)");
+    if (form.vaq2N)      reales.push("Vaq2: " + form.vaq2N + " cab (REAL)");
+    if (form.v2sN)       reales.push("V2S: " + form.v2sN + " cab (REAL)");
+    t += reales.length > 0 ? reales.join(" | ") + "\n" : "— ningún dato confirmado por el usuario —\n";
+
+    t += "\n=== DATOS ESTIMADOS POR EL SISTEMA (NO ingresados por usuario) ===\n";
+    const estimados = [];
+    if (!form.pvVacaAdulta)  estimados.push("PV adulto: 320 kg (default NEA)");
+    if (!form.supHa)         estimados.push("Superficie: no cargada — balance usa consumo voluntario");
+    if (!form.prenez)        estimados.push("Preñez histórica: no cargada");
+    if (!form.torosCC)       estimados.push("CC toros: no registrada");
+    if ((parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0) === 0) {
+      estimados.push("Destete: no cargado — motor usa Tradicional 100% como escenario base");
+    }
+    if (!form.vaq1PV)        estimados.push("PV Vaq1: estimado desde edad y biotipo, no pesado en campo");
+    if (!form.supl_vacas && !form.supl1) estimados.push("Suplemento vacas: no cargado");
+    if (!form.supl_vaq1)     estimados.push("Suplemento Vaq1: no cargado");
+    t += estimados.length > 0 ? estimados.join(" | ") + "\n" : "— todos los datos fueron ingresados —\n";
+    t += "\n";
     // Score sistémico del motor
     if (motor) {
       t += "SCORE SISTÉMICO: " + scoreRiesgo + "/100 (riesgo " + nivelRiesgo.toUpperCase() + ")\n";
@@ -8759,12 +9011,9 @@ function CalfAIPro() {
         <Input label="PV TOROS (kg)"       value={form.pvToros}      onChange={v=>set("pvToros",v)}      placeholder="" type="number" />
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:0 }}>
-        <Input label="CC TOROS (1–9)" value={form.torosCC} onChange={v=>set("torosCC",v)} placeholder="" type="number"
-          warn={form.torosCC && parseFloat(form.torosCC) < 4.5 ? "CC baja — preparo antes del servicio" : null}
-          sub="Objetivo al servicio: ≥5.5" />
         <Input label="PREÑEZ HISTÓRICA (%)" value={form.prenez} onChange={v=>set("prenez",v)} placeholder="" type="number" />
+        <Input label="% DESTETE HISTÓRICO"  value={form.pctDestete} onChange={v=>set("pctDestete",v)} placeholder="" type="number" />
       </div>
-      <Input label="% DESTETE HISTÓRICO"    value={form.pctDestete}   onChange={v=>set("pctDestete",v)}   placeholder="" type="number" />
       <SelectF label="ESTADO REPRODUCTIVO ACTUAL" value={form.eReprod} onChange={v=>set("eReprod",v)}
         placeholder="Seleccioná el estado..."
         options={[
@@ -10726,174 +10975,176 @@ function CalfAIPro() {
           )}
 
           {/* ═══ TAB BALANCE ═══ */}
-          {tab === "balance" && (
-            <div>
-              {/* ── Balance — siempre visible, usa motor si está listo o recalcula ── */}
-              {(() => {
-                // Usar motor si está listo, si no recalcular directamente
-                const bm = motor?.balanceMensual?.length > 0
-                  ? motor.balanceMensual
-                  : null;
+          {tab === "balance" && (() => {
+            const MESES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+            const mesHoy  = new Date().getMonth();
+            const bm      = motor?.balanceMensual;
 
-                const MESES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-                const mesHoy  = new Date().getMonth();
+            // ── Sin datos mínimos ──────────────────────────────────────
+            if (!bm || bm.length === 0) {
+              const falta = [];
+              if (!form.provincia) falta.push("provincia");
+              if (!form.vacasN)    falta.push("cantidad de vacas");
+              if (!form.biotipo)   falta.push("biotipo");
+              return (
+                <div style={{ background:C.card2, border:"1px solid "+C.amber+"40",
+                  borderRadius:12, padding:"20px 16px", textAlign:"center" }}>
+                  <div style={{ fontSize:28, marginBottom:8 }}>📊</div>
+                  <div style={{ fontFamily:C.font, fontSize:11, color:C.amber, marginBottom:8, fontWeight:700 }}>
+                    Completá estos datos para ver el balance
+                  </div>
+                  {falta.map(f => (
+                    <div key={f} style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:4 }}>⚠ {f}</div>
+                  ))}
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:10, lineHeight:1.7 }}>
+                    El balance compara la energía del pasto contra la demanda del rodeo mes a mes.<br/>
+                    Si tenés provincia, vacas y biotipo ya podés verlo aunque no hayas cargado superficie.
+                  </div>
+                </div>
+              );
+            }
 
-                if (!bm) {
-                  // Motor aún no corrió — mostrar qué falta
-                  const falta = [];
-                  if (!form.provincia) falta.push("provincia");
-                  if (!form.vacasN)    falta.push("cantidad de vacas");
-                  if (!form.supHa)     falta.push("superficie (ha)");
-                  return (
-                    <div style={{ background:C.card2, border:"1px solid "+C.amber+"40",
-                      borderRadius:12, padding:"16px 14px", marginBottom:12 }}>
-                      <div style={{ fontFamily:C.font, fontSize:11, color:C.amber, marginBottom:8, fontWeight:700 }}>
-                        📊 Balance forrajero energético
-                      </div>
-                      <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, marginBottom:8 }}>
-                        {falta.length > 0
-                          ? "Para ver el balance completá: " + falta.join(", ")
-                          : "Calculando balance..."}
-                      </div>
-                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, lineHeight:1.7 }}>
-                        El balance compara la energía que ofrece el pasto (NDVI + tipo + superficie)
-                        contra la demanda real del rodeo por categoría y estado fisiológico, mes a mes.
-                      </div>
-                    </div>
-                  );
-                }
+            const vals   = bm.map(m => m.balance ?? 0);
+            const maxAbs = Math.max(1, ...vals.map(Math.abs));
+            const invM   = [5,6,7].map(i => ({ mes:MESES_C[i], i, bal: bm[i]?.balance ?? null }));
+            const defCnt = invM.filter(m => m.bal !== null && m.bal < 0).length;
+            const W = 340, H = 140, padX = 20, colW = (W - padX*2) / 12;
+            const barW = colW - 3;
+            const midY = H / 2 - 8;
 
-                const vals   = bm.map(m => m.balance ?? 0);
-                const maxAbs = Math.max(1, ...vals.map(Math.abs));
-                const W = 340, H = 130, padX = 24, barW = (W - padX*2) / 12 - 2;
+            return (
+              <div>
+                {/* ── GRÁFICO BARRAS 12 MESES ── */}
+                <div style={{ background:C.card2, border:"1px solid "+C.border,
+                  borderRadius:12, padding:"12px 14px", marginBottom:10 }}>
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint,
+                    letterSpacing:1, marginBottom:8 }}>
+                    BALANCE ENERGÉTICO MENSUAL — Mcal/día · oferta pasto + supl − demanda rodeo
+                  </div>
 
-                // Calcular resumen invernal
-                const invMeses = [5,6,7].map(i => ({ mes:MESES_C[i], i, bal:bm[i]?.balance ?? null }));
-                const mesesDef = invMeses.filter(m => m.bal !== null && m.bal < 0).length;
-                const peorInv  = invMeses.reduce((mn, m) => (m.bal !== null && (mn.bal === null || m.bal < mn.bal)) ? m : mn, invMeses[0]);
+                  <svg viewBox={"0 0 "+W+" "+H} style={{ width:"100%", display:"block" }}>
+                    {/* Fondo invierno */}
+                    {[5,6,7].map(i => (
+                      <rect key={i}
+                        x={padX + i*colW} y={2} width={colW} height={H-14}
+                        fill={C.amber+"06"} />
+                    ))}
+                    {/* Fondo mes actual */}
+                    <rect x={padX + mesHoy*colW} y={2} width={colW} height={H-14}
+                      fill={C.green+"10"} rx={2} />
+                    {/* Línea cero */}
+                    <line x1={padX} y1={midY} x2={W-padX} y2={midY}
+                      stroke={C.textFaint} strokeWidth="0.8" strokeDasharray="2,3" />
+                    <text x={padX-3} y={midY+3} textAnchor="end"
+                      style={{ fontFamily:C.font, fontSize:"6px", fill:C.textFaint }}>0</text>
 
-                return (
-                  <div>
-                    {/* ── Gráfico de barras 12 meses ── */}
-                    <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:12,
-                      padding:"12px 14px", marginBottom:12 }}>
-                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>
-                        BALANCE ENERGÉTICO MENSUAL — Mcal/día (oferta − demanda)
-                      </div>
-                      <svg viewBox={"0 0 "+W+" "+H} style={{ width:"100%", display:"block" }}>
-                        {/* Fondo del mes actual */}
-                        {(() => {
-                          const x = padX + mesHoy * ((W-padX*2)/12);
-                          return <rect x={x-1} y={2} width={barW+4} height={H-14} fill={C.green+"07"} rx={3} />;
-                        })()}
-                        {/* Línea cero */}
-                        <line x1={padX} y1={H/2-4} x2={W-padX} y2={H/2-4}
-                          stroke={C.border} strokeWidth="1" />
-                        {/* Etiqueta "0" */}
-                        <text x={padX-4} y={H/2} textAnchor="end"
-                          style={{ fontFamily:C.font, fontSize:"6px", fill:C.textFaint }}>0</text>
-                        {/* Barras */}
-                        {bm.map((m, i) => {
-                          const x   = padX + i * ((W-padX*2)/12);
-                          const pct = Math.min(1, Math.abs(m.balance ?? 0) / maxAbs);
-                          const pos = (m.balance ?? 0) >= 0;
-                          const bH  = Math.max(2, pct * (H/2 - 18));
-                          const y   = pos ? H/2 - 4 - bH : H/2 - 4;
-                          const col = pos ? C.green : C.red;
-                          const esc = i === mesHoy;
-                          const esInv = [5,6,7].includes(i);
-                          return (
-                            <g key={i}>
-                              {esInv && (
-                                <rect x={x} y={4} width={barW+2} height={H-18}
-                                  fill={col+"06"} rx={0} />
-                              )}
-                              <rect x={x+1} y={y} width={barW} height={bH}
-                                fill={col+(esc?"ee":"bb")} rx={2}
-                                stroke={esc ? col : "none"} strokeWidth={esc?"1":"0"} />
-                              {bH > 12 && (
-                                <text x={x+barW/2} y={pos ? y+9 : y+bH-3}
-                                  textAnchor="middle"
-                                  style={{ fontFamily:C.font, fontSize:"6px", fill:"#fff", fontWeight:"700" }}>
-                                  {Math.abs(Math.round(m.balance??0))}
-                                </text>
-                              )}
-                              <text x={x+barW/2} y={H-2} textAnchor="middle"
-                                style={{ fontFamily:C.font, fontSize:"6px",
-                                  fill: esc ? C.green : esInv ? C.amber : C.textFaint,
-                                  fontWeight: esc ? "700" : "400" }}>
-                                {MESES_C[i]}
-                              </text>
-                            </g>
-                          );
-                        })}
-                        {/* Leyenda */}
-                        <text x={padX} y={12} style={{ fontFamily:C.font, fontSize:"7px", fill:C.green }}>▲ Superávit</text>
-                        <text x={W-padX} y={12} textAnchor="end" style={{ fontFamily:C.font, fontSize:"7px", fill:C.red }}>▼ Déficit</text>
-                        <text x={W/2} y={H-2} textAnchor="middle" style={{ fontFamily:C.font, fontSize:"6px", fill:C.amber }}>
-                          ■ Invierno crítico (Jun-Ago)
-                        </text>
-                      </svg>
+                    {/* Barras */}
+                    {bm.map((m, i) => {
+                      const v    = m.balance ?? 0;
+                      const pct  = Math.min(1, Math.abs(v) / maxAbs);
+                      const pos  = v >= 0;
+                      const bH   = Math.max(3, pct * (midY - 10));
+                      const x    = padX + i * colW + 1;
+                      const y    = pos ? midY - bH : midY;
+                      const col  = pos ? C.green : C.red;
+                      const esc  = i === mesHoy;
+                      const inv  = [5,6,7].includes(i);
+                      return (
+                        <g key={i}>
+                          <rect x={x} y={y} width={barW} height={bH}
+                            fill={col + (esc ? "ee" : inv ? "cc" : "99")} rx={2}
+                            stroke={esc ? col : "none"} strokeWidth={esc ? "1" : "0"} />
+                          {bH > 14 && (
+                            <text x={x+barW/2} y={pos ? y+9 : y+bH-3}
+                              textAnchor="middle"
+                              style={{ fontFamily:C.font, fontSize:"6px", fill:"#fff", fontWeight:"700" }}>
+                              {Math.abs(Math.round(v))}
+                            </text>
+                          )}
+                          <text x={x+barW/2} y={H-2} textAnchor="middle"
+                            style={{ fontFamily:C.font, fontSize:"6px",
+                              fill: esc ? C.green : inv ? C.amber : C.textFaint,
+                              fontWeight: esc || inv ? "700" : "400" }}>
+                            {MESES_C[i]}
+                          </text>
+                        </g>
+                      );
+                    })}
 
-                      {/* Tarjetas invernales */}
-                      <div style={{ display:"flex", gap:6, marginTop:8 }}>
-                        {invMeses.map(({ mes, bal }) => {
-                          const ok = bal !== null && bal >= 0;
-                          const color = bal === null ? C.textFaint : ok ? C.green : C.red;
-                          return (
-                            <div key={mes} style={{ flex:1, background:color+"10",
-                              border:"1px solid "+color+"40", borderRadius:8,
-                              padding:"6px 4px", textAlign:"center" }}>
-                              <div style={{ fontFamily:C.font, fontSize:9, color, fontWeight:700 }}>{mes}</div>
-                              <div style={{ fontFamily:C.font, fontSize:11, color, fontWeight:700, marginTop:2 }}>
-                                {bal !== null ? (bal>0?"+":"")+Math.round(bal)+" M" : "—"}
-                              </div>
-                              <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, marginTop:1 }}>
-                                {bal === null ? "sin dato" : ok ? "superávit" : "DÉFICIT"}
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {/* Resumen */}
-                        <div style={{ flex:1.5, background:mesesDef===0?C.green+"10":C.red+"10",
-                          border:"1px solid "+(mesesDef===0?C.green:C.red)+"40",
-                          borderRadius:8, padding:"6px 8px" }}>
-                          <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>INVIERNO</div>
-                          <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700,
-                            color:mesesDef===0?C.green:mesesDef===1?C.amber:C.red }}>
-                            {mesesDef === 0 ? "✓ OK" : mesesDef+"/3 meses"}
+                    {/* Leyendas */}
+                    <text x={padX+2} y={12}
+                      style={{ fontFamily:C.font, fontSize:"7px", fill:C.green }}>▲ Superávit</text>
+                    <text x={W-padX-2} y={H-16} textAnchor="end"
+                      style={{ fontFamily:C.font, fontSize:"7px", fill:C.red }}>▼ Déficit</text>
+                    <text x={padX + 5.5*colW + colW/2} y={14} textAnchor="middle"
+                      style={{ fontFamily:C.font, fontSize:"6px", fill:C.amber }}>▐ Invierno crítico</text>
+                  </svg>
+
+                  {/* Tarjetas invernales */}
+                  <div style={{ display:"flex", gap:6, marginTop:8 }}>
+                    {invM.map(({ mes, bal }) => {
+                      const ok  = bal !== null && bal >= 0;
+                      const col = bal === null ? C.textFaint : ok ? C.green : C.red;
+                      return (
+                        <div key={mes} style={{ flex:1, background:col+"10",
+                          border:"1px solid "+col+"40", borderRadius:8,
+                          padding:"6px 4px", textAlign:"center" }}>
+                          <div style={{ fontFamily:C.font, fontSize:9, color:col, fontWeight:700 }}>{mes}</div>
+                          <div style={{ fontFamily:C.font, fontSize:12, color:col, fontWeight:700, marginTop:2 }}>
+                            {bal !== null ? (bal>0?"+":"")+Math.round(bal) : "—"}
                           </div>
-                          <div style={{ fontFamily:C.font, fontSize:8,
-                            color:mesesDef===0?C.green:C.red, marginTop:2 }}>
-                            {mesesDef === 0 ? "Sin déficit" : "Déficit — suplementar"}
+                          <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>Mcal/d</div>
+                          <div style={{ fontFamily:C.font, fontSize:7,
+                            color:col, marginTop:2, fontWeight:700 }}>
+                            {bal === null ? "sin dato" : ok ? "✓" : "DÉFICIT"}
                           </div>
                         </div>
+                      );
+                    })}
+                    <div style={{ flex:1.4, background:(defCnt===0?C.green:defCnt===1?C.amber:C.red)+"10",
+                      border:"1px solid "+(defCnt===0?C.green:defCnt===1?C.amber:C.red)+"40",
+                      borderRadius:8, padding:"6px 8px" }}>
+                      <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>INVIERNO</div>
+                      <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, lineHeight:1,
+                        color:defCnt===0?C.green:defCnt===1?C.amber:C.red }}>
+                        {defCnt===0 ? "✓" : defCnt+"/3"}
                       </div>
-
-                      {(!form.supHa || !form.vacasN) && (
-                        <div style={{ fontFamily:C.font, fontSize:8, color:C.amber, marginTop:6 }}>
-                          ⚠ Estimación parcial — completá superficie y vacas para mayor precisión
-                        </div>
-                      )}
+                      <div style={{ fontFamily:C.font, fontSize:8,
+                        color:defCnt===0?C.green:C.red, marginTop:3 }}>
+                        {defCnt===0 ? "Sin déficit" : "meses con déficit"}
+                      </div>
                     </div>
                   </div>
-                );
-              })()}
 
-              {/* ── Gráfico detallado completo ── */}
-              <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />
-              <TrayectoriaVaquillona motor={motor} form={form} />
-              {tray && cadena && (
-                <GraficoCCEscenarios
-                  escenarios={[
-                    { label:"Sin cambios", tray:tray, color:C.amber },
-                    { label:"Con destete precoz", tray:{...tray, ccMinLact:Math.min((tray.ccMinLact||3.5)+0.3, tray.ccParto||4.5)}, color:C.green },
-                  ]}
-                  cadena={cadena} mesesLact={tray.mesesLact || 6} form={form} sat={sat}
-                />
-              )}
-            </div>
-          )}
+                  {(!form.supHa) && (
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.amber, marginTop:6 }}>
+                      ⚠ Sin superficie cargada — el balance usa consumo voluntario por PV · agregá ha para mayor precisión
+                    </div>
+                  )}
+                </div>
+
+                {/* ── GRÁFICO DETALLADO (GraficoBalance) ── */}
+                <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />
+
+                {/* ── TRAYECTORIA CC ── */}
+                <TrayectoriaVaquillona motor={motor} form={form} />
+
+                {/* ── ESCENARIOS CC ── */}
+                {tray && cadena && (
+                  <GraficoCCEscenarios
+                    escenarios={[
+                      { label:"Sin cambios", tray:tray, color:C.amber },
+                      { label:"Con destete precoz",
+                        tray:{...tray, ccMinLact:Math.min((tray.ccMinLact||3.5)+0.3, tray.ccParto||4.5)},
+                        color:C.green },
+                    ]}
+                    cadena={cadena} mesesLact={tray.mesesLact || 6} form={form} sat={sat}
+                  />
+                )}
+              </div>
+            );
+          })()}
+
 
           {/* ═══ TAB GEI ═══ */}
           {tab === "gei" && (
@@ -11042,6 +11293,87 @@ function CalfAIPro() {
                 {loading && <LoadingPanel msg={loadMsg} />}
                 {result && !loading && (
                   <div>
+                    {/* ── Gráfico de balance integrado con el informe ── */}
+                    {motor?.balanceMensual?.length > 0 && (() => {
+                      const bm = motor.balanceMensual;
+                      const MC = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+                      const mH = new Date().getMonth();
+                      const vs = bm.map(m => m.balance ?? 0);
+                      const mx = Math.max(1, ...vs.map(Math.abs));
+                      const W=320, H=80, px=16, bw=(W-px*2)/12-2;
+                      const midY = H/2 - 6;
+                      return (
+                        <div style={{ background:C.card2, border:"1px solid "+C.border,
+                          borderRadius:10, padding:"10px 14px", marginBottom:10 }}>
+                          <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint,
+                            letterSpacing:1, marginBottom:5 }}>
+                            BALANCE FORRAJERO — base del diagnóstico IA
+                          </div>
+                          <svg viewBox={"0 0 "+W+" "+H} style={{ width:"100%", display:"block" }}>
+                            {[5,6,7].map(i => (
+                              <rect key={i} x={px+i*(W-px*2)/12} y={2} width={(W-px*2)/12}
+                                height={H-12} fill={C.amber+"06"} />
+                            ))}
+                            <rect x={px+mH*(W-px*2)/12} y={2} width={(W-px*2)/12}
+                              height={H-12} fill={C.green+"10"} rx={2} />
+                            <line x1={px} y1={midY} x2={W-px} y2={midY}
+                              stroke={C.textFaint} strokeWidth="0.5" strokeDasharray="2,3" />
+                            {bm.map((m,i) => {
+                              const v = m.balance??0, pos = v>=0;
+                              const bH = Math.max(2, Math.min(1,Math.abs(v)/mx)*(midY-8));
+                              const x = px+i*(W-px*2)/12+1;
+                              const y = pos ? midY-bH : midY;
+                              const col = pos ? C.green : C.red;
+                              const cur = i===mH;
+                              return (
+                                <g key={i}>
+                                  <rect x={x} y={y} width={bw} height={bH}
+                                    fill={col+(cur?"ee":"99")} rx={1} />
+                                  <text x={x+bw/2} y={H-2} textAnchor="middle"
+                                    style={{ fontFamily:C.font, fontSize:"5px",
+                                      fill:cur?C.green:[5,6,7].includes(i)?C.amber:C.textFaint,
+                                      fontWeight:cur?"700":"400" }}>
+                                    {MC[i]}
+                                  </text>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                          <div style={{ display:"flex", gap:4, marginTop:5 }}>
+                            {[5,6,7].map(i => {
+                              const b = bm[i], ok = (b?.balance??0)>=0;
+                              const col = b?.balance!=null?(ok?C.green:C.red):C.textFaint;
+                              return (
+                                <div key={i} style={{ flex:1, background:col+"10",
+                                  border:"1px solid "+col+"30", borderRadius:5,
+                                  padding:"3px 4px", textAlign:"center" }}>
+                                  <div style={{ fontFamily:C.font, fontSize:7, color:col, fontWeight:700 }}>
+                                    {MC[i]}: {b?.balance!=null?(b.balance>0?"+":"")+Math.round(b.balance):"—"} M
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <div style={{ flex:1.2, background:C.card, borderRadius:5,
+                              padding:"3px 6px" }}>
+                              <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>CC serv</div>
+                              <div style={{ fontFamily:C.font, fontSize:9, fontWeight:700,
+                                color:tray?.ccServ?(tray.ccServ>=4.5?C.green:tray.ccServ>=4.0?C.amber:C.red):C.textFaint }}>
+                                {tray?.ccServ||"—"}
+                              </div>
+                            </div>
+                            <div style={{ flex:1.2, background:C.card, borderRadius:5,
+                              padding:"3px 6px" }}>
+                              <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>Preñez</div>
+                              <div style={{ fontFamily:C.font, fontSize:9, fontWeight:700,
+                                color:tray?.pr?(tray.pr>=65?C.green:tray.pr>=45?C.amber:C.red):C.textFaint }}>
+                                {tray?.pr ? tray.pr+"%" : "—"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     <RenderInforme texto={result} />
                     <details style={{ marginTop:12 }}>
                       <summary style={{ fontFamily:C.font, fontSize:10, color:C.textDim,
