@@ -6436,6 +6436,203 @@ function TrayectoriaVaquillona({ motor, form }) {
   );
 }
 
+// ── DASHBOARD DEL ESTABLECIMIENTO ─────────────────────────────────────
+// Pantalla de presentación — lo primero que ve el productor en la visita
+function DashboardEstablecimiento({ motor, form, sat, score, onTab }) {
+  const hoy     = new Date();
+  const mesHoy  = hoy.getMonth();
+  const MESES   = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  // Fase del ciclo
+  const cadena    = motor?.cadena ?? (form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null);
+  const faseCiclo = cadena ? calcFaseCiclo(cadena, form, {
+    tempHoy: sat?.temp ? parseFloat(sat.temp) : null,
+    ndviHoy: sat?.ndvi ? parseFloat(sat.ndvi) : null,
+    p30Hoy:  sat?.p30  ? parseFloat(sat.p30)  : null,
+    ccServ:  parseFloat(motor?.tray?.ccServ || 0),
+    ccToros: parseFloat(form.torosCC || 0),
+    prenez:  motor?.tray?.pr ?? 0,
+    mesesDeficit: motor?.balanceMensual?.filter(m=>[5,6,7].includes(m.i)&&m.balance<0).length ?? 0,
+    peorBalanceMcal: motor?.balanceMensual?.filter(m=>[5,6,7].includes(m.i)).reduce((mn,m)=>m.balance<(mn?.balance??0)?m:mn,null)?.balance ?? 0,
+    pvVaca: parseFloat(form.pvVacaAdulta)||320,
+    nVacas: parseFloat(form.vacasN)||0,
+    vaq1SinCorr: motor?.vaq1E ? (motor.vaq1E?.gdpReal||0) < 200 : false,
+    vaq2Llega: motor?.vaq2E?.llegas ?? true,
+    pvVaq2Falta: motor?.vaq2E?.llegas ? 0 : (motor?.vaq2E?.pvMinEntore||0)-(motor?.vaq2E?.pvEntore||0),
+    balanceMesActual: motor?.balanceMensual?.find(m=>m.i===mesHoy)?.balance ?? 0,
+  }) : null;
+
+  const tray     = motor?.tray;
+  const balMen   = motor?.balanceMensual ?? [];
+  const ccServ   = parseFloat(tray?.ccServ || 0);
+  const prenez   = tray?.pr ?? null;
+  const smf      = (v, ok, warn) => v >= ok ? C.green : v >= warn ? C.amber : C.red;
+
+  // Balance invernal — semáforo de 3 meses
+  const balInv = [5,6,7].map(i => {
+    const b = balMen.find(m => m.i === i);
+    return { mes: MESES[i], bal: b ? Math.round(b.balance) : null };
+  });
+  const mesesRojos = balInv.filter(b => b.bal !== null && b.bal < 0).length;
+
+  // Puntos críticos del motor — máximo 3
+  const cerebro = motor ? calcCerebro(motor, form, sat) : null;
+  const tarjCrit = cerebro?.tarjetas?.filter(t => t.prioridad === "P1" || t.prioridad === "URGENTE")
+    .slice(0,3) ?? [];
+
+  return (
+    <div>
+      {/* ── HEADER: establecimiento + fecha ── */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
+        <div>
+          <div style={{ fontFamily:C.font, fontSize:16, color:C.text, fontWeight:700 }}>
+            {form.nombreProductor || "Establecimiento"}
+          </div>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:2 }}>
+            {[form.localidad, form.provincia, form.zona].filter(Boolean).join(" · ")} · {hoy.toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"})}
+          </div>
+        </div>
+        {score && (
+          <div style={{ textAlign:"center", flexShrink:0 }}>
+            <div style={{ fontFamily:C.font, fontSize:32, fontWeight:700, color:score.colorTotal, lineHeight:1 }}>{score.total}</div>
+            <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, letterSpacing:1 }}>SCORE</div>
+          </div>
+        )}
+      </div>
+
+      {/* ── FASE DEL CICLO — la frase más importante ── */}
+      {faseCiclo && faseCiclo.fase !== "SIN_FECHA" && (
+        <div style={{ background:faseCiclo.color+"12", border:"1px solid "+faseCiclo.color+"40", borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ fontSize:22 }}>{faseCiclo.icono}</span>
+            <div>
+              <div style={{ fontFamily:C.font, fontSize:9, color:faseCiclo.color, letterSpacing:1, marginBottom:2 }}>
+                {faseCiclo.label.toUpperCase()}
+                {faseCiclo.siguiente ? " · " + faseCiclo.siguiente.label + " en " + faseCiclo.siguiente.diasFaltan + "d" : ""}
+              </div>
+              <div style={{ fontFamily:C.font, fontSize:11, color:C.text, lineHeight:1.5 }}>
+                {faseCiclo.descripcion.split(".")[0] + "."}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {!faseCiclo && (
+        <div style={{ background:C.amber+"10", border:"1px solid "+C.amber+"30", borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+          <div style={{ fontFamily:C.font, fontSize:10, color:C.amber }}>
+            📅 Cargá las fechas de servicio para activar el diagnóstico contextual
+          </div>
+        </div>
+      )}
+
+      {/* ── 3 MÉTRICAS CLAVE ── */}
+      {motor && (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:12 }}>
+          {/* CC al servicio */}
+          <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:10, padding:"10px 8px", textAlign:"center" }}>
+            <div style={{ fontFamily:C.font, fontSize:22, fontWeight:700, color:ccServ>0?smf(ccServ,4.5,4.0):C.textFaint, lineHeight:1 }}>
+              {ccServ > 0 ? ccServ.toFixed(1) : "—"}
+            </div>
+            <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, marginTop:3 }}>CC SERVICIO</div>
+            <div style={{ fontFamily:C.font, fontSize:7, color:ccServ>0?smf(ccServ,4.5,4.0):C.textFaint, marginTop:2 }}>
+              {ccServ >= 4.5 ? "✓ óptima" : ccServ > 0 ? "⚠ baja" : "sin dato"}
+            </div>
+          </div>
+          {/* Preñez estimada */}
+          <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:10, padding:"10px 8px", textAlign:"center" }}>
+            <div style={{ fontFamily:C.font, fontSize:22, fontWeight:700, color:prenez!=null?smf(prenez,65,45):C.textFaint, lineHeight:1 }}>
+              {prenez != null ? prenez + "%" : "—"}
+            </div>
+            <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, marginTop:3 }}>PREÑEZ EST.</div>
+            <div style={{ fontFamily:C.font, fontSize:7, color:prenez!=null?smf(prenez,65,45):C.textFaint, marginTop:2 }}>
+              {prenez >= 75 ? "✓ muy buena" : prenez >= 55 ? "✓ aceptable" : prenez != null ? "⚠ baja" : "sin dato"}
+            </div>
+          </div>
+          {/* Balance invernal */}
+          <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:10, padding:"10px 8px", textAlign:"center" }}>
+            <div style={{ fontFamily:C.font, fontSize:22, fontWeight:700, color:mesesRojos===0?C.green:mesesRojos===1?C.amber:C.red, lineHeight:1 }}>
+              {balInv[0].bal !== null ? mesesRojos + "/3" : "—"}
+            </div>
+            <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, marginTop:3 }}>MESES DÉFICIT</div>
+            <div style={{ display:"flex", gap:3, justifyContent:"center", marginTop:4 }}>
+              {balInv.map((b,i) => (
+                <div key={i} style={{ textAlign:"center" }}>
+                  <div style={{ width:18, height:18, borderRadius:4,
+                    background: b.bal === null ? C.border : b.bal >= 0 ? C.green+"30" : C.red+"30",
+                    border:"1px solid "+(b.bal === null ? C.border : b.bal >= 0 ? C.green+"60" : C.red+"60"),
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                  }}>
+                    <span style={{ fontFamily:C.font, fontSize:6, color:b.bal===null?C.textFaint:b.bal>=0?C.green:C.red }}>
+                      {b.bal === null ? "?" : b.bal >= 0 ? "✓" : "✗"}
+                    </span>
+                  </div>
+                  <div style={{ fontFamily:C.font, fontSize:6, color:C.textFaint, marginTop:1 }}>{b.mes}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PRONÓSTICO COMPACTO ── */}
+      {sat?.pronostico?.length > 0 && (
+        <div style={{ display:"flex", gap:3, marginBottom:12, overflowX:"auto", scrollbarWidth:"none" }}>
+          {sat.pronostico.slice(0,5).map((d,i) => {
+            const tmed = (d.tMax+d.tMin)/2;
+            const ico  = d.lluvia>10?"💧":d.tMin<=2?"❄️":tmed>=30?"☀️":"🌤";
+            return (
+              <div key={i} style={{ flex:"0 0 auto", textAlign:"center", padding:"5px 7px",
+                background: tmed<15?C.amber+"10":C.green+"08",
+                border:"1px solid "+(tmed<15?C.amber+"30":C.border), borderRadius:8, minWidth:38 }}>
+                <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>{d.dia}</div>
+                <div style={{ fontSize:12 }}>{ico}</div>
+                <div style={{ fontFamily:C.font, fontSize:9, color:C.text, fontWeight:700 }}>{d.tMax}°</div>
+                <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>{d.tMin}°</div>
+              </div>
+            );
+          })}
+          {sat?.helada7 && (
+            <div style={{ display:"flex", alignItems:"center", padding:"5px 10px",
+              background:C.amber+"10", border:"1px solid "+C.amber+"30", borderRadius:8, flexShrink:0 }}>
+              <span style={{ fontFamily:C.font, fontSize:8, color:C.amber }}>❄️ Helada probable</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── PUNTOS CRÍTICOS P1 — máximo 3 ── */}
+      {tarjCrit.length > 0 && (
+        <div style={{ marginBottom:12 }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.red, letterSpacing:1, marginBottom:6 }}>
+            🔴 {tarjCrit.length} PUNTO{tarjCrit.length>1?"S":""} CRÍTICO{tarjCrit.length>1?"S":""} — ACCIÓN ANTES DEL SERVICIO
+          </div>
+          {tarjCrit.map((t,i) => (
+            <div key={i} style={{ display:"flex", gap:10, padding:"10px 12px",
+              background:C.red+"07", border:"1px solid "+C.red+"25", borderRadius:10, marginBottom:6 }}>
+              <span style={{ fontSize:18, flexShrink:0 }}>{t.icono}</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontFamily:C.font, fontSize:11, color:"#c8e0c0", fontWeight:700, marginBottom:3 }}>{t.titulo}</div>
+                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{t.que?.slice(0,90)}{t.que?.length>90?"…":""}</div>
+                {t.impacto && <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:3 }}>💰 {t.impacto?.slice(0,80)}{t.impacto?.length>80?"…":""}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── BOTONES DE NAVEGACIÓN ── */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginTop:4 }}>
+        <button onClick={()=>onTab("balance")} style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:10, color:C.textDim, padding:"10px 8px", fontFamily:C.font, fontSize:10, cursor:"pointer" }}>
+          📊 Ver Balance
+        </button>
+        <button onClick={()=>onTab("cerebro")} style={{ background:C.green+"15", border:"1px solid "+C.green+"40", borderRadius:10, color:C.green, padding:"10px 8px", fontFamily:C.font, fontSize:10, fontWeight:700, cursor:"pointer" }}>
+          🧠 Ver Análisis IA
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── COMPONENTE: Tab Cerebro ───────────────────────────────────────────
 function TabCerebro({ motor, form, sat }) {
   const cerebro = React.useMemo(() => calcCerebro(motor, form, sat), [motor, form, sat]);
@@ -7036,7 +7233,7 @@ const FORM_DEF = {
   iniServ:"", finServ:"",
   edadPrimerEntore:"24",
   // ── Vaquillona ─────────────────────────────────────────────────
-  edadVaqMayo:"", tipoDesteteVaq:"hiper",
+  edadVaqMayo:"", tipoDesteteVaq:"",
   // ── Disponibilidad forrajera ───────────────────────────────────
   altPasto:"20", tipoPasto:"alto_denso",
   // Verdeos de invierno (nuevo v15)
@@ -7086,7 +7283,16 @@ const FORM_DEF = {
 };
 
 // ─── SYSTEM PROMPT ───────────────────────────────────────────────
-const SYS_FULL = `Sos un asesor técnico ganadero con 20 años de campo en cría bovina extensiva en NEA, NOA, Paraguay, Bolivia y Brasil. Conocés cada establecimiento como si lo hubieras caminado. Tu análisis es directo, preciso y útil para el productor real — no un resumen genérico.
+const SYS_FULL = `Sos un asesor técnico ganadero con 20 años de campo en cría bovina extensiva en NEA, NOA, Paraguay, Bolivia y Brasil. El motor técnico de AgroMind Pro ya calculó el diagnóstico completo — score por dimensión, fase del ciclo, balance forrajero mensual, trayectoria CC, estado de vaquillona, sanidad y GEI. Tu trabajo es TOMAR ese diagnóstico, identificar los 2–3 cuellos de botella reales ordenados por impacto en preñez y kilos de ternero, y proponer mejoras concretas con cuantificación del beneficio si se actúa.
+
+NO repitas el diagnóstico que ya está en el prompt — el técnico y el productor ya lo ven en pantalla.
+ARRANCÁ directamente con el punto crítico más importante y qué hacer.
+
+REGLA FUNDAMENTAL — DATO REAL vs ASUMIDO:
+- Cada dato del prompt está marcado como real (ingresado por el usuario) o como valor por defecto del sistema.
+- Si algo no fue ingresado por el usuario, SIEMPRE decirlo: "No se registró [dato] — el análisis asume [valor] como escenario de trabajo."
+- NUNCA presentar un valor por defecto como si fuera un dato real del establecimiento.
+- Si el tipo de destete de vaquillona no fue cargado, NO decir "vaquillona con destete hiperprecoz" — decir "sin dato de destete de vaquillona, el análisis proyecta el escenario sin suplemento como referencia".
 
 REGLAS DE ESCRITURA — OBLIGATORIAS:
 - Escribí como si le hablaras al productor cara a cara. Claro, técnico pero sin jerga innecesaria.
@@ -7094,113 +7300,52 @@ REGLAS DE ESCRITURA — OBLIGATORIAS:
 - Usá números concretos siempre: Mcal, kg MS, días, porcentajes. Nunca digas "puede haber déficit" — calculá y decí cuánto.
 - Cuando hay un problema grave, decilo sin rodeos: "Esto está mal y hay que corregirlo antes del servicio."
 - Las recomendaciones tienen que tener ACCIÓN + DOSIS + MOMENTO + POR QUÉ. No des opciones vagas.
-- Largo mínimo por sección: 120 palabras. El informe completo mínimo 700 palabras.
+- Largo mínimo por sección: 100 palabras. El informe completo mínimo 600 palabras.
 - Citas bibliográficas integradas en el texto con formato (Autor, año) donde corresponda al cálculo.
-- Al FINAL del informe, SIEMPRE incluir una sección "## Bibliografía" con SOLO las referencias que se usaron en ese informe, en formato:
-  Autor/es (año). Título. Revista/Editorial. DOI si disponible.
-  Las referencias disponibles son:
-  • NRC (2000). Nutrient Requirements of Beef Cattle, 7th ed. National Academies Press. DOI:10.17226/9791 [requerimientos energéticos]
-  • Lippke H. (1980). Forage characteristics and animal performance. J. Anim. Sci. 51:952-961 [consumo voluntario MS]
-  • Minson D.J. (1990). Forage in Ruminant Nutrition. Academic Press [consumo voluntario MS]
-  • Short R.E. et al. (1990). Estrous cycles, ovulation, and conception in post-partum beef cows. J. Anim. Sci. 68:799-811 [anestro posparto]
-  • Neel J.P.S. et al. (2007). Effects of interval to first calf and age at puberty on lifetime production. J. Anim. Sci. 85:543-549 [reproducción]
-  • Peruchena C.O. (2003). Manejo de la condición corporal en rodeos de cría del NEA. INTA Colonia Benítez [caída CC lactación]
-  • Detmann E. et al. (2010). NASSEM — Nutrição de Animais de Sistemas de Criação Extensivos. Suprema, MG [suplementación proteica]
-  • Rosello Brajovich J.E. et al. (2025). Relación CC-preñez en rodeos Brangus NEA. INTA Colonia Benítez, comunicación personal [CC y preñez NEA]
-  • Winchester C.F., Morris M.J. (1956). Water intake rates of cattle. J. Anim. Sci. 15:722-740 [consumo agua bovinos]
-  • Beede D.K. (1992). Water and its importance to cattle. Univ. Florida IFAS, Circular 1017 [consumo agua]
-  • López A. et al. (2021). Water salinity effects on voluntary intake and body weight in beef cattle. J. Anim. Sci. 99(8):skab215. DOI:10.1093/jas/skab215 [calidad agua]
-  • Balbuena O. (2003). Nutrición y manejo del destete y recría de terneros en el NEA. INTA EEA El Colorado, Publ. Técnica N°47 [recría vaquillona]
-  • Beauchemin K.A. et al. (2009). Nutritional management for enteric methane abatement in beef cattle. Aust. J. Exp. Agric. 48:21-27. DOI:10.1071/EA07139 [suplemento y CH₄]
-  • Benchaar C. et al. (2020). Diet composition effects on methane emissions from dairy cows. Anim. Feed Sci. Technol. 259:114298. DOI:10.1016/j.anifeedsci.2019.114298 [digestibilidad y Ym]
-  • IPCC (2019). 2019 Refinement to 2006 IPCC Guidelines, Vol.4 Agriculture. IPCC, Geneva. [Ec.10.21 — CH₄ entérico Tier 2]
-  • Gere J.I. et al. (2019). Methane emissions from grazing beef cattle in temperate grasslands. N.Z. J. Agric. Res. 62(3):346-360. DOI:10.1080/00288233.2018.1540994 [Ym calibrado C4]
-  • Gere J.I. et al. (2024). Enteric methane from Bos indicus cattle in subtropical extensive systems. Anim. Feed Sci. Technol. 310:115929. DOI:10.1016/j.anifeedsci.2024.115929 [Ym Bos indicus]
-  • IPCC AR6 WGI (2021). Climate Change 2021: The Physical Science Basis. Cambridge Univ. Press. DOI:10.1017/9781009157896 [GWP100 CH₄=28]
-  • Allen M.R. et al. (2018). A solution to the misrepresentation of CO₂-equivalent emissions of short-lived climate pollutants. npj Clim. Atmos. Sci. 1:16. DOI:10.1038/s41612-018-0026-8 [GWP*]
-  • McSherry M.E., Ritchie M.E. (2013). Effects of grazing on grassland soil carbon: a global review. Global Change Biol. 19(5):1347-1357. DOI:10.1111/gcb.12144 [SOC pastizal C4, incertidumbre ±40%]
-  • Wang S. et al. (2023). Grassland carbon sequestration cannot compensate for livestock methane emissions. Nature Commun. 14:4390. DOI:10.1038/s41467-023-40093-2 [límites del offset de CH₄]
-  • Beauchemin et al. (2009) — Aust. J. Exp. Agric. 48(2) [supl. proteico y CH₄]
-  • Allen et al. (2018) — npj Climate Atmos. Sci. 1:16 [GWP* métrica dinámica]
-  Incluir SOLO las que apliquen al diagnóstico de ESTE rodeo.
+- Al FINAL del informe, SIEMPRE incluir una sección "## Bibliografía" con SOLO las referencias que se usaron en ese informe.
 
-MODELO TÉCNICO v14:
-- DISPARADOR C4: T<15°C detiene crecimiento megatérmico. Es el momento crítico del sistema — coordinar toda la estrategia alrededor de este evento.
-- CONSUMO VOLUNTARIO (Lippke 1980; Minson 1990): fenología define kg MS/vaca/día → <10% flor: 2.8%PV · 10-25%: 2.4% · 25-50%: 2.0% · >50%: 1.6%PV. Digestibilidad decrece 0.5 unidades/semana de floración avanzada.
-- REQUERIMIENTOS: modelar por estado fisiológico real. Lactación pico = 18–22 Mcal/día para 320kg. Gestación tardía = 14–16 Mcal. Nunca promediar sin indicar el mes crítico.
-- AGUA (López et al. 2021, JAS 99:skab215): TDS >3.000mg/L reduce DMI. SO₄ más deletéreo que NaCl. En NEA/Chaco, laguna estacional puede cuadruplicar TDS en agosto-septiembre.
-- BIOTIPO (Short 1990; Neel 2007): Bos indicus moviliza CC más lentamente, recupera más despacio, umbral anestro 0.5–1.0 CC menor que taurino. Adaptar expectativas de preñez en consecuencia.
-- CC PARTO (Selk 1988): cada 0.5 unidades CC al parto = 25 días menos de anestro = +8–12 pp preñez. Ventana crítica: últimos 60 días gestación.
-- DESTETE HIPERPRECOZ (Wiltbank 1990): elimina bloqueo LH en 7–14 días. Efecto en CC en 45 días. Herramienta de rescate para vacas CC <4.5.
-- SUPLEMENTACIÓN PROTEICA INVERNAL (Detmann/NASSEM 2010): pasto >50% floración = PB <4% → por debajo del mínimo ruminal. 0.3–0.5 kg/día expeller girasol libera la digestión de fibra disponible. Diario obligatorio.
-- SANIDAD: techo del sistema. Aftosa + Brucelosis = obligatorio legal. IBR/DVB = −15 pp preñez si sin vacunar. Toros sin revisión pre-servicio = problemas físicos y de libido no detectados.
+ESTRUCTURA — 4 SECCIONES OBLIGATORIAS:
 
-5 SECCIONES OBLIGATORIAS — emojis exactos al inicio de cada título:
-1️⃣ DIAGNÓSTICO AMBIENTAL
-Situación climática real del establecimiento hoy. Temperatura, NDVI, lluvia, ENSO. Estado del disparador C4 y qué significa para este momento del año. Calidad del agua si hay datos. Cronología del servicio/parto y su relación con el momento forrajero.
+1️⃣ SITUACIÓN HOY — FASE DEL CICLO Y CLIMA
+Una sola sección corta (3–4 oraciones). Qué fase del ciclo estamos, qué está pasando en el campo (temperatura, NDVI, lluvia), y cómo se conecta eso con el momento más urgente del rodeo. Si hay helada proyectada, mencionarlo.
 
-2️⃣ DIAGNÓSTICO POR CATEGORÍA
-ORDEN OBLIGATORIO — de más crítica a menos crítica, siempre:
-1. Vaquillona 1° invierno: ¿llega al 60% PV adulto en agosto? PV actual vs objetivo, GDP necesario vs GDP del pasto, escenario de suplementación.
-2. Vaquillona 2° invierno: ¿llega al 75% PV adulto al entore? Estado actual, suplementación estratégica, semilla de algodón si corresponde.
-3. Vaca de 2° servicio (V2S): la categoría más exigente — crecimiento + lactación + gestación simultáneos. Requerimiento Mcal/día real, déficit, riesgo de anestro prolongado, impacto en preñez.
-4. Vacas adultas según CC: requerimiento Mcal/día por estado fisiológico, oferta del pasto, déficit o superávit, grupos críticos.
-5. Toros: condición corporal al servicio, suplementación si necesario.
-Para cada categoría: Requerimiento Mcal/día vs oferta pasto. Déficit numérico exacto. Proteína bruta del pasto vs requerimiento.
+2️⃣ PUNTOS CRÍTICOS — ORDENADOS POR IMPACTO
+Máximo 3 puntos. Para CADA uno:
+- Cuál es el problema exacto (con número: kg que faltan, Mcal de déficit, días de anestro, puntos de CC)
+- Por qué importa (impacto en pp preñez o kg ternero)
+- Qué hacer: ACCIÓN + DOSIS + MOMENTO. Concreto, sin vaguedades.
+- Cuánto mejora si se actúa: "Con esta corrección, la preñez proyectada sube de X% a Y%"
+Orden obligatorio: 1° lo que más impacta en preñez · 2° lo que más impacta en kg ternero · 3° lo que más impacta en eficiencia del sistema.
 
-3️⃣ DESTETE Y PROYECCIÓN CC
-Analizar CADA GRUPO DE CC por separado (no promediar). Para cada grupo:
-- CC hoy → CC parto → CC mínima lactación → CC servicio
-- Mcal movilizadas durante lactación (caída CC × 56 Mcal/punto)
-- Días de anestro según biotipo y CC al parto
-- Preñez esperada según CC al servicio
-- Recomendación de destete específica para ese grupo: Tradicional 180d / Anticipado 90d / Hiperprecoz 50d
-Identificar el mes de mayor riesgo de cada grupo. Qué pasa si no se actúa (pérdida de preñez en pp).
+3️⃣ VAQUILLONA — TRAYECTORIA REAL VS OBJETIVO
+Solo si hay datos de vaquillona cargados. Si no hay datos, decirlo y omitir la sección.
+Para cada categoría con datos:
+- PV actual estimado vs objetivo para la fase (con número)
+- GDP necesario vs GDP del pasto solo (con número)
+- Si no llega: cuánto suplemento, qué tipo, cuándo empezar, costo estimado vs valor del ternero postergado
+Si no se cargó tipo de destete: "Sin dato de manejo de vaquillona — proyección basada en crecimiento de pasto solo."
 
-4️⃣ BALANCE ENERGÉTICO
-Mes a mes: oferta forrajera (Mcal/vaca/día) + CC movilizada + suplemento vs demanda real. Identificar los 2–3 meses más críticos con déficit exacto en Mcal. Costo estimado de suplementación para cubrir ese déficit. Disponibilidad de pasto en kgMS/ha y cómo condiciona la decisión (cantidad vs calidad).
+4️⃣ CRONOGRAMA — PRÓXIMOS 3 MESES
+Un renglón por mes con formato: MES: acción específica · categoría · resultado esperado.
+Solo incluir acciones que no se estén haciendo ya según los datos cargados.
 
-5️⃣ RECOMENDACIONES CONCRETAS
-ORDEN OBLIGATORIO por categoría prioritaria:
-🔴/🟡/🟢 1. VAQUILLONA 1° INVIERNO — suplementación con dosis, fuente, frecuencia (2–3x/sem si solo proteína, diario si incluye energía con almidón)
-🔴/🟡/🟢 2. VAQUILLONA 2° INVIERNO — estrategia nutricional para llegar al entore en peso
-🔴/🟡/🟢 3. VACA 2° SERVICIO — manejo separado, suplementación específica, destete precoz si CC < 4.5
-🔴/🟡/🟢 4. VACAS POR GRUPO DE CC — destete recomendado por grupo (no genérico para todo el rodeo), suplementación si necesario
-🔴/🟡/🟢 5. SANIDAD y otros
-Para cada recomendación: QUÉ hacer · CUÁNTO (dosis exacta en kg/vaca/día o % PV) · CUÁNDO (mes exacto) · POR QUÉ (consecuencia si no se hace en pp preñez o kg ganados).
-Al final: cronograma mensual de acciones para los próximos 6 meses.
+## Bibliografía
+SOLO las referencias usadas en este informe, en formato: Autor/es (año). Título. Revista. DOI si disponible.
+Referencias disponibles:
+• NRC (2000). Nutrient Requirements of Beef Cattle, 7th ed. National Academies Press.
+• Peruchena C.O. (2003). Manejo de la condición corporal en rodeos de cría del NEA. INTA Colonia Benítez.
+• Short R.E. et al. (1990). Estrous cycles, ovulation, and conception in post-partum beef cows. J. Anim. Sci. 68:799-811.
+• Detmann E. et al. (2010). NASSEM — Nutrição de Animais de Sistemas de Criação Extensivos. Suprema, MG.
+• Balbuena O. (2003). Nutrición y manejo del destete y recría de terneros en el NEA. INTA EEA El Colorado.
+• Lippke H. (1980). Forage characteristics and animal performance. J. Anim. Sci. 51:952-961.
+• Minson D.J. (1990). Forage in Ruminant Nutrition. Academic Press.
+• IPCC (2019). 2019 Refinement to 2006 IPCC Guidelines, Vol.4 Agriculture.
+• Gere J.I. et al. (2019). Methane emissions from grazing beef cattle. N.Z. J. Agric. Res. 62(3):346-360.
+• Rosello Brajovich J.E. et al. (2025). Relación CC-preñez en rodeos Brangus NEA. INTA Colonia Benítez.
+• Bavera G.A. (2005). Cursos de producción bovina de carne. FAV UNRC.
+• Wiltbank J.N. (1990). Beef cattle reproductive management. Colorado State Univ.
+`;
 
-CITAS OBLIGATORIAS EN TEXTO (formato autor, año) según lo que aplique al rodeo:
-- Requerimientos energéticos: (NRC, 2000)
-- Caída CC en lactación NEA: (Peruchena, 2003)
-- Anestro posparto: (Short et al., 1990; Neel et al., 2007)
-- Suplementación proteica y activación ruminal: (Detmann et al., 2010)
-- Consumo voluntario de MS: (Lippke, 1980; Minson, 1990)
-- Calidad de agua y consumo: (López et al., 2021; Winchester & Morris, 1956)
-- Emisiones CH₄ entérico: (IPCC, 2019) Tier 2, Ec.10.21
-- Factor Ym calibrado C4 NEA: (Gere et al., 2019; Gere et al., 2024)
-- Efecto suplemento proteico sobre CH₄: (Beauchemin et al., 2009; Benchaar et al., 2020)
-- Captura CO₂ pastizal (incertidumbre ±40%): (McSherry & Ritchie, 2013)
-- Límites del offset CH₄ por pastizal: (Wang et al., 2023)
-- GWP₁₀₀ CH₄ = 28: (IPCC AR6, 2021)
-- GWP* para rodeos estables: (Allen et al., 2018)
-- CC y preñez NEA: (Rosello Brajovich et al., 2025)
-- Recría vaquillona NEA: (Balbuena, 2003)
-
-SECCIÓN ## Bibliografía AL FINAL — incluir SOLO las referencias que se usaron. Formato:
-Autor/es (año). Título. Revista, Vol(Nro):páginas. DOI.
-
-INSTRUCCIONES ESTRUCTURA — INCUMPLIRLAS ES ERROR:
-- Usar EXACTAMENTE los títulos con sus emojis: 1️⃣ DIAGNÓSTICO AMBIENTAL · 2️⃣ DIAGNÓSTICO POR CATEGORÍA · 3️⃣ DESTETE Y PROYECCIÓN CC · 4️⃣ BALANCE ENERGÉTICO · 5️⃣ RECOMENDACIONES CONCRETAS
-- En 2️⃣ SIEMPRE incluir subsección "TOROS — PREPARO SERVICIO" aunque la CC sea buena. Si CC toros < 5.0: calcular días necesarios para llegar a CC 5.5 y protocolo de suplementación.
-- Si no hay suplemento cargado para vaquillona 1 o 2, el informe DEBE mostrar explícitamente el escenario sin intervención: GDP 0-100g/d, PV agosto y probabilidad de no llegar al entore a los 24 meses. Luego calcular el escenario CON suplemento.
-- Si no hay destete definido, informar que el análisis usa Tradicional 180d como peor escenario y qué pasaría con destete anticipado o hiperprecoz.
-- Si la vaca 2° servicio no tiene manejo de lactancia diferenciado, alertar sobre el riesgo de anestro prolongado y menor preñez.
-- Los % de preñez mostrados deben corresponder al escenario REAL con los datos cargados — no al escenario ideal.
-- En 4️⃣ mencionar si hay verdeos disponibles y cómo cambia el balance invernal.
-- En 5️⃣ el cronograma mensual DEBE tener un renglón por cada mes de los próximos 6 meses con formato: "MES: acción específica — categoría — resultado esperado"
-- Si hay datos de stock: comparar demanda del plan vs stock disponible y alertar déficit.
-- Si hay visitas de campo: comparar CC observada vs proyección y ajustar recomendaciones.`;
 
 // ─── APP PRINCIPAL ────────────────────────────────────────────────
 export default function Page() {
@@ -7222,7 +7367,7 @@ function AgroMindPro() {
   const [loading,     setLoading]     = useState(false);
   const [loadMsg,     setLoadMsg]     = useState("");
   const [result,      setResult]      = useState("");
-  const [tab,         setTab]         = useState("diagnostico");
+  const [tab,         setTab]         = useState("resumen");
   const [modoForraje, setModoForraje] = useState("general");
   const [usaPotreros, setUsaPotreros] = useState(true); // siempre potreros
   const [potreros,    setPotreros]    = useState([{ ha:"", veg:"Pastizal natural NEA/Chaco", fenol:"menor_10" }]);
@@ -7557,7 +7702,7 @@ function AgroMindPro() {
 
   // ── RUN ANALYSIS ──────────────────────────────────────────────
   async function runAnalysis() {
-    setLoading(true); setResult(""); setTab("diagnostico");
+    setLoading(true); setResult(""); setTab("cerebro");
     let mi = 0;
     const iv = setInterval(() => { setLoadMsg(MSGS[mi % MSGS.length]); mi++; }, 2200);
     try {
@@ -7639,14 +7784,99 @@ function AgroMindPro() {
       });
       salto(20);
 
+
+      // ── SCORE POR DIMENSIÓN ──────────────────────────────────────────
+      const scoreData = motor ? calcScore(motor, form, null) : null;
+      if (scoreData) {
+        chk(30);
+        doc.setFillColor(20, 40, 22);
+        doc.roundedRect(ML, y, AU, 9, 2, 2, "F");
+        doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+        doc.text("SCORE: " + scoreData.total + "/100 — " + scoreData.labelTotal, ML+4, y+6);
+        salto(12);
+        const dimW = AU / scoreData.dim.length;
+        scoreData.dim.forEach((d, di) => {
+          const dx = ML + di * dimW;
+          const col = d.score >= 75 ? [126,200,80] : d.score >= 50 ? [232,160,48] : [224,85,48];
+          doc.setFillColor(240,245,240);
+          doc.roundedRect(dx, y, dimW-2, 14, 1, 1, "F");
+          doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
+          doc.text(d.nombre, dx + (dimW-2)/2, y+5, { align:"center", maxWidth: dimW-4 });
+          doc.setFontSize(10); doc.setFont("helvetica","bold"); doc.setTextColor(col[0],col[1],col[2]);
+          doc.text(String(d.score), dx + (dimW-2)/2, y+11, { align:"center" });
+        });
+        salto(18);
+      }
+
+      // ── PUNTOS CRÍTICOS DEL MOTOR ────────────────────────────────────
+      const cerebPDF = motor ? calcCerebro(motor, form, sat) : null;
+      const critiPDF = cerebPDF ? (cerebPDF.tarjetas||[]).filter(t => t.prioridad==="P1"||t.prioridad==="URGENTE").slice(0,3) : [];
+      if (critiPDF.length > 0) {
+        chk(15);
+        doc.setFillColor(224, 85, 48);
+        doc.roundedRect(ML, y, AU, 8, 2, 2, "F");
+        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+        doc.text("PUNTOS CRÍTICOS — ACCIÓN ANTES DEL SERVICIO", ML+4, y+5.5);
+        salto(11);
+        critiPDF.forEach(t => {
+          chk(12);
+          doc.setFillColor(255,245,242);
+          doc.roundedRect(ML, y, AU, 8, 1, 1, "F");
+          doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(180,60,30);
+          doc.text("▶ " + t.titulo, ML+3, y+5.5, { maxWidth: AU-6 });
+          salto(10);
+          if (t.que) {
+            doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(60,60,60);
+            doc.splitTextToSize(t.que.slice(0,120), AU-6).slice(0,2).forEach(ln => {
+              chk(4); doc.text("  " + ln, ML+3, y); salto(4);
+            });
+          }
+          salto(2);
+        });
+        salto(3);
+      }
+
+      // ── BALANCE INVERNAL ─────────────────────────────────────────────
+      if (motor && motor.balanceMensual) {
+        chk(20);
+        doc.setFillColor(230,248,230);
+        doc.roundedRect(ML, y, AU, 8, 2, 2, "F");
+        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(45,106,31);
+        doc.text("BALANCE INVERNAL (Jun–Jul–Ago)", ML+4, y+5.5);
+        salto(11);
+        const MESES_PDF2 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+        [5,6,7].forEach((mi, ci) => {
+          const bm = motor.balanceMensual.find(m => m.i === mi);
+          const bv = bm ? Math.round(bm.balance) : null;
+          const bx = ML + ci * (AU/3);
+          const col = bv === null ? [180,180,180] : bv >= 0 ? [45,106,31] : [200,60,40];
+          doc.setFillColor(245,250,245);
+          doc.roundedRect(bx, y, AU/3-3, 12, 1, 1, "F");
+          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
+          doc.text(MESES_PDF2[mi], bx + (AU/3-3)/2, y+4.5, { align:"center" });
+          doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(col[0],col[1],col[2]);
+          doc.text(bv !== null ? (bv >= 0 ? "+" : "") + bv + " Mcal" : "—", bx + (AU/3-3)/2, y+10, { align:"center" });
+        });
+        salto(16);
+      }
+
+      // ── INFORME IA (si existe) ───────────────────────────────────────
       // Secciones
-      const partes    = result.split(/(?=\d️⃣)/);
+      const partes    = result ? result.split(/(?=\d️⃣)/) : [];
+      if (!result) {
+        chk(12);
+        doc.setFontSize(8); doc.setFont("helvetica","italic"); doc.setTextColor(150,150,150);
+        doc.text("Informe de análisis IA no generado — generalo desde el tab Cerebro.", ML, y);
+        salto(10);
+      }
       const SEC_COLORS_PDF = ["#2d6a1f","#2d6a1f","#d4952a","#d4952a","#c04820"];
       SEC_EMOJIS.forEach((em, si) => {
+        if (!result) return;
         const parte = partes.find(p => p.startsWith(em));
         if (!parte) return;
         chk(20);
         const [r, g, b] = SEC_COLORS_PDF[si].match(/\w\w/g).map(h => parseInt(h, 16));
+
         doc.setFillColor(r, g, b);
         doc.roundedRect(ML, y, AU, 9, 2, 2, "F");
         doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
@@ -8112,8 +8342,89 @@ function AgroMindPro() {
         "Gestación temprana (1–4 meses)","Gestación media (5–7 meses)","Preparto (último mes)",
         "Lactación con ternero al pie","Vaca seca sin ternero",
       ].map(e=>[e,e])} />
-      <Input label="SERVICIO — INICIO" value={form.iniServ} onChange={v=>set("iniServ",v)} type="date" />
-      <Input label="SERVICIO — FIN"    value={form.finServ} onChange={v=>set("finServ",v)} type="date" />
+
+      {/* Fechas de servicio — selectores mes/año en lugar de date picker (evita bugs iOS) */}
+      {(() => {
+        const MESES_OPT = [
+          ["01","Enero"],["02","Febrero"],["03","Marzo"],["04","Abril"],
+          ["05","Mayo"],["06","Junio"],["07","Julio"],["08","Agosto"],
+          ["09","Septiembre"],["10","Octubre"],["11","Noviembre"],["12","Diciembre"],
+        ];
+        const hoy = new Date();
+        const anioAct = hoy.getFullYear();
+        const ANIOS = [anioAct-1, anioAct, anioAct+1].map(a => [String(a), String(a)]);
+
+        // Parsear y formatear: form.iniServ = "2025-10-01"
+        const getMes  = (v) => v ? v.slice(5,7) : "";
+        const getAnio = (v) => v ? v.slice(0,4) : "";
+        const setFecha = (campo, mes, anio) => {
+          if (mes && anio) set(campo, anio + "-" + mes + "-01");
+          else set(campo, "");
+        };
+
+        const iniMes  = getMes(form.iniServ);
+        const iniAnio = getAnio(form.iniServ);
+        const finMes  = getMes(form.finServ);
+        const finAnio = getAnio(form.finServ);
+
+        const cadenaCalc = form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null;
+        const diasServ   = cadenaCalc?.diasServ;
+        const warnServ   = diasServ != null && (diasServ < 60 || diasServ > 95)
+          ? (diasServ < 60 ? "Servicio muy corto (" + diasServ + "d) — pocas vacas preñadas en la cabeza" : "Servicio largo (" + diasServ + "d) — cola de preñez pesada, terneros más livianos")
+          : null;
+
+        return (
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
+              📅 FECHAS DE SERVICIO
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
+              {/* Inicio */}
+              <div>
+                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:4 }}>INICIO</div>
+                <div style={{ display:"flex", gap:4 }}>
+                  <select value={iniMes} onChange={e => setFecha("iniServ", e.target.value, iniAnio||String(anioAct))}
+                    style={{ flex:2, background:C.card2, border:"1px solid "+C.border, borderRadius:8, color:C.text, padding:"10px 8px", fontFamily:C.font, fontSize:12 }}>
+                    <option value="">Mes</option>
+                    {MESES_OPT.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  <select value={iniAnio} onChange={e => setFecha("iniServ", iniMes||"10", e.target.value)}
+                    style={{ flex:1, background:C.card2, border:"1px solid "+C.border, borderRadius:8, color:C.text, padding:"10px 8px", fontFamily:C.font, fontSize:12 }}>
+                    <option value="">Año</option>
+                    {ANIOS.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+              </div>
+              {/* Fin */}
+              <div>
+                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:4 }}>FIN</div>
+                <div style={{ display:"flex", gap:4 }}>
+                  <select value={finMes} onChange={e => setFecha("finServ", e.target.value, finAnio||String(anioAct))}
+                    style={{ flex:2, background:C.card2, border:"1px solid "+C.border, borderRadius:8, color:C.text, padding:"10px 8px", fontFamily:C.font, fontSize:12 }}>
+                    <option value="">Mes</option>
+                    {MESES_OPT.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  <select value={finAnio} onChange={e => setFecha("finServ", finMes||"01", e.target.value)}
+                    style={{ flex:1, background:C.card2, border:"1px solid "+C.border, borderRadius:8, color:C.text, padding:"10px 8px", fontFamily:C.font, fontSize:12 }}>
+                    <option value="">Año</option>
+                    {ANIOS.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+            {diasServ != null && (
+              <div style={{ fontFamily:C.font, fontSize:9, color: warnServ ? C.amber : C.green, marginTop:4 }}>
+                {warnServ ? "⚠ " + warnServ : "✓ Servicio de " + diasServ + " días — " + (diasServ <= 90 ? "óptimo para NEA" : "ajustar si es posible")}
+              </div>
+            )}
+            {!form.iniServ && (
+              <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:4 }}>
+                Típico NEA: inicio octubre, fin enero (90 días)
+              </div>
+            )}
+          </div>
+        );
+      })()}
       <SelectF label="EDAD AL PRIMER ENTORE"
         value={form.edadPrimerEntore}
         onChange={v=>set("edadPrimerEntore",v)}
@@ -9560,80 +9871,31 @@ function AgroMindPro() {
   // ── PASO 8: ANÁLISIS ──────────────────────────────────────────
   const renderAnalisis = () => {
     const score = motor ? calcScore(motor, form, calcFaseCiclo(motor?.cadena ?? calcCadena(form.iniServ, form.finServ), form)) : null;
-    const DIAS_SEMANA = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 
     return (
     <div>
 
-      {/* ══ SCORE RADAR — visible siempre que haya motor ══ */}
-      {motor
-        ? <ScoreRadar score={score} />
-        : (
-          <div style={{ background:C.card2, border:"1px dashed " + C.border, borderRadius:14, padding:20, textAlign:"center", marginBottom:14 }}>
-            <div style={{ fontFamily:C.font, fontSize:28, marginBottom:6 }}>📊</div>
-            <div style={{ fontFamily:C.font, fontSize:11, color:C.textFaint }}>
-              Completá los pasos anteriores para ver el diagnóstico completo
-            </div>
-          </div>
-        )
-      }
-
-      {/* ══ PRONÓSTICO 7 DÍAS — si hay datos satelitales ══ */}
-      {sat?.pronostico?.length > 0 && (
-        <div style={{ background:C.card2, border:"1px solid " + C.border, borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
-            🌤 PRONÓSTICO 7 DÍAS — {form.localidad || form.provincia || ""}
-          </div>
-          <div style={{ display:"flex", gap:4, overflowX:"auto", scrollbarWidth:"none" }}>
-            {sat.pronostico.map((d, i) => {
-              const lluvia = d.lluvia > 10 ? "💧" : d.lluvia > 2 ? "🌦" : d.tMin <= 2 ? "❄️" : d.tMax >= 30 ? "☀️" : "🌤";
-              const tmed = (d.tMax + d.tMin) / 2;
-              const activo = tmed < 15; // C4 no activo
-              return (
-                <div key={i} style={{
-                  flex:"0 0 auto", textAlign:"center", padding:"6px 8px", borderRadius:8,
-                  background: activo ? C.amber + "10" : C.green + "08",
-                  border:"1px solid " + (activo ? C.amber + "30" : C.border),
-                  minWidth:42,
-                }}>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:2 }}>{d.dia}</div>
-                  <div style={{ fontSize:14 }}>{lluvia}</div>
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.text, fontWeight:700 }}>{d.tMax}°</div>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>{d.tMin}°</div>
-                  {d.lluvia > 2 && (
-                    <div style={{ fontFamily:C.font, fontSize:7, color:"#5aaff0" }}>{d.lluvia}mm</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {sat.helada7 && (
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, marginTop:6 }}>
-              ⚠ Helada probable en los próximos 7 días — revisar terneros recién nacidos
-            </div>
-          )}
-          {sat.lluviaProx7 > 0 && (
-            <div style={{ fontFamily:C.font, fontSize:9, color:"#5aaff0", marginTop:4 }}>
-              💧 Lluvia acumulada próx. 7 días: {sat.lluviaProx7}mm
-              {sat.tempMediaProx7 < 15 ? " · C4 restringido (T<15°C)" : ""}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ══ 4 TABS PRINCIPALES — siempre visibles, se adaptan a los datos disponibles ══ */}
+      {/* ══ 5 TABS: Resumen · Diagnóstico · Balance · GEI · Cerebro ══ */}
       <div>
-          <div style={{ display:"flex", gap:4, marginBottom:12, overflowX:"auto", scrollbarWidth:"none" }}>
-            {[["diagnostico","🔍 Diagnóstico"],["balance","📊 Balance"],["gei","🌿 GEI"],["cerebro","🧠 Cerebro"]].map(([k,l]) => (
+          <div style={{ display:"flex", gap:3, marginBottom:12, overflowX:"auto", scrollbarWidth:"none" }}>
+            {[["resumen","🏠"],["diagnostico","🔍"],["balance","📊"],["gei","🌿"],["cerebro","🧠"]].map(([k,l]) => (
               <button key={k} onClick={()=>setTab(k)} style={{
                 flex:"0 0 auto", padding:"10px 12px", borderRadius:10, cursor:"pointer",
                 background: tab===k ? C.green : "transparent",
                 border:     tab===k ? "1px solid " + C.green : "1px solid " + C.border,
                 color:      tab===k ? "#0b1a0c" : C.textDim,
-                fontFamily: C.font, fontSize:10, fontWeight: tab===k ? 700 : 400,
+                fontFamily: C.font, fontSize:13, fontWeight: tab===k ? 700 : 400,
               }}>{l}</button>
             ))}
           </div>
+
+          {/* ═══ TAB RESUMEN — dashboard del establecimiento ═══ */}
+          {tab === "resumen" && (
+            <DashboardEstablecimiento
+              motor={motor} form={form} sat={sat} score={score}
+              onTab={setTab}
+            />
+          )}
 
           {/* ═══ TAB DIAGNÓSTICO ═══ */}
           {tab === "diagnostico" && (
@@ -9966,8 +10228,9 @@ function AgroMindPro() {
                       </div>
                     </details>
                     <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                      <button onClick={descargarPDF} style={{ flex:2, background:C.blue+"12", border:"1px solid "+C.blue+"35", borderRadius:10, color:C.blue, padding:13, fontFamily:C.font, fontSize:13, cursor:"pointer" }}>⬇ Exportar PDF completo</button>
-                      <button onClick={descargarCSV} style={{ flex:1, background:C.green+"10", border:"1px solid "+C.green+"35", borderRadius:10, color:C.green, padding:13, fontFamily:C.font, fontSize:13, cursor:"pointer" }}>📊 CSV</button>
+                      <button onClick={() => { descargarPDF(); setTimeout(descargarCSV, 800); }} style={{ flex:2, background:C.green, color:"#0b1a0c", padding:13, borderRadius:10, border:"none", fontFamily:C.font, fontSize:13, fontWeight:700, cursor:"pointer" }}>📤 Compartir (PDF + CSV)</button>
+                      <button onClick={descargarPDF} style={{ flex:1, background:C.blue+"12", border:"1px solid "+C.blue+"35", borderRadius:10, color:C.blue, padding:13, fontFamily:C.font, fontSize:12, cursor:"pointer" }}>PDF</button>
+                      <button onClick={descargarCSV} style={{ flex:1, background:C.green+"10", border:"1px solid "+C.green+"35", borderRadius:10, color:C.green, padding:13, fontFamily:C.font, fontSize:12, cursor:"pointer" }}>CSV</button>
                     </div>
                     <button onClick={runAnalysis} style={{ width:"100%", background:C.green+"06", border:"1px solid "+C.border, borderRadius:10, color:C.textDim, padding:10, fontFamily:C.font, fontSize:12, cursor:"pointer", marginTop:8 }}>
                       🔄 Regenerar informe
