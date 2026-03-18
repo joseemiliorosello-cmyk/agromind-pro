@@ -1495,8 +1495,12 @@ function evaluarSanidad(vacunas, brucelosis, aftosa, toros, historiaAbortos, pro
 const ccPond = (dist) => {
   let s = 0, t = 0;
   (dist || []).forEach(d => { const p = parseFloat(d.pct)||0, c = parseFloat(d.cc)||0; s += p*c; t += p; });
+  // Retornar promedio aunque no sume 100% — el motor debe funcionar con datos parciales
+  // Si no hay ningún dato cargado, retorna 0 (fallback 4.5 en calcTrayectoriaCC)
   return t > 0 ? s / t : 0;
 };
+// ccPondConDatos: retorna true si hay al menos una fila con CC y % válidos
+const ccPondConDatos = (dist) => (dist||[]).some(d => parseFloat(d.cc)>0 && parseFloat(d.pct)>0);
 // ─── CONVERSIÓN DE ESCALA CC ──────────────────────────────────────
 // escala "5" → "9": multiplica por 1.8 (Lowman→Wagner/Selk)
 // escala "9" → interna: sin cambio
@@ -1732,6 +1736,17 @@ const DISCLAIMER = "Las recomendaciones generadas por Calf AI tienen carácter o
 // Nivel 4 (salidas): recomendaciones, prompt, UI state
 
 function correrMotor(form, sat, potreros, usaPotreros) {
+  // DEBUG — remover en producción
+  if (typeof window !== "undefined" && window.__calfDebug) {
+    console.log("[Motor] inicio →", {
+      provincia: form.provincia,
+      vacasN: form.vacasN,
+      biotipo: form.biotipo,
+      distribucionCC: form.distribucionCC,
+      iniServ: form.iniServ,
+      finServ: form.finServ,
+    });
+  }
   const alertas = [];   // alertas generadas por el motor
   const trazas  = {};   // trazabilidad: qué afecta a qué
 
@@ -1869,15 +1884,26 @@ function correrMotor(form, sat, potreros, usaPotreros) {
   let verdeoAporteMcalMes = 0; // Mcal/día adicionales del verdeo
   let verdeoMesInicio = 7; // agosto por defecto
   if (form.tieneVerdeo === "si" && form.verdeoHa) {
-    const haV      = parseFloat(form.verdeoHa) || 0;
-    const msHaV    = 2800; // kg MS/ha avena/raigrás
-    const mcalKgV  = 2.0;
-    const utilV    = 0.45;
-    const map      = { junio:5, julio:6, agosto:7, septiembre:8 };
+    const haV   = parseFloat(form.verdeoHa) || 0;
+    // Parámetros según tipo de verdeo — NEA/NOA campo real
+    // Fuente: INTA EEA Concepción del Uruguay; Romero 2008; Formoso 2010
+    const tipoV = form.verdeoTipo || "Avena / Raigrás / Melilotus";
+    const VERDEO_PARAMS = {
+      "Avena / Raigrás / Melilotus": { msHa:2800, mcalKg:2.10, pb:18, util:0.50 },
+      "Raigrás anual":               { msHa:3200, mcalKg:2.20, pb:20, util:0.52 },
+      "Triticale":                   { msHa:3000, mcalKg:2.05, pb:14, util:0.48 },
+      "Melilotus":                   { msHa:2200, mcalKg:2.15, pb:22, util:0.55 }, // leguminosa — PB alta
+      "Gramínea + leguminosa":       { msHa:2600, mcalKg:2.18, pb:20, util:0.52 },
+    };
+    const vp = VERDEO_PARAMS[tipoV] || VERDEO_PARAMS["Avena / Raigrás / Melilotus"];
+    const map = { junio:5, julio:6, agosto:7, septiembre:8 };
     verdeoMesInicio = map[form.verdeoDisp||"agosto"] || 7;
-    // Mcal/día en los 3 meses de disponibilidad (90 días)
-    verdeoAporteMcalMes = +(haV * msHaV * mcalKgV * utilV / 90).toFixed(0);
-    trazas.verdeo = { ha:haV, msHa:msHaV, aporteMcalDia:verdeoAporteMcalMes, desde:verdeoMesInicio };
+    // Mcal/día en los meses de disponibilidad (90 días ≈ 3 meses)
+    verdeoAporteMcalMes = +(haV * vp.msHa * vp.mcalKg * vp.util / 90).toFixed(0);
+    trazas.verdeo = {
+      ha:haV, tipo:tipoV, msHa:vp.msHa, pb:vp.pb,
+      mcalKg:vp.mcalKg, aporteMcalDia:verdeoAporteMcalMes, desde:verdeoMesInicio,
+    };
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -2366,6 +2392,21 @@ function correrMotor(form, sat, potreros, usaPotreros) {
   const scoreRiesgo = nivelRiesgo === "bajo" ? 85
     : nivelRiesgo === "moderado" ? 60
     : nivelRiesgo === "alto" ? 35 : 15;
+
+  // DEBUG temporal — activar con window.__calfDebug = true en consola
+  if (typeof window !== "undefined" && window.__calfDebug) {
+    console.log("[Motor.return]", {
+      tray: tray ? {ccHoy:tray.ccHoy, ccParto:tray.ccParto, ccServ:tray.ccServ, pr:tray.pr} : null,
+      ccPondVal,
+      balanceMensual_len: balanceMensual?.length,
+      balanceJul: balanceMensual?.[6]?.balance,
+      balanceJun: balanceMensual?.[5]?.balance,
+      cadena: cadena ? "ok" : "NULL",
+      form_vacasN: form.vacasN,
+      form_provincia: form.provincia,
+      form_distribucionCC: form.distribucionCC,
+    });
+  }
 
   return {
     // Nivel 1
@@ -6104,11 +6145,21 @@ function calcFaseCiclo(cadena, form, ctx) {
 function calcCerebro(motor, form, sat) {
   if (!motor) return null;
 
-  const {
-    tray, vaq1E, vaq2E, balanceMensual, sanidad, cadena,
-    nVacas, nToros, nV2s, nVaq2, nVaq1,
-    ccPondVal, pvEntVaq1, pvEntradaVaq2,
-  } = motor;
+  // Desestructurar con fallbacks seguros — si motor crasheó parcialmente
+  const tray           = motor.tray           || null;
+  const vaq1E          = motor.vaq1E          || null;
+  const vaq2E          = motor.vaq2E          || null;
+  const balanceMensual = motor.balanceMensual || [];
+  const sanidad        = motor.sanidad        || null;
+  const cadena         = motor.cadena         || null;
+  const nVacas         = motor.nVacas         || 0;
+  const nToros         = motor.nToros         || 0;
+  const nV2s           = motor.nV2s           || 0;
+  const nVaq2          = motor.nVaq2          || 0;
+  const nVaq1          = motor.nVaq1          || 0;
+  const ccPondVal      = motor.ccPondVal      || 0;
+  const pvEntVaq1      = motor.pvEntVaq1      || 0;
+  const pvEntradaVaq2  = motor.pvEntradaVaq2  || null;
 
   // ── FASE DEL CICLO HOY — se calcula después de tener las variables del motor ──
   // (se llena abajo, después de calcular ccServ, ccToros, etc.)
@@ -6119,14 +6170,13 @@ function calcCerebro(motor, form, sat) {
   const ndviHoy   = parseFloat(sat?.ndvi) || null;
   const p30Hoy    = parseFloat(sat?.p30)  || null;
   const ensoHoy   = sat?.enso || form.enso || "neutro";
-  const provincia = sat?.prov || form.provincia || "Corrientes";
+  const provincia = sat?.prov || form.provincia || "";
   const hist      = getClima(provincia);
 
   const pvVaca    = parseFloat(form.pvVacaAdulta) || 320;
   const nVacasN   = parseFloat(form.vacasN) || nVacas || 0;
-  const precTern  = parseFloat(form.precioTernero) || 450; // $/kg PV destete — default
-  const pvTern    = Math.round(pvVaca * 0.25);             // ternero destete ~ 25% vaca
-  const valorTern = precTern * pvTern;
+  // valorTern: no usar precios — solo cantidades productivas
+  const pvTern    = Math.round(pvVaca * 0.25); // ternero destete ~ 25% vaca
 
   // ── INDICADORES CLAVE ──────────────────────────────────────────
   const prenez        = tray?.pr              ?? 0;
@@ -6153,7 +6203,7 @@ function calcCerebro(motor, form, sat) {
                                               + (ccToros > 0 && ccToros < 5.0 ? 8 : 0));
   const ternerosPot   = Math.round(nVacasN * (prenezPot / 100) * 0.95);
   const ternerosDif   = Math.max(0, ternerosPot - ternerosBase);
-  const valorDif      = ternerosDif * valorTern;
+  // Sin valorDif monetario — expresar solo en terneros adicionales
 
   // ── FECHA DE SERVICIO — para anclar el calendario ──────────────
   const iniServDate   = cadena?.ini || null;
@@ -8009,7 +8059,7 @@ const FORM_DEF = {
   // ── Disponibilidad forrajera ───────────────────────────────────
   altPasto:"20", tipoPasto:"alto_denso",
   // Verdeos de invierno (nuevo v1)
-  tieneVerdeo:"no", verdeoHa:"", verdeoTipo:"Avena/Cebadilla", verdeoDisp:"agosto",
+  tieneVerdeo:"no", verdeoHa:"", verdeoTipo:"Avena / Raigrás / Melilotus", verdeoDisp:"agosto",
   suplMeses:["5","6","7"],  // meses de suplementación invernal (0=ene … 11=dic)
   mesTacto:"abr",     // mes en que se hizo el tacto (feb/mar/abr/may/jun/otro)
   verdeoDestinoVaq:"si",   // ¿se reserva para vaquillona?
@@ -8230,9 +8280,37 @@ function CalfAIPro() {
   const evalAgua       = motor?.evalAgua       ?? null;
   const sanidad        = motor?.sanidad        ?? null;
   const baseParams     = motor?.baseParams     ?? {};
-  const tray           = motor?.tray           ?? null;
+  // tray: usar motor como fuente primaria
+  // Si motor aún no corrió (null), calcular tray directamente desde form
+  // Esto elimina el flash de "sin datos" al cargar la página
+  const tray = motor?.tray ?? (() => {
+    if (!form.distribucionCC?.length) return null;
+    try {
+      const cadenaCalc = form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null;
+      return calcTrayectoriaCC({
+        dist: form.distribucionCC,
+        cadena: cadenaCalc,
+        destTrad: form.destTrad, destAntic: form.destAntic, destHiper: form.destHiper,
+        supHa: form.supHa, vacasN: form.vacasN,
+        biotipo: form.biotipo, primerParto: form.primerParto,
+        provincia: form.provincia,
+        supl1: form.supl1||"", dosis1: form.dosis1||"0",
+        supl2: "", dosis2: "0",
+        supl3: form.supl3||"", dosis3: form.dosis3||"0",
+      });
+    } catch(e) { return null; }
+  })();
   const dist           = motor?.dist           ?? null;
-  const balanceMensual = motor?.balanceMensual ?? [];
+  // balanceMensual: del motor como fuente primaria
+  // Si motor es null y hay datos mínimos → ejecutar solo el balance para no bloquear la UI
+  const balanceMensual = motor?.balanceMensual ?? (() => {
+    if (!form.vacasN || !form.biotipo || !form.provincia) return [];
+    try {
+      // Correr motor completo — es rápido (<5ms), el delay del useEffect es el problema
+      const r = correrMotor(form, sat, potreros, usaPotreros);
+      return r?.balanceMensual ?? [];
+    } catch(e) { return []; }
+  })();
   const toroDxn        = motor?.toroDxn        ?? null;
   const stockStatus    = motor?.stockStatus    ?? {};
   const alertasMotor   = motor?.alertas        ?? [];
@@ -9124,14 +9202,11 @@ function CalfAIPro() {
         const provsFiltro = zonaActual ? (PROVS_POR_ZONA[zonaActual] || []) : Object.values(PROVS_POR_ZONA).flat();
         const handleZona  = (v) => {
           set("zona", v);
-          // Si la provincia actual no corresponde a la nueva zona, resetear
+          // Si la provincia actual no corresponde a la nueva zona → resetear a vacío
+          // El usuario elige la provincia — no auto-seleccionar
           const nuevasProvs = PROVS_POR_ZONA[v] || [];
           if (form.provincia && !nuevasProvs.includes(form.provincia)) {
-            set("provincia", nuevasProvs[0] || "");
-          }
-          // Si no hay provincia seleccionada, auto-seleccionar la primera
-          if (!form.provincia && nuevasProvs.length > 0) {
-            set("provincia", nuevasProvs[0]);
+            set("provincia", "");
           }
         };
         return (
@@ -9149,7 +9224,7 @@ function CalfAIPro() {
               ]} />
             <SelectF label="PROVINCIA / REGIÓN" value={form.provincia}
               onChange={v=>set("provincia",v)}
-              placeholder={zonaActual ? "Seleccioná provincia..." : "Primero elegí la zona →"}
+              placeholder={zonaActual ? "Seleccioná provincia de " + zonaActual + "..." : "← Primero elegí la zona"}
               options={provsFiltro.map(p=>[p,p])} />
           </>
         );
@@ -9161,67 +9236,30 @@ function CalfAIPro() {
       <Input id="campo-localidad" label="PARAJE / CAMPO (opcional)" value={form.localidad} onChange={v=>set("localidad",v)} placeholder="Ej: Charata, El Pintado, La Fidelidad…" sub="Solo para el informe — no afecta el cálculo" />
 
       {/* ── MÓDULO DIAGNÓSTICO TOROS ── */}
+      {/* Módulo toros — compacto para no causar re-layout al escribir torosN */}
       {parseInt(form.torosN) > 0 && (
-        <div style={{ background:C.card2, border:`1px solid ${C.blue}30`, borderRadius:12, padding:14, marginTop:4 }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, letterSpacing:1, marginBottom:10 }}>🐂 DIAGNÓSTICO PREPARO DE SERVICIO — TOROS</div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <SelectF label="CC TOROS (escala 1–9)" value={form.torosCC||""} onChange={v=>set("torosCC",v)}
-              placeholder="Seleccioná CC..."
-              options={[
+        <div style={{ background:C.card2, border:"1px solid "+C.blue+"30",
+          borderRadius:10, padding:"10px 14px", marginTop:4 }}>
+          <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:8 }}>
+            🐂 TOROS — CC AL SERVICIO
+          </div>
+          <SelectF label="CC TOROS (escala 1–9)" value={form.torosCC||""}
+            onChange={v=>set("torosCC",v)}
+            placeholder="Seleccioná CC actual..."
+            options={[
               ["3.0","CC 3.0 — Muy flaco 🔴"],["3.5","CC 3.5 — Flaco 🔴"],
               ["4.0","CC 4.0 — Regular ⚠"],["4.5","CC 4.5 — Aceptable"],
-              ["5.0","CC 5.0 — Óptimo ✓"],["5.5","CC 5.5 — Muy bueno ✓"],["6.0","CC 6.0 — Exceso"],
+              ["5.0","CC 5.0 — Buena ✓"],["5.5","CC 5.5 — Óptimo ✅"],
+              ["6.0","CC 6.0 — Excelente"],
             ]} />
-            <SelectF label="DISTRIBUCIÓN EN LOTES" value={form.torosLote||"si"} onChange={v=>set("torosLote",v)} options={[
-              ["si","Todos en 1 lote con las vacas"],
-              ["distribuidos","Distribuidos en varios lotes"],
-            ]} />
-          </div>
-          {form.torosLote === "distribuidos" && (
-            <Input label="CANTIDAD DE LOTES (con toros)" value={form.torosLotes||""} onChange={v=>set("torosLotes",v)} placeholder="" type="number" sub="Verificar que cada lote tiene al menos 1 toro" />
+          {form.torosCC && parseFloat(form.torosCC) < 5.0 && (
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, marginTop:6 }}>
+              ⚠ CC {form.torosCC} — objetivo ≥5.5 al servicio ·{" "}
+              {Math.round((5.5-parseFloat(form.torosCC))/0.018)} días de preparo
+            </div>
           )}
-          {/* Diagnóstico automático */}
-          {(() => {
-            const ccT = parseFloat(form.torosCC) || 4.5;
-            const nT  = parseInt(form.torosN) || 0;
-            const nV  = parseInt(form.vacasN) || 0;
-            const nLotes = parseInt(form.torosLotes) || 1;
-            const relAT  = form.torosLote === "distribuidos" && nLotes > 1
-              ? Math.round(nV / nT) + ` (promedio — verificar ${nLotes} lotes individualmente)`
-              : nV > 0 && nT > 0 ? Math.round(nV / nT) + ":1" : "—";
-            const diasHastaServ = cadena?.diasPartoTemp ? Math.max(0, Math.round(cadena.diasPartoTemp / 30)) : null;
-            const diasNeeded    = Math.max(0, Math.round((5.5 - ccT) / 0.018)); // 0.018 CC/día con suplementación
-            return (
-              <div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:8 }}>
-                  <div style={{ background:`${C.blue}08`, borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
-                    <div style={{ fontFamily:C.font, fontSize:18, color:ccT>=5.0?C.green:ccT>=4.5?C.amber:C.red, fontWeight:700 }}>{ccT}</div>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>CC actual</div>
-                  </div>
-                  <div style={{ background:`${C.blue}08`, borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
-                    <div style={{ fontFamily:C.font, fontSize:14, color:C.blue, fontWeight:700 }}>{relAT}</div>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>Relación toro:vaca</div>
-                  </div>
-                  <div style={{ background:`${C.blue}08`, borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
-                    <div style={{ fontFamily:C.font, fontSize:18, color:ccT>=5.0?C.green:C.red, fontWeight:700 }}>
-                      {ccT >= 5.0 ? "✓" : `−${diasNeeded}d`}
-                    </div>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>{ccT>=5.0?"Listo serv.":"días para CC 5.5"}</div>
-                  </div>
-                </div>
-                {ccT < 5.0 && (
-                  <Alerta tipo="warn">
-                    🐂 Toros CC {ccT} → objetivo CC 5.5 al servicio. Necesitan suplementación proteica ({((parseFloat(form.pvToros)||(parseFloat(form.pvVacaAdulta)||320)*1.3)*0.003).toFixed(1)} kg/día expeller girasol) por {diasNeeded} días antes del entore. Un toro flaco reduce la detección de celo y fertilidad espermática.
-                  </Alerta>
-                )}
-                {parseInt(form.vacasN)/parseInt(form.torosN) > 30 && (
-                  <Alerta tipo="warn">
-                    Relación toro:vaca &gt; 30:1 — riesgo de vacas no servidas en los primeros 21 días. Revisar condición física y libido de los toros antes del servicio.
-                  </Alerta>
-                )}
-              </div>
-            );
-          })()}
+          <Toggle label="¿Revisación pre-servicio?" value={form.sanToros==="con_control"}
+            onChange={v=>set("sanToros", v?"con_control":"sin_control")} />
         </div>
       )}
     </div>
@@ -9580,7 +9618,7 @@ function CalfAIPro() {
         )}
       </div>
 
-      {ccPondVal > 0 && tray && (
+      {tray && (
         <div style={{ marginTop:14 }}>
           {/* Trayectoria completa CC */}
           <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
@@ -10135,7 +10173,7 @@ function CalfAIPro() {
       "Pasturas templadas C3":                      { cat:"c3",       label:"Pasturas templadas C3",             emoji:"🌾", fenologia:false, altura:false, pb:16, desc:"Producción más estable · sin fenología estacional marcada" },
       "Mixta gramíneas+leguminosas":                { cat:"mixta",    label:"Mixta gramíneas + leguminosas",     emoji:"🌱", fenologia:false, altura:false, pb:18, desc:"PB alta por leguminosas · buena calidad todo el año" },
       "Bosque nativo / monte":                      { cat:"monte",    label:"Bosque nativo / monte",             emoji:"🌳", fenologia:false, altura:false, pb:2.5, desc:"Baja oferta · valor en sombra y refugio · no suplementa" },
-      "Verdeo de invierno":                         { cat:"verdeo",   label:"Verdeo de invierno",                emoji:"🌾", fenologia:false, altura:false, pb:20, desc:"Avena/raigrás/triticale · PB alta · no requiere supl proteica" },
+      "Verdeo de invierno":                         { cat:"verdeo",   label:"Verdeo de invierno",                emoji:"🌾", fenologia:false, altura:false, pb:20, desc:"Avena / Raigrás / Melilotus · PB alta · no requiere supl proteica" },
     };
 
     const haPot   = potreros.reduce((s,p)=>s+(parseFloat(p.ha)||0), 0);
@@ -10294,9 +10332,12 @@ function CalfAIPro() {
             <div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
                 <Input label="SUPERFICIE (ha)" value={form.verdeoHa||""} onChange={v=>set("verdeoHa",v)} placeholder="50" type="number" />
-                <SelectF label="TIPO" value={form.verdeoTipo||"Avena/Cebadilla"} onChange={v=>set("verdeoTipo",v)} options={[
-                  ["Avena/Cebadilla","Avena / Cebadilla"],["Raigrás","Raigrás anual"],
-                  ["Triticale","Triticale"],["Consociado","Gramínea + leguminosa"],
+                <SelectF label="TIPO" value={form.verdeoTipo||"Avena / Raigrás / Melilotus"} onChange={v=>set("verdeoTipo",v)} options={[
+                  ["Avena / Raigrás / Melilotus","Avena · Raigrás · Melilotus (invierno clásico)"],
+                  ["Melilotus","Melilotus (leguminosa — PB 22% — NEA)"],
+                  ["Raigrás anual","Raigrás anual"],
+                  ["Triticale","Triticale"],
+                  ["Gramínea + leguminosa","Gramínea + leguminosa consociada"],
                 ]} />
               </div>
               <SelectF label="DESTINADO PARA" value={form.verdeoDestinoVaq||"si"} onChange={v=>set("verdeoDestinoVaq",v)} options={[
@@ -11238,7 +11279,9 @@ function CalfAIPro() {
           {tab === "balance" && (() => {
             const MESES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
             const mesHoy  = new Date().getMonth();
-            const bm      = motor?.balanceMensual;
+            // Usar balanceMensual del scope raíz (siempre tiene fallback [])
+            // No usar motor?.balanceMensual que puede ser undefined entre renders
+            const bm = balanceMensual; // del scope: motor?.balanceMensual ?? []
 
             // ── Datos mínimos para el balance ─────────────────────────
             const faltaMin = [];
@@ -11274,7 +11317,7 @@ function CalfAIPro() {
                     Calculando balance...
                   </div>
                   <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:6 }}>
-                    Si persiste, revisá la consola del navegador (F12) para ver el error del motor
+                    Para debug: escribí <code>window.__calfDebug=true</code> en consola (F12) y recargá
                   </div>
                 </div>
               );
@@ -11282,6 +11325,8 @@ function CalfAIPro() {
 
             const vals      = bm.map(m => m.balance ?? 0);
             const maxAbs    = Math.max(1, ...vals.map(Math.abs));
+            // Si todos los valores son 0 o muy pequeños → faltan datos de rodeo
+            const sinDatosRodeo = maxAbs < 5 && !form.vacasN;
             const invM      = [5,6,7].map(i => ({ mes:MESES_C[i], i, bal: bm[i]?.balance ?? null }));
             const defCnt    = invM.filter(m => m.bal !== null && m.bal < 0).length;
             const W = 340, H = 140, padX = 20, colW = (W - padX*2) / 12;
@@ -11293,6 +11338,14 @@ function CalfAIPro() {
 
             return (
               <div>
+                {/* ── Aviso si faltan datos críticos ── */}
+                {sinDatosRodeo && (
+                  <div style={{ background:C.amber+"0d", border:"1px solid "+C.amber+"30",
+                    borderRadius:8, padding:"8px 12px", marginBottom:10,
+                    fontFamily:C.font, fontSize:9, color:C.amber }}>
+                    ⚠ Cargá la cantidad de vacas y el biotipo en el Paso 0 para ver el balance completo
+                  </div>
+                )}
                 {/* ── Panel diagnóstico del suplemento ── */}
                 <div style={{ background: haySupl ? C.blue+"0d" : C.amber+"0d",
                   border:"1px solid "+(haySupl ? C.blue+"30" : C.amber+"30"),
