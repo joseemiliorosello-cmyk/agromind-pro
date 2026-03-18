@@ -341,112 +341,156 @@ function calcTrayectoriaCC(params) {
     provincia,
   } = params;
 
-  const ccH = ccPond(dist) || 4.5; // fallback 4.5 si no hay CC cargada
-  // Sin fechas de servicio: usar cadenaUsada estimada NEA típica (parto oct, servicio dic-mar)
-  // para poder mostrar la trayectoria CC aunque las fechas no estén cargadas
-  const cadenaEst = cadenaUsada || {
-    partoTemp:  new Date(new Date().getFullYear(), 9, 1),  // octubre
-    partoTard:  new Date(new Date().getFullYear(), 10, 30), // noviembre
-    ini:        new Date(new Date().getFullYear(), 11, 1), // diciembre
-    fin:        new Date(new Date().getFullYear()+1, 2, 1), // marzo
-    diasServ:   90,
-    _estimada:  true,  // marcar como estimada
+  // ── CC PONDERADA (fuente única) ─────────────────────────────────
+  // ccPond() devuelve 0 si dist está vacío — usar 4.5 como fallback técnico
+  const ccH = ccPond(dist) || 4.5;
+
+  // ── CADENA REPRODUCTIVA ─────────────────────────────────────────
+  // Si no hay fechas cargadas: usar cadena típica NEA para calcular la trayectoria
+  // Marcada como _estimada para que la UI avise
+  const cadenaR = cadena || {
+    partoTemp: new Date(new Date().getFullYear(), 9, 1),   // oct
+    partoTard: new Date(new Date().getFullYear(), 10, 28), // nov
+    ini:       new Date(new Date().getFullYear(), 11, 1),  // dic
+    fin:       new Date(new Date().getFullYear()+1, 2, 1), // mar
+    diasServ:  90,
+    _estimada: true,
   };
-  const cadenaUsada = cadenaUsada || cadenaEst;
+  const esEstimada = !cadena;
 
-  const bt       = getBiotipo(biotipo);
-  const ha       = parseFloat(supHa) || 100;
-  const vN       = parseFloat(vacasN) || 50;
-  const cargaEV  = vN / ha;
-  const ajCarga  = cargaEV > 0.8 ? -0.05 : cargaEV > 0.5 ? -0.02 : 0;
+  const bt      = getBiotipo(biotipo);
+  const ha      = parseFloat(supHa) || 100;
+  const vN      = parseFloat(vacasN) || 50;
+  const cargaEV = vN / ha;
+  const ajCarga = cargaEV > 0.8 ? -0.05 : cargaEV > 0.5 ? -0.02 : 0;
+  const hist    = getClima(provincia || "Corrientes");
 
-  const hist = getClima(provincia || "Corrientes");
-
-  // ── FASE 1: CC AL TACTO = CC AL PARTO ──
-  // La CC se mide al tacto (mar-abr), 60-90 días antes del parto.
-  // En gestación avanzada la vaca sin ternero al pie apenas moviliza reservas.
-  // La CC ingresada es directamente la CC al parto.
-  // Único ajuste: suplemento preparto puede sumar +0.1 a +0.2 CC.
+  // ── FASE 1: CC AL TACTO = CC AL PARTO ──────────────────────────
+  // La CC se mide al tacto (60-90d antes del parto).
+  // En gestación sin ternero la vaca no moviliza reservas → CC tacto ≈ CC parto.
+  // Suplemento preparto puede añadir +0.1–0.2 CC (Selk 1988).
   const mcalSuplPreP = mcalSuplemento(supl3, parseFloat(dosis3) || 0);
   const boostPreP    = mcalSuplPreP > 0 ? Math.min(0.20, mcalSuplPreP * 0.04) : 0;
-  const diasHastaParto = 0; // ya no se usa para proyección — CC ingresada es CC parto
-  let ccParto = parseFloat(Math.min(9, Math.max(1, ccH + boostPreP)).toFixed(2));
+  const ccParto      = parseFloat(Math.min(9, Math.max(1, ccH + boostPreP)).toFixed(2));
+  const diasHastaParto = 0;
 
-  // ── FASE 2: PARTO → DESTETE ──
-  const pT = parseFloat(destTrad)  || 0;
-  const pA = parseFloat(destAntic) || 0;
-  const pH = parseFloat(destHiper) || 0;
+  // ── FASE 2: PARTO → DESTETE (caída de CC en lactación) ─────────
+  // El ternero al pie consume 6–8 Mcal/día → la vaca moviliza reservas corporales.
+  // Duración de lactación determina cuánto cae la CC.
+  // Peruchena INTA 2003; Short et al. 1990; calibrado campo NEA.
+  const pT  = parseFloat(destTrad)  || 0;
+  const pA  = parseFloat(destAntic) || 0;
+  const pH  = parseFloat(destHiper) || 0;
   const tot = pT + pA + pH;
-  // Si no hay destete definido, usar Tradicional 100% como fallback del motor
-  // (muestra la situación más conservadora — máxima caída de CC)
+  // Si no hay modalidad de destete definida → usar tradicional (situación más conservadora)
   const mesesLact = tot > 0
     ? (pT*(180/30) + pA*(90/30) + pH*(50/30)) / tot
-    : 6.0; // fallback: tradicional 180d = 6 meses
+    : 6.0;
 
-  // Caída CC en lactación: más intensa cuanto menor es la CC al parto
-  // (la vaca que entra con CC alta tiene más reservas para movilizar)
-  // Peruchena 2003: 0.5 CC/mes con CC parto ≥ 5.0; 0.4 con CC < 4.5
-  // Caída CC por mes en lactación (Peruchena INTA 2003; calibrado campo NEA)
-  // Bos indicus moviliza menos grasa que Bos taurus → tasaCaidaBase reducida
-  // CC 5.5+ al parto: buen estado, pierde menos por mes
-  // CC < 4.5 al parto: ya comprometida, pierde lo poco que tiene
+  // Tasa de caída CC/mes según CC al parto (Peruchena 2003)
+  // Bos indicus moviliza menos grasa → factor bt.movCC < 1
   const tasaCaidaBase = ccParto >= 6.0 ? 0.28
     : ccParto >= 5.5 ? 0.32
     : ccParto >= 5.0 ? 0.36
     : ccParto >= 4.5 ? 0.40
     : 0.44;
-  const tasaCaida  = tasaCaidaBase * bt.movCC;
+  const tasaCaida   = tasaCaidaBase * bt.movCC;
+  // supl2 = suplemento con ternero al pie (prácticamente nunca se usa — costo prohibitivo)
   const mcalSuplLact = mcalSuplemento(supl2, parseFloat(dosis2) || 0);
-  // En la práctica supl2 llega vacío (vacas no se suplementan con ternero al pie)
-  // Se mantiene para simulación comparativa. La reducción real es por destete precoz.
-  const reducCaida = mcalSuplLact > 0 ? Math.min(0.10, mcalSuplLact * 0.015) : 0;
-  const caidaLact  = Math.min(2.5, mesesLact * (tasaCaida - reducCaida));
-  const ccMinLact  = parseFloat(Math.max(1.0, ccParto - caidaLact).toFixed(2));
-  const anestro    = calcAnestro(ccParto, ccMinLact, biotipo, primerParto);
-  const ccDestete  = ccMinLact;
+  const reducCaida   = mcalSuplLact > 0 ? Math.min(0.10, mcalSuplLact * 0.015) : 0;
+  const caidaLact    = Math.min(2.5, mesesLact * (tasaCaida - reducCaida));
+  const ccMinLact    = parseFloat(Math.max(1.0, ccParto - caidaLact).toFixed(2));
+  const anestro      = calcAnestro(ccParto, ccMinLact, biotipo, primerParto);
+  const ccDestete    = ccMinLact;
 
-  // ── FASE 3: DESTETE → PRÓXIMO SERVICIO ──
-  // Recuperación post-destete: depende del mes de destete y del pasto disponible
-  // En verano: 0.4–0.5 CC/mes; en invierno: 0.1–0.2 CC/mes (requiere supl)
-  const mesParto   = cadenaUsada.partoTemp ? cadenaUsada.partoTemp.getMonth() : 10;
+  // ── FASE 3: DESTETE → SERVICIO (recuperación de CC) ────────────
+  // Desde el destete, la vaca sin ternero recupera CC.
+  // Tasa de recuperación depende del mes (temperatura, calidad del pasto C4).
+  // Suplemento invernal (supl1) acelera la recuperación.
+  // mesParto: mes del primer parto (cabeza de parición) = inicio del período crítico.
+  const mesParto   = cadenaR.partoTemp ? cadenaR.partoTemp.getMonth() : 10;
   const mesDestete = (mesParto + Math.round(mesesLact)) % 12;
-  const mesServ    = cadenaUsada.ini ? cadenaUsada.ini.getMonth() : (mesParto + 3) % 12;
-  // Acotar a máximo 180 días (6 meses) — evita que ccServ llegue a valores imposibles
-  // cuando el servicio queda muy lejos o la fecha no está cargada
+  const mesServ    = cadenaR.ini ? cadenaR.ini.getMonth() : (mesParto + 3) % 12;
   const diasRecupRaw = ((mesServ - mesDestete + 12) % 12) * 30;
-  // Máximo 120 días (4 meses): intervalo destete-servicio real en NEA
-  // Si no hay fecha de servicio cargada, la estimación automática (mesParto+3)
-  // puede dar hasta 9 meses de recuperación → ccServ irreal.
+  // Máximo 120 días: intervalo real destete-servicio en NEA
   const diasRecup    = Math.min(120, Math.max(0, diasRecupRaw));
 
-  const mcalSuplInv   = mcalSuplemento(supl1, parseFloat(dosis1) || 0);
-  let   ccServ        = ccDestete;
+  const mcalSuplInv = mcalSuplemento(supl1, parseFloat(dosis1) || 0);
+  let ccServ = ccDestete;
   for (let d = 0; d < diasRecup; d++) {
-    const mes = (mesDestete + Math.floor(d / 30)) % 12;
-    const t   = hist[mes]?.t || 20;
-    // Tasa de recuperación: verano con buen pasto C4 = 0.015/día; invierno = 0.004/día
-    // Tasa diaria calibrada: verano C4 activo max 0.5 CC/mes = 0.017/día
-    // pero acotada: el animal no puede ganar más de 1.5 CC en toda la recuperación
+    const mes       = (mesDestete + Math.floor(d / 30)) % 12;
+    const t         = hist[mes]?.t || 20;
+    // Tasa diaria de recuperación CC según temperatura (C4 activo en verano)
     const tasaRecup = t >= 25 ? 0.013 : t >= 20 ? 0.009 : t >= 15 ? 0.005 : 0.003;
-    // Boost por suplemento invernal
     const boostSupl = mcalSuplInv > 0 ? Math.min(0.005, mcalSuplInv * 0.0015) : 0;
     ccServ += (tasaRecup + boostSupl + ajCarga / Math.max(1, diasRecup));
   }
-  // No puede superar la CC al parto + 1.5 (techo fisiológico de recuperación post-parto)
-  // Techo biológico real: la vaca no puede recuperar más de 1.0 CC en 4 meses
-  // (en condiciones normales NEA: 0.3–0.5 CC/mes en verano con buen pasto)
-  // Y no puede superar CC 6.0 en un sistema pastoril extensivo
+  // Techo: no puede superar CC parto + 1.0 ni CC 6.0 en sistema extensivo
   ccServ = parseFloat(Math.min(ccParto + 1.0, Math.min(6.0, Math.max(1, ccServ))).toFixed(2));
 
   const pr = interpCC(ccServ).pr;
 
+  // ── ESCENARIO DESTETE ALTERNATIVO: ¿Qué pasaría con destete precoz? ──
+  // Si la CC proyectada al servicio < 4.5, calcular cuánto mejoraría con
+  // destete anticipado (90d) o hiperprecoz (50d)
+  const calcCcServConDestete = (diasLact) => {
+    const ml    = diasLact / 30;
+    const caida = Math.min(2.5, ml * (tasaCaida - reducCaida));
+    const ccMin = Math.max(1, ccParto - caida);
+    const mDest = (mesParto + Math.round(ml)) % 12;
+    const mSv   = cadenaR.ini ? cadenaR.ini.getMonth() : (mesParto + 3) % 12;
+    const dRec  = Math.min(120, Math.max(0, ((mSv - mDest + 12) % 12) * 30));
+    let ccS     = ccMin;
+    for (let d = 0; d < dRec; d++) {
+      const ms = (mDest + Math.floor(d / 30)) % 12;
+      const t  = hist[ms]?.t || 20;
+      const tr = t >= 25 ? 0.013 : t >= 20 ? 0.009 : t >= 15 ? 0.005 : 0.003;
+      const bs = mcalSuplInv > 0 ? Math.min(0.005, mcalSuplInv * 0.0015) : 0;
+      ccS += (tr + bs + ajCarga / Math.max(1, dRec));
+    }
+    return parseFloat(Math.min(ccParto + 1.0, Math.min(6.0, Math.max(1, ccS))).toFixed(2));
+  };
+  const ccServAntic  = calcCcServConDestete(90);
+  const ccServHiper  = calcCcServConDestete(50);
+  const ccServTrad   = calcCcServConDestete(180);
+  const prAntic      = interpCC(ccServAntic).pr;
+  const prHiper      = interpCC(ccServHiper).pr;
+  const gananciaPrHiper  = prHiper - pr;
+  const gananciaPrAntic  = prAntic - pr;
+
+  // ── RECOMENDACIÓN DE DESTETE ────────────────────────────────────
+  // ¿Qué modalidad de destete permite llegar a CC ≥ 4.5 al servicio?
+  let recDestete = null;
+  if (ccServ >= 4.5) {
+    recDestete = { tipo:"tradicional", label:"🟢 Tradicional — CC suficiente", urgencia:"monitorear" };
+  } else if (ccServAntic >= 4.5) {
+    recDestete = {
+      tipo:"anticipado", label:"🔶 Anticipado (90d) recomendado",
+      urgencia:"importante",
+      motivo:"Con destete tradicional CC " + ccServTrad + " → con anticipado CC " + ccServAntic + " (+PP " + gananciaPrAntic + "pp preñez)",
+    };
+  } else {
+    recDestete = {
+      tipo:"hiperprecoz", label:"⚡ Hiperprecoz (50d) urgente",
+      urgencia:"urgente",
+      motivo:"Solo hiperprecoz permite CC " + ccServHiper + " al servicio (+PP " + gananciaPrHiper + "pp preñez vs situación actual)",
+    };
+  }
+
   return {
-    ccHoy:    ccH,
-    ccParto,
-    ccMinLact,
-    ccDestete,
-    ccServ,
-    pr,
+    ccHoy:    ccH,       // CC ponderada al tacto (dato real del form)
+    ccParto,             // CC al parto (= tacto + boost preparto)
+    ccMinLact,           // CC mínima en lactación (mín histórico)
+    ccDestete,           // CC al destete
+    ccServ,              // CC proyectada al próximo servicio
+    ccServAntic,         // CC al servicio con destete anticipado
+    ccServHiper,         // CC al servicio con hiperprecoz
+    ccServTrad,          // CC al servicio con tradicional puro
+    pr,                  // % preñez estimada con el manejo actual
+    prAntic,             // % preñez con destete anticipado
+    prHiper,             // % preñez con hiperprecoz
+    gananciaPrAntic,     // pp ganados con anticipado vs actual
+    gananciaPrHiper,     // pp ganados con hiperprecoz vs actual
     mesesLact:    mesesLact.toFixed(1),
     caidaLact:    caidaLact.toFixed(2),
     anestro,
@@ -455,7 +499,8 @@ function calcTrayectoriaCC(params) {
     diasHastaParto,
     diasRecup,
     mesParto, mesDestete, mesServ,
-    _estimada: cadenaUsada._estimada || false,
+    recDestete,
+    _estimada: esEstimada,
   };
 }
 
@@ -7164,6 +7209,10 @@ function TabCerebro({ motor, form, sat }) {
         ["Anestro pp", anestro != null ? anestro + "d" : "—",             anestro != null ? smf(1/Math.max(1,anestro),1/60,1/90) : null],
       ],
       alerta: tray?._estimada ? "Sin fechas de servicio — CC proyectada con cadena típica NEA · cargá fechas para precisión"
+        : tray?.recDestete?.urgencia === "urgente"
+        ? "⚡ " + (tray.recDestete.motivo || "CC crítica — hiperprecoz urgente")
+        : tray?.recDestete?.urgencia === "importante"
+        ? "🔶 " + (tray.recDestete.motivo || "Destete anticipado recomendado")
         : ccServ > 0 && ccServ < 4.5
         ? "CC por debajo de 4.5 — cada 0.5 puntos menos reduce preñez ~8pp (NRC 2000)"
         : ccServ <= 0 ? "Sin CC cargada — el motor usa valores estimados" : null,
@@ -7633,9 +7682,21 @@ function PanelRecomendaciones({ motor, form }) {
   const [planAbierto, setPlanAbierto] = React.useState(null);
   const [pasoAbierto, setPasoAbierto] = React.useState({});
 
+  if (!motor) return (
+    <div style={{ padding:20, textAlign:"center" }}>
+      <div style={{ display:"flex", justifyContent:"center", gap:6, marginBottom:8 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{ width:6, height:6, borderRadius:3, background:T.green,
+            animation:"pulse 1.2s ease-in-out "+(i*0.2)+"s infinite" }} />
+        ))}
+      </div>
+      <div style={{ fontFamily:T.font, fontSize:10, color:T.textFaint }}>Calculando planes...</div>
+    </div>
+  );
+
   if (!dx) return (
-    <div style={{ padding:20, textAlign:"center", fontFamily:T.font, fontSize:11, color:T.textFaint }}>
-      Completá los datos del rodeo para ver el diagnóstico
+    <div style={{ padding:16, textAlign:"center", fontFamily:T.font, fontSize:10, color:T.textFaint }}>
+      Cargá biotipo, vacas y CC para ver los planes de acción
     </div>
   );
 
@@ -10976,7 +11037,9 @@ function CalfAIPro() {
                       ["CC ponderada hoy",    ccPondVal > 0 ? ccPondVal.toFixed(1) : "—",   ccPondVal > 0 ? smf2(ccPondVal, 4.5, 4.0) : null, ccPondVal <= 0 ? "Cargá la distribución CC en el paso 1" : ""],
                       ["CC proyectada parto", tray?.ccParto ? tray.ccParto.toFixed(1) : "—", tray?.ccParto ? smf2(tray.ccParto, 4.5, 4.0) : null, tray?.ccParto < 4.0 ? "Parto con CC baja → mayor anestro posparto" : ""],
                       ["CC mínima lactación", tray?.ccMinLact ? tray.ccMinLact.toFixed(1) : "—", tray?.ccMinLact ? smf2(tray.ccMinLact, 3.5, 3.0) : null, tray?.ccMinLact < 3.0 ? "Mínima crítica — mobilización excesiva" : ""],
-                      ["CC al servicio",      tray?.ccServ ? tray.ccServ.toFixed(1) : "—",  tray?.ccServ ? smf2(tray.ccServ, 4.5, 4.0) : null, tray?.ccServ < 4.5 ? "Por debajo del óptimo (4.5) → preñez reducida" : "Óptima para el servicio"],
+                      ["CC al servicio",      tray?.ccServ ? tray.ccServ.toFixed(1) : "—",  tray?.ccServ ? smf2(tray.ccServ, 4.5, 4.0) : null, tray?.ccServ < 4.5 ? "⚠ " + (tray?.recDestete?.label || "Por debajo del óptimo → revisar manejo de lactancia") : "✓ Óptima"],
+                      ["Con destete anticip.", tray?.ccServAntic ? tray.ccServAntic.toFixed(1) : "—", tray?.ccServAntic ? smf2(tray.ccServAntic, 4.5, 4.0) : null, tray?.gananciaPrAntic > 0 ? "+" + tray.gananciaPrAntic + "pp preñez vs situación actual" : ""],
+                      ["Con hiperprecoz",      tray?.ccServHiper ? tray.ccServHiper.toFixed(1) : "—", tray?.ccServHiper ? smf2(tray.ccServHiper, 4.5, 4.0) : null, tray?.gananciaPrHiper > 0 ? "+" + tray.gananciaPrHiper + "pp preñez" : ""],
                     ]
                   },
                   {
