@@ -342,7 +342,17 @@ function calcTrayectoriaCC(params) {
   } = params;
 
   const ccH = ccPond(dist) || 4.5; // fallback 4.5 si no hay CC cargada
-  if (!cadena) return null;
+  // Sin fechas de servicio: usar cadenaUsada estimada NEA típica (parto oct, servicio dic-mar)
+  // para poder mostrar la trayectoria CC aunque las fechas no estén cargadas
+  const cadenaEst = cadenaUsada || {
+    partoTemp:  new Date(new Date().getFullYear(), 9, 1),  // octubre
+    partoTard:  new Date(new Date().getFullYear(), 10, 30), // noviembre
+    ini:        new Date(new Date().getFullYear(), 11, 1), // diciembre
+    fin:        new Date(new Date().getFullYear()+1, 2, 1), // marzo
+    diasServ:   90,
+    _estimada:  true,  // marcar como estimada
+  };
+  const cadenaUsada = cadenaUsada || cadenaEst;
 
   const bt       = getBiotipo(biotipo);
   const ha       = parseFloat(supHa) || 100;
@@ -398,9 +408,9 @@ function calcTrayectoriaCC(params) {
   // ── FASE 3: DESTETE → PRÓXIMO SERVICIO ──
   // Recuperación post-destete: depende del mes de destete y del pasto disponible
   // En verano: 0.4–0.5 CC/mes; en invierno: 0.1–0.2 CC/mes (requiere supl)
-  const mesParto   = cadena.partoTemp ? cadena.partoTemp.getMonth() : 10;
+  const mesParto   = cadenaUsada.partoTemp ? cadenaUsada.partoTemp.getMonth() : 10;
   const mesDestete = (mesParto + Math.round(mesesLact)) % 12;
-  const mesServ    = cadena.ini ? cadena.ini.getMonth() : (mesParto + 3) % 12;
+  const mesServ    = cadenaUsada.ini ? cadenaUsada.ini.getMonth() : (mesParto + 3) % 12;
   // Acotar a máximo 180 días (6 meses) — evita que ccServ llegue a valores imposibles
   // cuando el servicio queda muy lejos o la fecha no está cargada
   const diasRecupRaw = ((mesServ - mesDestete + 12) % 12) * 30;
@@ -445,6 +455,7 @@ function calcTrayectoriaCC(params) {
     diasHastaParto,
     diasRecup,
     mesParto, mesDestete, mesServ,
+    _estimada: cadenaUsada._estimada || false,
   };
 }
 
@@ -1985,10 +1996,13 @@ function correrMotor(form, sat, potreros, usaPotreros) {
   // El único suplemento eficiente en vacas es PREPARTO (sin ternero al pie)
   // y ese se modela en calcTrayectoriaCC como ajuste de CC al parto
   const suplCats = [
+    { sk:"supl_vacas",  dk:"dosis_vacas",  n:nVacas }, // vacas adultas
     { sk:"supl_v2s",    dk:"dosis_v2s",    n:nV2s   }, // triple estrés: sí suplemento
     { sk:"supl_toros",  dk:"dosis_toros",  n:nToros }, // preparo servicio: sí suplemento
     { sk:"supl_vaq2",   dk:"dosis_vaq2",   n:nVaq2  }, // recría: sí suplemento
     { sk:"supl_vaq1",   dk:"dosis_vaq1",   n:nVaq1  }, // 1° invierno: sí suplemento, respuesta máxima
+    // Suplemento general (supl1) — si no hay por categoría, aplica al rodeo completo
+    { sk:"supl1",       dk:"dosis1",       n: !(form.supl_vacas||form.supl_v2s||form.supl_vaq1||form.supl_vaq2) ? (nVacas+nV2s+nVaq1+nVaq2) : 0 },
   ];
   // Meses de suplementación configurados por el usuario (0=ene … 11=dic)
   const suplMesesArr = (form.suplMeses || ["5","6","7"]).map(Number);
@@ -2343,15 +2357,16 @@ function useMotor(form, sat, potreros, usaPotreros) {
       } catch(e) {
         console.warn("Motor error:", e);
       }
-    }, 80);
+    }, 0);
     return () => clearTimeout(timer);
   }, [form, sat, potreros, usaPotreros]);
 
   // Primer run sincrónico
   React.useLayoutEffect(() => {
     try {
-      setEstado(correrMotor(form, sat, potreros, usaPotreros));
-    } catch(e) {}
+      const r = correrMotor(form, sat, potreros, usaPotreros);
+      if (r) setEstado(r);
+    } catch(e) { console.warn("Motor init error:", e); }
   }, []); // eslint-disable-line
 
   return estado;
@@ -4871,6 +4886,108 @@ function elegirSuplEnergetico(form) {
   return SUPLEMENTOS["Sorgo grano"];
 }
 
+// ─── RECOMENDACIÓN DE SUPLEMENTO CONTEXTUAL ──────────────────────
+// Clasifica el tipo de suplemento necesario según el diagnóstico real:
+//   P  = Proteico puro   → pasto C4 encañado (PB<7%), NDVI medio-alto, cantidad OK
+//   E  = Energético puro → pasto con PB≥8% pero déficit energético (alta carga, alta producción)
+//   EP = Energético+Prot → pasto escaso Y de baja calidad (invierno seco, NDVI bajo)
+//
+// El consumo voluntario de MS aumenta cuando se corrige el PB:
+//   Detmann/NASSEM 2010: +0.4–1.0 kg MS pasto por kg suplemento proteico (efecto asociativo)
+//   Con PB<7%: el rumen colapsa → digestión fibra cae → el animal come menos aunque haya pasto
+//
+// Retorna: { tipo, label, opciones:[{nombre,dosis,freq,motivo,efectoCV}], impactoCV }
+function recomendarSuplemento(fenologia, pbPasto, disponMS, deficitMcal, pvKg, form, categoria) {
+  const stock     = (form?.stockAlim || []).map(s => s.alimento);
+  const inHay     = (n) => stock.includes(n);
+
+  // Diagnosticar el tipo de déficit
+  const defProt   = pbPasto < 7;    // déficit proteico → colapso microbiano
+  const defEnerg  = deficitMcal > 0; // déficit energético neto del balance
+  const pastoEsc  = disponMS < 1200; // pasto escaso (<1200 kgMS/ha)
+
+  // Clasificar: P, E, o EP
+  const tipo = defProt && !pastoEsc ? "P"   // pasto OK en cantidad pero poca proteína
+             : defProt && pastoEsc  ? "EP"  // poco pasto Y baja proteína → ambos
+             : defEnerg             ? "EP"  // déficit energético → refuerzo mixto
+                                    : "P";  // default: siempre hay algo de déficit proteico en C4
+
+  // CV actual y potencial con corrección proteica
+  const cvBase    = pvKg * 0.022; // kg MS/día sin corrección
+  const boostCV   = defProt ? Math.min(0.8, cvBase * 0.35) : 0; // +35% con proteína (NASSEM)
+  const cvCorr    = +(cvBase + boostCV).toFixed(1);
+  const impactoCV = defProt
+    ? `+${Math.round(boostCV*1000)}g MS/día adicional de pasto consumido al corregir PB (Detmann 2010)`
+    : defEnerg
+    ? `Cubre ${Math.round(deficitMcal)} Mcal/día de déficit sin modificar el pasto`
+    : "";
+
+  // Armar opciones según tipo y stock disponible
+  const opciones = [];
+
+  if (tipo === "P" || tipo === "EP") {
+    // Proteico preferido: girasol (disponible en NEA), alternativa: soja o algodón
+    const prot1 = inHay("Expeller soja")    ? "Expeller soja"
+                : inHay("Expeller algodón") ? "Expeller algodón"
+                :                             "Expeller girasol";
+    const s1    = SUPLEMENTOS[prot1];
+    const dosis1 = calcDosisProtein(pvKg, pbPasto, defProt ? 8 : 10, s1);
+    const freq1  = "2–3 veces/semana (proteico — no diario)";
+    opciones.push({
+      nombre:   prot1,
+      tipo:     "P",
+      dosis:    dosis1,
+      freq:     freq1,
+      pb:       s1.pb,
+      em:       s1.em,
+      motivo:   defProt
+        ? `PB pasto ${pbPasto}% <7% → microflora colapsa → digestión fibra cae. ${prot1} (PB ${s1.pb}%) activa el rumen`
+        : `Refuerzo proteico para categoría ${categoria||"rodeo"}`,
+      efectoCV: defProt ? `CV pasto sube ${Math.round(boostCV*1000)}g MS/día` : "",
+    });
+  }
+
+  if (tipo === "E" || tipo === "EP") {
+    // Energético: sorgo preferido (diario), alternativa maíz
+    const ener1 = inHay("Maíz grano")      ? "Maíz grano"
+                : inHay("Sorgo grano")     ? "Sorgo grano"
+                : inHay("Afrechillo trigo")? "Afrechillo trigo"
+                :                            "Sorgo grano";
+    const s2    = SUPLEMENTOS[ener1];
+    // Dosis: cubrir déficit Mcal con este alimento
+    const dosis2 = deficitMcal > 0
+      ? Math.max(0.3, Math.min(2.5, +(deficitMcal / s2.em / Math.max(1, pvKg>0?1:1)).toFixed(1)))
+      : 0.5;
+    opciones.push({
+      nombre:   ener1,
+      tipo:     "E",
+      dosis:    dosis2,
+      freq:     "Diario obligatorio (almidón — riesgo acidosis si intermitente)",
+      pb:       s2.pb,
+      em:       s2.em,
+      motivo:   `Déficit energético ${deficitMcal > 0 ? Math.abs(Math.round(deficitMcal)) + " Mcal/día" : "moderado"} — ${ener1} (${s2.em} Mcal/kg EM)`,
+      efectoCV: "",
+    });
+  }
+
+  // Semilla de algodón como alternativa EP solo para Vaq2 y vacas adultas (no Vaq1)
+  if ((tipo === "EP" || tipo === "P") && categoria !== "vaq1" && inHay("Semilla algodón")) {
+    const s3 = SUPLEMENTOS["Semilla algodón"];
+    opciones.push({
+      nombre:  "Semilla algodón",
+      tipo:    "EP",
+      dosis:   Math.min(1.5, pvKg * 0.005),
+      freq:    "Ad libitum o 2–3 veces/semana",
+      pb:      s3.pb,
+      em:      s3.em,
+      motivo:  "Alternativa EP local: proteína bypass + energía grasa. Ad libitum válido en Vaq2 >280kg",
+      efectoCV: defProt ? `CV pasto sube ${Math.round(boostCV*0.7*1000)}g MS/día` : "",
+    });
+  }
+
+  return { tipo, opciones, impactoCV, cvBase, cvCorr, defProt, defEnerg, pastoEsc };
+}
+
 // ── Calcula kg/día de suplemento proteico para cubrir deficit de PB ─
 // Lógica NASSEM: la proteína activa el rumen, mejora digestión de fibra
 // Meta: llevar PB dieta a ≥8% (mínimo ruminal) o ≥10% (crecimiento)
@@ -6287,18 +6404,24 @@ function calcCerebro(motor, form, sat) {
     });
   }
 
-  // Suplemento preparto — si hay déficit CC parto
+  // Suplemento preparto — con clasificación P/E/EP y efecto en consumo
   if (ccParto > 0 && ccParto < 4.5) {
-    const diasPrep = 60;
-    const suplSug = "Expeller de soja o girasol";
+    const fenolMes  = form.fenologia || "menor_10";
+    const pbPasPre  = { menor_10:10, "10_25":8, "25_50":6, mayor_50:4 }[fenolMes] || 8;
+    const dispMS    = motor.disponMS?.msHa || 1500;
+    const defMcalPP = Math.max(0, 14 - (motor.balanceMensual?.find(m=>m.i===9)?.ofPasto || 12));
+    const recPre    = recomendarSuplemento(fenolMes, pbPasPre, dispMS, defMcalPP, pvVaca, form, "vacas");
+    const op1       = recPre.opciones[0] || { nombre:"Expeller girasol", dosis:0.5, freq:"2–3×/semana", motivo:"proteico preparto" };
+    const cvTexto   = recPre.impactoCV ? " · " + recPre.impactoCV : "";
     tarjetas.push({
       id: "supl_preparto",
       prioridad: "P1",
       icono: "🌾",
-      titulo: "Suplemento preparto — llegar al parto con CC ≥4.5",
-      cuando: `${diasHastaServ ? fmtDesde(diasHastaServ + 180) : "Últimos 60d gestación"} — sin ternero al pie`,
-      que: `0.5–0.8 kg ${suplSug}/vaca/día los últimos 60 días de gestación. ÚNICA ventana eficiente para suplementar vacas adultas.`,
-      conexion: `CC parto proyectada: ${ccParto}. Cada 0.5 CC al parto = 25 días menos de anestro posparto → más preñez.`,
+      titulo: "Suplemento preparto — " + op1.tipo + " · llegar al parto con CC ≥4.5",
+      cuando: (diasHastaServ ? fmtDesde(diasHastaServ + 180) : "Últimos 60d gestación") + " — sin ternero al pie",
+      que: op1.dosis + " kg " + op1.nombre + "/vaca/día · " + op1.freq + ". ÚNICA ventana eficiente para vacas adultas." + cvTexto,
+      conexion: "CC parto proyectada: " + ccParto + ". Cada 0.5 CC al parto = 25 días menos de anestro posparto → más preñez. " + op1.motivo,
+      tipoSupl: op1.tipo,
     });
   }
 
@@ -6312,8 +6435,15 @@ function calcCerebro(motor, form, sat) {
       icono: "🐂",
       titulo: `Preparo toros — CC ${ccToros} → 5.5 al servicio`,
       cuando: fechaIniPrep,
-      que: `${Math.round(pvVaca * 1.3 * 0.003 * 10)/10} kg expeller/toro/día por ${diasPrep} días. Libido y eyaculado recuperan con la CC (Chenoweth 1994).`,
-      conexion: `Toro CC <5.0 reduce preñez 10–15pp por lote — silencioso. El costo del suplemento es <3% del valor de los terneros que se pierden.`,
+      que: (() => {
+        const recT = recomendarSuplemento(form.fenologia||"menor_10",
+          {menor_10:10,"10_25":8,"25_50":6,mayor_50:4}[form.fenologia||"menor_10"]||8,
+          motor.disponMS?.msHa||1500, 0, pvVaca*1.3, form, "toros");
+        const op = recT.opciones[0] || { nombre:"Expeller girasol", dosis:0.6, freq:"2–3×/semana" };
+        return op.dosis + " kg " + op.nombre + "/toro/día · " + op.freq + " por " + diasPrep + " días. " + (recT.impactoCV||"") + " Libido y eyaculado recuperan con la CC (Chenoweth 1994).";
+      })(),
+      conexion: "Toro CC <5.0 reduce preñez 10–15pp por lote — silencioso. El costo del suplemento es <3% del valor de los terneros que se pierden.",
+      tipoSupl: "P",
     });
   }
   if (form.sanToros === "sin_control") {
@@ -6336,10 +6466,19 @@ function calcCerebro(motor, form, sat) {
       icono: "🐮",
       titulo: "Suplemento proteico — Vaquillona 1° invierno",
       cuando: "Mayo–Agosto (90 días)",
-      que: `0.3–0.5 kg expeller de girasol/cabeza/día, 2–3 veces por semana. No hace falta diario cuando hay volumen de pasto — la proteína activa el rumen, no reemplaza el forraje.`,
-      conexion: `GDP proyectado: ${vaq1E.gdpReal || 0} g/día → con proteína: 300–400 g/día. Sin corrección no llega al entore en agosto — entore postergado 1 año. ` +
-        `En C4 encañado (PB <8%) la microflora ruminal falla y arrastra toda la digestión (Detmann/NASSEM 2010).`,
+      que: (() => {
+        const pbV1 = {menor_10:10,"10_25":8,"25_50":6,mayor_50:4}[form.fenologia||"menor_10"]||8;
+        const recV1 = recomendarSuplemento(form.fenologia||"menor_10", pbV1,
+          motor.disponMS?.msHa||1500, 0, (pvEntVaq1||Math.round(pvVaca*0.40)), form, "vaq1");
+        const op = recV1.opciones[0] || { nombre:"Expeller girasol", dosis:0.4, freq:"2–3×/semana" };
+        return "[" + op.tipo + "] " + op.dosis + " kg " + op.nombre + "/cabeza/día · " + op.freq + "." +
+          (recV1.impactoCV ? " " + recV1.impactoCV + "." : "") +
+          " La proteína activa el rumen — no reemplaza el forraje, lo aprovecha mejor.";
+      })(),
+      conexion: "GDP proyectado: " + (vaq1E.gdpReal || 0) + " g/día → con corrección proteica: 300–400 g/día. " +
+        "En C4 encañado (PB <8%) la microflora ruminal colapsa y la digestión de fibra cae (Detmann/NASSEM 2010).",
       impacto: "Entore postergado 1 año → 1 ternero menos por vaquillona · con suplemento llega al entore en 24 meses en lugar de 36",
+      tipoSupl: "P",
     });
   }
 
@@ -7024,7 +7163,8 @@ function TabCerebro({ motor, form, sat }) {
         ["Preñez est.", prenez != null ? prenez + "%" : "—",              prenez != null ? smf(prenez,65,45)          : null],
         ["Anestro pp", anestro != null ? anestro + "d" : "—",             anestro != null ? smf(1/Math.max(1,anestro),1/60,1/90) : null],
       ],
-      alerta: ccServ > 0 && ccServ < 4.5
+      alerta: tray?._estimada ? "Sin fechas de servicio — CC proyectada con cadena típica NEA · cargá fechas para precisión"
+        : ccServ > 0 && ccServ < 4.5
         ? "CC por debajo de 4.5 — cada 0.5 puntos menos reduce preñez ~8pp (NRC 2000)"
         : ccServ <= 0 ? "Sin CC cargada — el motor usa valores estimados" : null,
     },
@@ -10490,114 +10630,109 @@ function CalfAIPro() {
           </div>
         )}
 
-        {/* ── STOCK DE ALIMENTOS ── */}
+        {/* ── NECESIDADES DE CAMPAÑA ── */}
         {(() => {
-          const stockAlim = form.stockAlim || [];
-          const ALIM_NOMBRES = [
-            "Expeller girasol","Expeller soja","Expeller algodón",
-            "Sorgo grano","Maíz grano","Semilla algodón","Pellet trigo",
-            "Rollo silaje maíz","Urea tamponada",
+          const mesesSupl = (form.suplMeses || ["5","6","7"]).map(Number);
+          const diasSupl  = mesesSupl.length * 30;
+          if (diasSupl === 0) return null;
+
+          // Calcular kg necesarios por alimento para toda la campaña
+          const CATS_NECES = [
+            { sK:"supl_vacas",   dK:"dosis_vacas",   n:parseInt(form.vacasN)||0,  label:"Vacas" },
+            { sK:"supl_v2s",     dK:"dosis_v2s",     n:parseInt(form.v2sN)||0,    label:"V2S" },
+            { sK:"supl_toros",   dK:"dosis_toros",   n:parseInt(form.torosN)||0,  label:"Toros" },
+            { sK:"supl_vaq2",    dK:"dosis_vaq2",    n:parseInt(form.vaq2N)||0,   label:"Vaq2" },
+            { sK:"supl_vaq1",    dK:"dosis_vaq1",    n:Math.round((parseInt(form.vacasN)||0)*(parseFloat(form.pctReposicion)||20)/100), label:"Vaq1" },
           ];
-          // Calcular demanda total del plan (kg/día × 90 días invierno)
-          const CATS_STOCK = [
-            // vacas: NO van aquí — herramienta = destete, no suplemento
-            // suplemento preparto (sin ternero) se modela en trayectoria CC
-            { sK:"supl_v2s",   dK:"dosis_v2s",   n: parseInt(form.v2sN)||0   },
-            { sK:"supl_toros", dK:"dosis_toros", n: parseInt(form.torosN)||0 },
-            { sK:"supl_vaq2",  dK:"dosis_vaq2",  n: parseInt(form.vaq2N)||0  },
-            { sK:"supl_vaq1",  dK:"dosis_vaq1",  n: Math.round((parseInt(form.vacasN)||0)*(parseFloat(form.pctReposicion)||20)/100) },
-            { sK:"supl_ternero",dK:"dosis_ternero",n:0 },
-          ];
-          const demandaPorAlim = {};
-          CATS_STOCK.forEach(c => {
+
+          // Agrupar por alimento
+          const necesPorAlim = {};
+          const detallePorAlim = {};
+          CATS_NECES.forEach(c => {
             const alim = form[c.sK];
-            if (!alim || !c.n) return;
-            const dosis = parseFloat(form[c.dK]) || 0;
-            if (!dosis) return;
-            if (!demandaPorAlim[alim]) demandaPorAlim[alim] = 0;
-            demandaPorAlim[alim] += dosis * c.n * 90; // 90 días invierno
+            const dos  = parseFloat(form[c.dK]) || 0;
+            if (!alim || !dos || !c.n) return;
+            const kgTotal = dos * c.n * diasSupl;
+            if (!necesPorAlim[alim]) { necesPorAlim[alim] = 0; detallePorAlim[alim] = []; }
+            necesPorAlim[alim] += kgTotal;
+            detallePorAlim[alim].push({ cat:c.label, n:c.n, dos, kgTotal });
           });
 
+          const alims = Object.keys(necesPorAlim);
+          if (alims.length === 0) return null;
+
           return (
-            <div style={{ background:C.card2, border:`1px solid ${C.amber}30`, borderRadius:12, padding:14, marginBottom:12 }}>
-              <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, letterSpacing:1, marginBottom:10 }}>
-                📦 STOCK DE ALIMENTOS — Plan invierno (90 días)
+            <div style={{ background:C.card2, border:"1px solid "+C.border,
+              borderRadius:12, padding:"12px 14px", marginTop:8 }}>
+              <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint,
+                letterSpacing:1, marginBottom:10 }}>
+                📦 NECESIDADES DE CAMPAÑA — {diasSupl} días ·{" "}
+                {mesesSupl.map(m=>["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][m]).join("·")}
               </div>
-              {/* Tabla demanda */}
-              {Object.keys(demandaPorAlim).length > 0 && (
-                <div style={{ marginBottom:10 }}>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:6 }}>DEMANDA CALCULADA DEL PLAN</div>
-                  {Object.entries(demandaPorAlim).map(([alim, kgTotal]) => {
-                    const stockItem = stockAlim.find(s => s.alimento === alim);
-                    const stockKg   = stockItem ? parseFloat(stockItem.toneladas) * 1000 : 0;
-                    const deficit   = stockKg > 0 ? kgTotal - stockKg : null;
-                    return (
-                      <div key={alim} style={{
-                        display:"flex", justifyContent:"space-between", alignItems:"center",
-                        padding:"6px 10px", borderRadius:8, marginBottom:4,
-                        background: deficit !== null && deficit > 0 ? `${C.red}08` : `${C.green}06`,
-                        border:`1px solid ${deficit !== null && deficit > 0 ? C.red+"25" : C.green+"20"}`,
-                      }}>
-                        <span style={{ fontFamily:C.font, fontSize:10, color:C.text }}>{alim}</span>
-                        <div style={{ textAlign:"right" }}>
-                          <div style={{ fontFamily:C.font, fontSize:11, color:C.amber, fontWeight:700 }}>
-                            {(kgTotal/1000).toFixed(1)} t necesarias
-                          </div>
-                          {deficit !== null && (
-                            <div style={{ fontFamily:C.font, fontSize:9, color: deficit > 0 ? C.red : C.green }}>
-                              {deficit > 0 ? `⚠ Faltan ${(deficit/1000).toFixed(1)} t` : `✓ Stock suficiente (+${(Math.abs(deficit)/1000).toFixed(1)} t extra)`}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {/* Ingreso de stock */}
-              <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:8 }}>STOCK DISPONIBLE HOY (toneladas)</div>
-              <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim, marginBottom:10, lineHeight:1.4 }}>
-                🔸 Resaltados = usados en tu plan · Los demás también pueden cargarse
-              </div>
-              {ALIM_NOMBRES.map(alim => {
-                const item = stockAlim.find(s => s.alimento === alim) || { alimento:alim, toneladas:"" };
-                const demanda = demandaPorAlim[alim];
-                const stockKg = item.toneladas ? parseFloat(item.toneladas) * 1000 : 0;
-                const deficit = demanda && stockKg > 0 ? demanda - stockKg : null;
+              {alims.map(alim => {
+                const kgTotal = necesPorAlim[alim];
+                const tnTotal = (kgTotal / 1000).toFixed(1);
+                const detalle = detallePorAlim[alim];
+                const sInfo   = SUPLEMENTOS[alim];
+                const tipo    = sInfo?.tipo === "P" ? "Proteico" : sInfo?.tipo === "E" ? "Energético" : "Energ-Proteico";
+                const colTipo = sInfo?.tipo === "P" ? C.green : sInfo?.tipo === "E" ? C.amber : C.blue;
                 return (
-                  <div key={alim} style={{
-                    display:"flex", alignItems:"center", gap:8, marginBottom:8,
-                    padding:"8px 10px", borderRadius:8,
-                    background: demanda ? `${C.amber}08` : "transparent",
-                    border:`1px solid ${demanda ? C.amber+"30" : C.border}`,
-                  }}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontFamily:C.font, fontSize:10, color: demanda ? C.text : C.textFaint, fontWeight: demanda ? 600 : 400 }}>{alim}</div>
-                      {demanda && <div style={{ fontFamily:C.font, fontSize:8, color:C.amber }}>Necesitás {(demanda/1000).toFixed(1)} t</div>}
-                      {deficit !== null && <div style={{ fontFamily:C.font, fontSize:8, color: deficit > 0 ? C.red : C.green }}>{deficit > 0 ? `⚠ Faltan ${(deficit/1000).toFixed(1)} t` : `✓ Stock OK`}</div>}
+                  <div key={alim} style={{ marginBottom:10, padding:"10px 12px",
+                    background:C.card, borderRadius:10,
+                    border:"1px solid "+colTipo+"25" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between",
+                      alignItems:"flex-start", marginBottom:6 }}>
+                      <div>
+                        <div style={{ fontFamily:C.font, fontSize:11, color:C.text,
+                          fontWeight:700 }}>{alim}</div>
+                        <div style={{ fontFamily:C.font, fontSize:8, color:colTipo,
+                          marginTop:1 }}>{tipo} · PB {sInfo?.pb||"—"}% · {sInfo?.em||"—"} Mcal/kg</div>
+                      </div>
+                      <div style={{ textAlign:"right", flexShrink:0 }}>
+                        <div style={{ fontFamily:C.font, fontSize:20, fontWeight:700,
+                          color:colTipo, lineHeight:1 }}>{tnTotal} t</div>
+                        <div style={{ fontFamily:C.font, fontSize:8,
+                          color:C.textFaint }}>para la campaña</div>
+                      </div>
                     </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-                      <input
-                        type="number" step="0.5" min="0"
-                        value={item.toneladas}
-                        onChange={e => {
-                          const val = e.target.value;
-                          const newStock = [...(form.stockAlim||[]).filter(s => s.alimento !== alim)];
-                          if (val) newStock.push({ alimento:alim, toneladas:val });
-                          set("stockAlim", newStock);
-                        }}
-                        placeholder="0.0"
-                        style={{ width:70, background:C.card, border:`1px solid ${demanda ? C.amber+"60" : C.border}`,
-                          borderRadius:6, color:C.text, padding:"6px 8px", fontFamily:C.font, fontSize:12 }}
-                      />
-                      <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>t</span>
-                    </div>
+                    {/* Desglose por categoría */}
+                    {detalle.map((d,i) => (
+                      <div key={i} style={{ display:"flex", justifyContent:"space-between",
+                        padding:"3px 0", borderTop:"1px solid "+C.border+"60" }}>
+                        <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+                          {d.cat} ({d.n} cab × {d.dos} kg/d)
+                        </span>
+                        <span style={{ fontFamily:C.font, fontSize:9, color:C.text }}>
+                          {(d.kgTotal/1000).toFixed(1)} t · {Math.round(d.dos*d.n)} kg/día
+                        </span>
+                      </div>
+                    ))}
+                    {/* Frecuencia de suministro */}
+                    {sInfo?.tipo === "E" && (
+                      <div style={{ fontFamily:C.font, fontSize:8, color:C.red,
+                        marginTop:4, fontWeight:700 }}>
+                        ⚡ DIARIO obligatorio — almidón puede causar acidosis si se da en bolo
+                      </div>
+                    )}
+                    {sInfo?.tipo === "P" && (
+                      <div style={{ fontFamily:C.font, fontSize:8, color:C.green,
+                        marginTop:4 }}>
+                        ✓ 2–3 veces/semana — activa microflora ruminal, no requiere diario
+                      </div>
+                    )}
                   </div>
                 );
               })}
+              <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint,
+                marginTop:4, borderTop:"1px solid "+C.border, paddingTop:6 }}>
+                Total campaña: {(Object.values(necesPorAlim).reduce((s,v)=>s+v,0)/1000).toFixed(1)} t ·{" "}
+                {Object.values(necesPorAlim).reduce((s,v)=>s+v,0)/diasSupl|0} kg/día promedio ·{" "}
+                Comprá antes del {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][Math.max(0,mesesSupl[0]-1)||0]}
+              </div>
             </div>
           );
         })()}
+
 
 
       </div>
@@ -10838,7 +10973,7 @@ function CalfAIPro() {
                   {
                     titulo: "📊 Condición corporal",
                     filas: [
-                      ["CC ponderada hoy",    ccPondVal > 0 ? ccPondVal.toFixed(1) : "—",   ccPondVal > 0 ? smf2(ccPondVal, 4.5, 4.0) : null, ""],
+                      ["CC ponderada hoy",    ccPondVal > 0 ? ccPondVal.toFixed(1) : "—",   ccPondVal > 0 ? smf2(ccPondVal, 4.5, 4.0) : null, ccPondVal <= 0 ? "Cargá la distribución CC en el paso 1" : ""],
                       ["CC proyectada parto", tray?.ccParto ? tray.ccParto.toFixed(1) : "—", tray?.ccParto ? smf2(tray.ccParto, 4.5, 4.0) : null, tray?.ccParto < 4.0 ? "Parto con CC baja → mayor anestro posparto" : ""],
                       ["CC mínima lactación", tray?.ccMinLact ? tray.ccMinLact.toFixed(1) : "—", tray?.ccMinLact ? smf2(tray.ccMinLact, 3.5, 3.0) : null, tray?.ccMinLact < 3.0 ? "Mínima crítica — mobilización excesiva" : ""],
                       ["CC al servicio",      tray?.ccServ ? tray.ccServ.toFixed(1) : "—",  tray?.ccServ ? smf2(tray.ccServ, 4.5, 4.0) : null, tray?.ccServ < 4.5 ? "Por debajo del óptimo (4.5) → preñez reducida" : "Óptima para el servicio"],
@@ -10980,40 +11115,80 @@ function CalfAIPro() {
             const mesHoy  = new Date().getMonth();
             const bm      = motor?.balanceMensual;
 
-            // ── Sin datos mínimos ──────────────────────────────────────
+            // ── Sin datos mínimos o motor cargando ────────────────────
             if (!bm || bm.length === 0) {
+              // Si el motor existe pero balanceMensual está vacío → datos insuficientes
               const falta = [];
               if (!form.provincia) falta.push("provincia");
               if (!form.vacasN)    falta.push("cantidad de vacas");
               if (!form.biotipo)   falta.push("biotipo");
+              // Si no falta nada pero el motor aún no corrió → spinner
+              if (falta.length === 0 && !motor) {
+                return (
+                  <div style={{ padding:40, textAlign:"center" }}>
+                    <div style={{ display:"flex", justifyContent:"center", gap:6, marginBottom:12 }}>
+                      {[0,1,2].map(i => (
+                        <div key={i} style={{ width:8, height:8, borderRadius:4, background:C.green,
+                          animation:"pulse 1.2s ease-in-out "+(i*0.2)+"s infinite" }} />
+                      ))}
+                    </div>
+                    <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint }}>Calculando balance...</div>
+                  </div>
+                );
+              }
               return (
                 <div style={{ background:C.card2, border:"1px solid "+C.amber+"40",
                   borderRadius:12, padding:"20px 16px", textAlign:"center" }}>
                   <div style={{ fontSize:28, marginBottom:8 }}>📊</div>
                   <div style={{ fontFamily:C.font, fontSize:11, color:C.amber, marginBottom:8, fontWeight:700 }}>
-                    Completá estos datos para ver el balance
+                    Completá para ver el balance
                   </div>
                   {falta.map(f => (
-                    <div key={f} style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:4 }}>⚠ {f}</div>
+                    <div key={f} style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:4 }}>⚠ Falta: {f}</div>
                   ))}
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:10, lineHeight:1.7 }}>
-                    El balance compara la energía del pasto contra la demanda del rodeo mes a mes.<br/>
-                    Si tenés provincia, vacas y biotipo ya podés verlo aunque no hayas cargado superficie.
-                  </div>
                 </div>
               );
             }
 
-            const vals   = bm.map(m => m.balance ?? 0);
-            const maxAbs = Math.max(1, ...vals.map(Math.abs));
-            const invM   = [5,6,7].map(i => ({ mes:MESES_C[i], i, bal: bm[i]?.balance ?? null }));
-            const defCnt = invM.filter(m => m.bal !== null && m.bal < 0).length;
+            const vals      = bm.map(m => m.balance ?? 0);
+            const maxAbs    = Math.max(1, ...vals.map(Math.abs));
+            const invM      = [5,6,7].map(i => ({ mes:MESES_C[i], i, bal: bm[i]?.balance ?? null }));
+            const defCnt    = invM.filter(m => m.bal !== null && m.bal < 0).length;
             const W = 340, H = 140, padX = 20, colW = (W - padX*2) / 12;
-            const barW = colW - 3;
-            const midY = H / 2 - 8;
+            const barW      = colW - 3;
+            const midY      = H / 2 - 8;
+            const suplMeses = (form.suplMeses || ["5","6","7"]).map(Number);
+            const haySupl   = bm.some(m => (m.suplAporte||0) > 0);
+            const maxSuplMes= Math.max(0, ...bm.map(m => m.suplAporte||0));
 
             return (
               <div>
+                {/* ── Panel diagnóstico del suplemento ── */}
+                <div style={{ background: haySupl ? C.blue+"0d" : C.amber+"0d",
+                  border:"1px solid "+(haySupl ? C.blue+"30" : C.amber+"30"),
+                  borderRadius:10, padding:"8px 12px", marginBottom:10,
+                  display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <div>
+                    <div style={{ fontFamily:C.font, fontSize:9,
+                      color:haySupl?C.blue:C.amber, fontWeight:700, marginBottom:2 }}>
+                      {haySupl
+                        ? "💊 Suplemento activo — " + suplMeses.map(m=>MESES_C[m]).join(" · ")
+                        : "⚠ Meses seleccionados pero sin suplemento cargado por categoría"}
+                    </div>
+                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+                      {haySupl
+                        ? "Aporte máx: " + Math.round(maxSuplMes) + " Mcal/día · " + suplMeses.length + " mes" + (suplMeses.length>1?"es":"") + " · barra azul = aporte del suplemento"
+                        : "Paso 1 → Suplementación → cargá tipo y dosis por categoría para ver el efecto en el balance"}
+                    </div>
+                  </div>
+                  {haySupl && (
+                    <div style={{ fontFamily:C.font, fontSize:20, fontWeight:700,
+                      color:C.blue, flexShrink:0, marginLeft:8 }}>
+                      +{Math.round(maxSuplMes)}M
+                    </div>
+                  )}
+                </div>
+
                 {/* ── GRÁFICO BARRAS 12 MESES ── */}
                 <div style={{ background:C.card2, border:"1px solid "+C.border,
                   borderRadius:12, padding:"12px 14px", marginBottom:10 }}>
@@ -11021,26 +11196,16 @@ function CalfAIPro() {
                     letterSpacing:1, marginBottom:8 }}>
                     BALANCE ENERGÉTICO MENSUAL — Mcal/día · oferta pasto + supl − demanda rodeo
                   </div>
-
                   <svg viewBox={"0 0 "+W+" "+H} style={{ width:"100%", display:"block" }}>
-                    {/* Fondo invierno */}
                     {[5,6,7].map(i => (
-                      <rect key={i}
-                        x={padX + i*colW} y={2} width={colW} height={H-14}
-                        fill={C.amber+"06"} />
+                      <rect key={i} x={padX+i*colW} y={2} width={colW} height={H-14} fill={C.amber+"06"} />
                     ))}
-                    {/* Fondo mes actual */}
-                    <rect x={padX + mesHoy*colW} y={2} width={colW} height={H-14}
-                      fill={C.green+"10"} rx={2} />
-                    {/* Línea cero */}
-                    <line x1={padX} y1={midY} x2={W-padX} y2={midY}
-                      stroke={C.textFaint} strokeWidth="0.8" strokeDasharray="2,3" />
-                    <text x={padX-3} y={midY+3} textAnchor="end"
-                      style={{ fontFamily:C.font, fontSize:"6px", fill:C.textFaint }}>0</text>
-
-                    {/* Barras */}
+                    <rect x={padX+mesHoy*colW} y={2} width={colW} height={H-14} fill={C.green+"10"} rx={2} />
+                    <line x1={padX} y1={midY} x2={W-padX} y2={midY} stroke={C.textFaint} strokeWidth="0.8" strokeDasharray="2,3" />
+                    <text x={padX-3} y={midY+3} textAnchor="end" style={{ fontFamily:C.font, fontSize:"6px", fill:C.textFaint }}>0</text>
                     {bm.map((m, i) => {
                       const v    = m.balance ?? 0;
+                      const supl = m.suplAporte ?? 0;
                       const pct  = Math.min(1, Math.abs(v) / maxAbs);
                       const pos  = v >= 0;
                       const bH   = Math.max(3, pct * (midY - 10));
@@ -11049,28 +11214,31 @@ function CalfAIPro() {
                       const col  = pos ? C.green : C.red;
                       const esc  = i === mesHoy;
                       const inv  = [5,6,7].includes(i);
+                      const suplH= maxSuplMes > 0 ? Math.min(bH, Math.max(0, supl/maxAbs*(midY-10))) : 0;
                       return (
                         <g key={i}>
                           <rect x={x} y={y} width={barW} height={bH}
-                            fill={col + (esc ? "ee" : inv ? "cc" : "99")} rx={2}
-                            stroke={esc ? col : "none"} strokeWidth={esc ? "1" : "0"} />
+                            fill={col+(esc?"ee":inv?"cc":"99")} rx={2}
+                            stroke={esc?col:"none"} strokeWidth={esc?"1":"0"} />
+                          {suplH > 1 && pos && (
+                            <rect x={x+1} y={y} width={barW-2} height={suplH}
+                              fill={C.blue+"70"} rx={1} />
+                          )}
                           {bH > 14 && (
-                            <text x={x+barW/2} y={pos ? y+9 : y+bH-3}
-                              textAnchor="middle"
+                            <text x={x+barW/2} y={pos?y+9:y+bH-3} textAnchor="middle"
                               style={{ fontFamily:C.font, fontSize:"6px", fill:"#fff", fontWeight:"700" }}>
                               {Math.abs(Math.round(v))}
                             </text>
                           )}
                           <text x={x+barW/2} y={H-2} textAnchor="middle"
                             style={{ fontFamily:C.font, fontSize:"6px",
-                              fill: esc ? C.green : inv ? C.amber : C.textFaint,
-                              fontWeight: esc || inv ? "700" : "400" }}>
+                              fill:esc?C.green:inv?C.amber:C.textFaint,
+                              fontWeight:esc||inv?"700":"400" }}>
                             {MESES_C[i]}
                           </text>
                         </g>
                       );
                     })}
-
                     {/* Leyendas */}
                     <text x={padX+2} y={12}
                       style={{ fontFamily:C.font, fontSize:"7px", fill:C.green }}>▲ Superávit</text>
