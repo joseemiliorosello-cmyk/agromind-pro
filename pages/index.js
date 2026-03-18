@@ -767,7 +767,7 @@ function calcImpactoCola(prenezTotal, cabezaPct, vacasN, pctDestete, mesesServic
 // Objetivo: 60% PV adulta en agosto (~90d mayo→agosto)
 // NRC 2000; INTA Rafaela; Lippke 1980; Detmann 2010
 // ─── DISPONIBILIDAD FORRAJERA (kgMS/ha) ──────────────────────────
-// Tabla INTA EEA Colonia Benítez — Rosello Brajovich et al. 2025
+// Tabla INTA EEA Colonia Benítez — INTA Colonia Benítez 2025
 // Cuadro 1: Estimación cantidad de pasto según altura × tipo
 const TABLA_DISP_MS = {
   // [altCm]: { corto_denso:[min,max], alto_ralo:[min,max], alto_denso:[min,max] }
@@ -790,7 +790,7 @@ function calcDisponibilidadMS(altPasto, tipoPasto) {
 }
 
 // ─── VAQUILLONA 1° INVIERNO — motor completo ─────────────────────
-// Reglas (Balbuena INTA 2003; Rosello Brajovich 2025; Detmann/NASSEM 2010):
+// Reglas (Balbuena INTA 2003; INTA Colonia Benítez 2025; Detmann/NASSEM 2010):
 //
 // CANTIDAD alta (>2000 kgMS/ha) + CALIDAD baja (fenología >25% floración):
 //   → Solo proteína: 0.5–0.7% PV · frecuencia 2–3x/semana (no diario)
@@ -990,7 +990,7 @@ function calcPvEntradaVaq2(pvSalidaVaq1, provincia) {
 // GDP mínimo invierno: 300 g/d (pastizal solo da 200-250 g/d sin suplemento)
 // Objetivo entore (noviembre): 75% PV adulto
 // Suplementación estratégica: semilla algodón ad libitum viable (>280 kg PV)
-// Fuente: Balbuena INTA 2003; Rosello Brajovich 2025
+// Fuente: Balbuena INTA 2003; INTA Colonia Benítez 2025
 // Vaq2° invierno: mínimo 330 g/d → garantiza 40 kg en 122 días
 // SIEMPRE requiere suplementación — pasto solo da <200 g/d en invierno NEA
 const GDP_MIN_VAQ2 = 330; // g/d — mínimo invierno, nunca sin suplementar
@@ -1169,7 +1169,7 @@ function calcV2S(pvV2s, pvAdulta, ccActual, conTernero, biotipo, cadena) {
   };
 }
 
-// ─── TABLA SUPERVIVENCIA (Rosello Brajovich et al. 2025 — INTA Colonia Benítez) ──
+// ─── TABLA SUPERVIVENCIA (INTA EEA Colonia Benítez 2025) ──
 // Cuadro 2: Probabilidad supervivencia (%) × CC × estado preñez
 // CC mapeada a escala 1–9: MuyFlaca≤3, Flaca=4, Regular=5, Buena≥6
 const TABLA_SUPERV = {
@@ -2400,7 +2400,8 @@ function useMotor(form, sat, potreros, usaPotreros) {
         const resultado = correrMotor(form, sat, potreros, usaPotreros);
         setEstado(resultado);
       } catch(e) {
-        console.warn("Motor error:", e);
+        console.error("Motor error:", e?.message || e, e?.stack?.split("\n")[1]);
+        setEstado(null);
       }
     }, 0);
     return () => clearTimeout(timer);
@@ -2411,7 +2412,7 @@ function useMotor(form, sat, potreros, usaPotreros) {
     try {
       const r = correrMotor(form, sat, potreros, usaPotreros);
       if (r) setEstado(r);
-    } catch(e) { console.warn("Motor init error:", e); }
+    } catch(e) { console.error("Motor init error:", e?.message || e, e?.stack?.split("\n")[1]); }
   }, []); // eslint-disable-line
 
   return estado;
@@ -3228,12 +3229,7 @@ const BIBLIOGRAFIA = {
     area:["suplementacion"],
   },
   // Tabla de supervivencia CC — rodeos NEA
-  RoselloBrajovich2025: {
-    id:"RoselloBrajovich2025", autores:"Rosello Brajovich J.E. et al.",
-    año:2025, titulo:"Relación condición corporal — preñez en rodeos Brangus del NEA",
-    fuente:"Datos de campo INTA Colonia Benítez — comunicación personal", doi:null,
-    area:["cc_prenez"],
-  },
+  // RoselloBrajovich2025 removido de bibliografía UI
   // Agua — calidad y consumo
   LopezAFJ2021: {
     id:"LopezAFJ2021", autores:"López A., Fernández J., Jabur M.",
@@ -3344,7 +3340,7 @@ function formatBibliografia(ids) {
 
 // IDs de referencias usadas en cada módulo del motor
 const REFS_MODULOS = {
-  CC:         ["NRC2000","PeruchenaMDDS2003","RoselloBrajovich2025","Short1990","Neel2007"],
+  CC:         ["NRC2000","PeruchenaMDDS2003","Short1990","Neel2007"],
   CONSUMO_MS: ["Lippke1980","Minson1990","NRC2000"],
   AGUA:       ["LopezAFJ2021","Winchester1956","Beede1992"],
   SUPLEMENTO: ["Detmann2010","NRC2000","Beauchemin2009"],
@@ -5327,7 +5323,7 @@ function diagnosticarSistema(motor, form) {
     pvVaq2Entore:  vaq2E?.pvEntore       ?? null,
     llegazVaq2:    vaq2E?.llegas         ?? null,
     defMesesInv:   balanceMensual.filter(m=>[5,6,7].includes(m.i)&&m.deficit).length,
-    peorBalance:   Math.min(...balanceMensual.map(m=>m.balance)),
+    peorBalance:   balanceMensual.length > 0 ? Math.min(...balanceMensual.map(m=>m.balance||0)) : 0,
     stockOk:       Object.values(stockStatus).every(s=>s.suficiente),
     relacionAT:    (nVacas && nToros) ? Math.round(nVacas/nToros) : null,
     ccToros:       parseFloat(form.torosCC) || null,
@@ -6189,6 +6185,39 @@ function calcCerebro(motor, form, sat) {
     : 0;
   const costoPerdVaq1 = anosRecupVaq1 * valorTern;
   const costoPerdVaq2 = anosRecupVaq2 > 0 ? Math.round(anosRecupVaq2 * valorTern * 0.6 * nVaq2) : 0;
+
+  // ── FORRAJE: calidad + cantidad + impacto en consumo ──────────
+  // La oferta forrajera tiene dos dimensiones independientes:
+  //   CANTIDAD (kgMS/ha) → limita la carga animal posible
+  //   CALIDAD  (PB%) → limita el consumo voluntario y la digestión
+  // Cuando PB < 7% (C4 encañado), el animal no puede comer más pasto aunque haya cantidad
+  // → la proteína desbloquea la microflora ruminal (Detmann/NASSEM 2010)
+  const disponMSHa   = motor.disponMS?.msHa || 0;
+  const fenolActual  = form.fenologia || "menor_10";
+  const pbPastoAct   = { menor_10:12, "10_25":9, "25_50":6, mayor_50:4 }[fenolActual] || 9;
+  const esEncañado   = pbPastoAct < 7;        // C4 >50% floración → PB crítico
+  const esBajaCant   = disponMSHa < 1200;     // escasez real
+  const tipoDeficit  = esEncañado && esBajaCant ? "mixto"
+                     : esEncañado              ? "proteico"
+                     : esBajaCant              ? "energetico"
+                     : "ninguno";
+  // Factor de consumo voluntario reducido por calidad baja del pasto
+  // (sin proteína suplementaria, el animal limita su consumo aunque haya cantidad)
+  const factorConsCV = pbPastoAct >= 10 ? 1.0 : pbPastoAct >= 7 ? 0.80 : 0.55;
+  // Consumo voluntario teórico vs real por calidad del pasto
+  const pvVacaNum    = parseFloat(form.pvVacaAdulta) || 320;
+  const cvTeorico    = pvVacaNum * 0.028; // 2.8% PV — pasto <10% floración
+  const cvReal       = cvTeorico * factorConsCV;
+  const cvPerdido    = Math.round((cvTeorico - cvReal) * 10) / 10; // kg MS/día perdidos
+
+  // Sanidad: impacto en fertilidad
+  const sanAlerts     = motor.sanidad?.alerts || [];
+  const sinAftosa     = form.sanAftosa !== "si";
+  const sinBrucelosis = form.sanBrucelosis !== "si";
+  const sinRevToros   = form.sanToros !== "con_control";
+  const hayAbortos    = form.sanAbortos === "si";
+  const sanPenaltyPP  = (sinAftosa ? 0 : 0) + (sinBrucelosis ? 8 : 0) +
+                        (sinRevToros ? 10 : 0) + (hayAbortos ? 12 : 0); // pp de preñez perdidos
 
   // ── DÉFICIT FORRAJERO EN DETALLE ──────────────────────────────
   // Profundidad del peor mes de invierno
@@ -7230,10 +7259,14 @@ function TabCerebro({ motor, form, sat }) {
         ["Ago", balMen[7]?.balance != null ? (balMen[7].balance>0?"+":"") + Math.round(balMen[7].balance) + " Mcal/d" : "—", balMen[7]?.balance != null ? (balMen[7].balance>=0?C.green:C.red) : null],
         ["Peor mes", peorBal ? MESES_C[peorBal.i] + ": " + Math.round(peorBal.balance) + " Mcal/d" : "—", peorBal?.balance < 0 ? C.red : C.green],
         ["NDVI hoy", sat?.ndvi ? sat.ndvi + " (" + (sat.condForr||"—") + ")" : "—", sat?.ndvi ? smf(parseFloat(sat.ndvi),0.50,0.35) : null],
-        ["Temp. hoy", sat?.temp ? sat.temp + "°C" : "—", sat?.temp && parseFloat(sat.temp) < 15 ? C.amber : C.green],
+        ["Calidad pasto", motor?.disponMS ? (motor.disponMS.msHa + " kgMS/ha · PB " + ({menor_10:12,"10_25":9,"25_50":6,mayor_50:4}[tray?._estimada?"menor_10":form.fenologia||"menor_10"]||9) + "%") : "—", motor?.disponMS?.nivel === "alta" ? C.green : motor?.disponMS?.nivel === "media" ? C.amber : C.red],
+        ["Tipo déficit", motor ? ({mixto:"Mixto — cantidad Y calidad",proteico:"Proteico — PB <7% (C4 encañado)",energetico:"Energético — escasez de pasto",ninguno:"Sin déficit de calidad"}[tipoDeficit]||"—") : "—", tipoDeficit==="ninguno"?C.green:tipoDeficit==="proteico"?C.amber:tipoDeficit==="mixto"?C.red:C.textFaint],
+        ["CV real vs teórico", motor ? (Math.round(cvReal*10)/10 + " vs " + Math.round(cvTeorico*10)/10 + " kg MS/vaca/d") : "—", cvPerdido > 1 ? C.amber : C.green],
       ],
       alerta: mesesDef >= 2
         ? "Déficit " + mesesDef + " meses — pérdida de CC invernal sin intervención"
+        : tipoDeficit === "proteico"
+        ? "Pasto encañado (PB " + ({menor_10:12,"10_25":9,"25_50":6,mayor_50:4}[form.fenologia||"menor_10"]||9) + "%) — el animal come " + cvPerdido + " kg MS/d menos · proteína desbloquea la microflora"
         : mesesDef === 1 ? "Un mes con déficit — manejable con suplemento o ajuste de carga" : null,
     },
     // ── VAQUILLONA ────────────────────────────────────────────────
@@ -7269,9 +7302,15 @@ function TabCerebro({ motor, form, sat }) {
         ["Rev. toros",  form.sanToros==="con_control"?"Con revisión ✓":"Sin revisión", form.sanToros==="con_control"?C.green:C.red],
         ["Abortos",     form.sanAbortos==="si"?"⚠ Sí — revisar":"No",      form.sanAbortos==="si"?C.amber:C.green],
         ["Prog. sanit.", form.sanPrograma==="si"?"Sí ✓":"No",               form.sanPrograma==="si"?C.green:C.amber],
+        // Impacto en preñez de los problemas sanitarios
+        ...(motor ? [["Penalidad sanit.", sanPenaltyPP > 0 ? "−" + sanPenaltyPP + " pp preñez estimado" : "Sin penalidad", sanPenaltyPP > 0 ? C.red : C.green]] : []),
       ],
       alerta: form.sanAftosa!=="si" || form.sanBrucelosis!=="si"
         ? "Vacunación obligatoria incompleta — riesgo legal y sanitario"
+        : sinRevToros
+        ? "Sin revisión de toros: −10pp preñez estimado (lote con toros con problemas no detectados)"
+        : hayAbortos
+        ? "Abortos en el año — requiere diagnóstico diferencial urgente (IBR/DVB/Leptospira/Brucelosis)"
         : null,
     },
     // ── TOROS ─────────────────────────────────────────────────────
@@ -8098,7 +8137,7 @@ Referencias disponibles:
 • Minson D.J. (1990). Forage in Ruminant Nutrition. Academic Press.
 • IPCC (2019). 2019 Refinement to 2006 IPCC Guidelines, Vol.4 Agriculture.
 • Gere J.I. et al. (2019). Methane emissions from grazing beef cattle. N.Z. J. Agric. Res. 62(3):346-360.
-• Rosello Brajovich J.E. et al. (2025). Relación CC-preñez en rodeos Brangus NEA. INTA Colonia Benítez.
+• INTA EEA Colonia Benítez (2025). Protocolos de manejo reproductivo en rodeos de cría NEA.
 • Bavera G.A. (2005). Cursos de producción bovina de carne. FAV UNRC.
 • Wiltbank J.N. (1990). Beef cattle reproductive management. Colorado State Univ.
 `;
@@ -8461,7 +8500,7 @@ function CalfAIPro() {
     }
 
     if (dist?.grupos?.length) {
-      t += `\nCC POR GRUPO (supervivencia Rosello Brajovich 2025):\n`;
+      t += `\nCC POR GRUPO (distribución por estado corporal):\n`;
       dist.grupos.forEach(g => {
         const sv = calcSupervivencia(g.ccHoy, form.eReprod);
         t += `  CC${g.ccHoy}(${g.pct}%): →parto${g.ccParto} →serv${g.ccServ} →${g.pr}%p · anestro${g.anestro?.dias}d · ${g.urgencia} · superv.${sv.pct}%(${sv.riesgo}) · ${g.recDestete}\n`;
@@ -8809,7 +8848,7 @@ function CalfAIPro() {
       for (let p = 1; p <= tot; p++) {
         doc.setPage(p);
         doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(180,180,180);
-        doc.text("Calf AI v1 · INTA Colonia Benitez 2025 · Peruchena 2003 · Selk 1988 · Short et al. 1990 · NASSEM 2010", ML, 292);
+        doc.text("Calf AI · Peruchena 2003 · Selk 1988 · Short et al. 1990 · NASSEM 2010 · NRC 2000", ML, 292);
         doc.text(`${p}/${tot}`, W-MR, 292, { align:"right" });
       }
 
@@ -9070,28 +9109,51 @@ function CalfAIPro() {
         </div>
       )}
       {sat?.error && <Alerta tipo="warn">{sat.error}</Alerta>}
-      <SelectF label="ZONA" value={form.zona} onChange={v=>set("zona",v)}
-        placeholder="Seleccioná la zona..."
-        options={[
-        ["NEA","NEA — Corrientes / Chaco / Formosa / Misiones"],
-        ["NOA","NOA — Salta / Jujuy / Tucumán"],
-        ["Pampa Húmeda","Pampa Húmeda — Buenos Aires / Entre Ríos / Santa Fe sur"],
-        ["Paraguay Oriental","Paraguay Oriental"],
-        ["Chaco Paraguayo","Chaco Paraguayo"],
-        ["Brasil (Cerrado)","Brasil — Mato Grosso / Cerrado"],
-        ["Bolivia (Llanos)","Bolivia — Llanos orientales"],
-      ]} />
-      <SelectF label="PROVINCIA / REGIÓN" value={form.provincia} onChange={v=>set("provincia",v)}
-        placeholder="Seleccioná la provincia..."
-        options={[
-        ["Corrientes","Corrientes"],["Chaco","Chaco"],["Formosa","Formosa"],
-        ["Entre Ríos","Entre Ríos"],["Santa Fe","Santa Fe"],
-        ["Santiago del Estero","Santiago del Estero"],["Salta","Salta"],
-        ["Buenos Aires","Buenos Aires"],["Córdoba","Córdoba"],["La Pampa","La Pampa"],
-        ["Paraguay Oriental","Paraguay Oriental"],["Chaco Paraguayo","Chaco Paraguayo"],
-        ["Mato Grosso do Sul (BR)","Mato Grosso do Sul (BR)"],
-        ["Santa Cruz / Beni (BO)","Santa Cruz / Beni (BO)"],
-      ]} />
+      {/* Zona + Provincia vinculadas */}
+      {(() => {
+        const PROVS_POR_ZONA = {
+          "NEA":              ["Corrientes","Chaco","Formosa","Misiones","Entre Ríos"],
+          "NOA":              ["Salta","Jujuy","Tucumán","Santiago del Estero","Catamarca"],
+          "Pampa Húmeda":     ["Buenos Aires","Santa Fe","Córdoba","Entre Ríos","La Pampa"],
+          "Paraguay Oriental":["Paraguay Oriental"],
+          "Chaco Paraguayo":  ["Chaco Paraguayo"],
+          "Brasil (Cerrado)": ["Mato Grosso do Sul (BR)","Mato Grosso / Goiás (BR)","Pantanal (BR)"],
+          "Bolivia (Llanos)": ["Santa Cruz / Beni (BO)","Tarija / Chaco (BO)"],
+        };
+        const zonaActual  = form.zona || "";
+        const provsFiltro = zonaActual ? (PROVS_POR_ZONA[zonaActual] || []) : Object.values(PROVS_POR_ZONA).flat();
+        const handleZona  = (v) => {
+          set("zona", v);
+          // Si la provincia actual no corresponde a la nueva zona, resetear
+          const nuevasProvs = PROVS_POR_ZONA[v] || [];
+          if (form.provincia && !nuevasProvs.includes(form.provincia)) {
+            set("provincia", nuevasProvs[0] || "");
+          }
+          // Si no hay provincia seleccionada, auto-seleccionar la primera
+          if (!form.provincia && nuevasProvs.length > 0) {
+            set("provincia", nuevasProvs[0]);
+          }
+        };
+        return (
+          <>
+            <SelectF label="ZONA" value={form.zona} onChange={handleZona}
+              placeholder="Seleccioná la zona..."
+              options={[
+                ["NEA","NEA — Corrientes · Chaco · Formosa · Misiones"],
+                ["NOA","NOA — Salta · Jujuy · Tucumán · Stgo. del Estero"],
+                ["Pampa Húmeda","Pampa Húmeda — Bs.As · Santa Fe · Córdoba"],
+                ["Paraguay Oriental","Paraguay Oriental"],
+                ["Chaco Paraguayo","Chaco Paraguayo"],
+                ["Brasil (Cerrado)","Brasil — Cerrado / Pantanal"],
+                ["Bolivia (Llanos)","Bolivia — Llanos orientales"],
+              ]} />
+            <SelectF label="PROVINCIA / REGIÓN" value={form.provincia}
+              onChange={v=>set("provincia",v)}
+              placeholder={zonaActual ? "Seleccioná provincia..." : "Primero elegí la zona →"}
+              options={provsFiltro.map(p=>[p,p])} />
+          </>
+        );
+      })()}
       <SelectF label="ENSO" value={form.enso} onChange={v=>set("enso",v)} options={[
         ["neutro","Neutro — año promedio"],["nino","El Niño (+25% oferta forrajera)"],["nina","La Niña (−25% oferta forrajera)"],
       ]} />
@@ -11178,37 +11240,42 @@ function CalfAIPro() {
             const mesHoy  = new Date().getMonth();
             const bm      = motor?.balanceMensual;
 
-            // ── Sin datos mínimos o motor cargando ────────────────────
+            // ── Datos mínimos para el balance ─────────────────────────
+            const faltaMin = [];
+            if (!form.provincia) faltaMin.push("provincia");
+            if (!form.vacasN)    faltaMin.push("cantidad de vacas");
+            if (!form.biotipo)   faltaMin.push("biotipo");
+
             if (!bm || bm.length === 0) {
-              // Si el motor existe pero balanceMensual está vacío → datos insuficientes
-              const falta = [];
-              if (!form.provincia) falta.push("provincia");
-              if (!form.vacasN)    falta.push("cantidad de vacas");
-              if (!form.biotipo)   falta.push("biotipo");
-              // Si no falta nada pero el motor aún no corrió → spinner
-              if (falta.length === 0 && !motor) {
+              if (faltaMin.length > 0) {
                 return (
-                  <div style={{ padding:40, textAlign:"center" }}>
-                    <div style={{ display:"flex", justifyContent:"center", gap:6, marginBottom:12 }}>
-                      {[0,1,2].map(i => (
-                        <div key={i} style={{ width:8, height:8, borderRadius:4, background:C.green,
-                          animation:"pulse 1.2s ease-in-out "+(i*0.2)+"s infinite" }} />
-                      ))}
+                  <div style={{ background:C.card2, border:"1px solid "+C.amber+"40",
+                    borderRadius:12, padding:"20px 16px", textAlign:"center" }}>
+                    <div style={{ fontSize:28, marginBottom:8 }}>📊</div>
+                    <div style={{ fontFamily:C.font, fontSize:11, color:C.amber, marginBottom:8, fontWeight:700 }}>
+                      Completá para ver el balance
                     </div>
-                    <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint }}>Calculando balance...</div>
+                    {faltaMin.map(f => (
+                      <div key={f} style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:4 }}>⚠ Falta: {f}</div>
+                    ))}
                   </div>
                 );
               }
+              // Motor cargando → spinner
               return (
-                <div style={{ background:C.card2, border:"1px solid "+C.amber+"40",
-                  borderRadius:12, padding:"20px 16px", textAlign:"center" }}>
-                  <div style={{ fontSize:28, marginBottom:8 }}>📊</div>
-                  <div style={{ fontFamily:C.font, fontSize:11, color:C.amber, marginBottom:8, fontWeight:700 }}>
-                    Completá para ver el balance
+                <div style={{ padding:40, textAlign:"center" }}>
+                  <div style={{ display:"flex", justifyContent:"center", gap:6, marginBottom:12 }}>
+                    {[0,1,2].map(i => (
+                      <div key={i} style={{ width:8, height:8, borderRadius:4, background:C.green,
+                        animation:"pulse 1.2s ease-in-out "+(i*0.2)+"s infinite" }} />
+                    ))}
                   </div>
-                  {falta.map(f => (
-                    <div key={f} style={{ fontFamily:C.font, fontSize:10, color:C.amber, marginBottom:4 }}>⚠ Falta: {f}</div>
-                  ))}
+                  <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint }}>
+                    Calculando balance...
+                  </div>
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:6 }}>
+                    Si persiste, revisá la consola del navegador (F12) para ver el error del motor
+                  </div>
                 </div>
               );
             }
