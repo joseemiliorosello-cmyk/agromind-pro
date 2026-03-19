@@ -2997,28 +2997,6 @@ const renderUbicacion = () => (
     </div>
   );
 
-  // Composición de pasos
-  const renderCampo = () => (
-    <div>
-      {renderUbicacion()}
-      {renderRodeo()}
-      {renderCC()}
-    </div>
-  );
-
-  const renderRodeoCompleto = () => (
-    <div>
-      {renderCategorias()}
-      {renderForraje()}
-      {renderSuplAgua()}
-    </div>
-  );
-
-  const renderManejo = () => (
-    <div>
-      {renderSanidad()}
-    </div>
-  );
 
   return {
     renderCampo, renderRodeoCompleto,
