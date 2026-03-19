@@ -33,33 +33,782 @@ function PanelGEI({ form, motor, tray, sat }
 
 // ─── COMPONENTES AUXILIARES PASOS ───────────────────────────────
 
-function PanelFaseCiclo({ faseCiclo }) {
-  if (!faseCiclo || faseCiclo.fase === "SIN_FECHA") return null;
-  const C = T;
+function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
+  const mesP    = cadena?.partoTemp ? cadena.partoTemp.getMonth() : 10;
+  // mesServ = mes real de inicio de servicio (de cadena.ini), no derivado del parto
+  const mesServ = cadena?.ini ? cadena.ini.getMonth() : (mesP + 3) % 12;
+
+  // ── Panel 1: Trayectoria CC ──
+  // Ciclo correcto:
+  //   Hoy → Parto:           CC sube (recuperación preparto)
+  //   Parto → Destete:       CC cae (lactación, moviliza reservas endógenas)
+  //   Destete → Servicio:    CC mínima / leve recuperación (ccMinLact → ccServ)
+  //   Servicio → fin de año: CC sigue subiendo (gestación + recuperación)
+  const dataMeses = MESES_C.map((mes, mi) => {
+    const obj = { mes };
+    escenarios.forEach((esc, ei) => {
+      if (!esc.tray) return;
+      const { ccHoy, ccParto, ccMinLact, ccServ } = esc.tray;
+      // mesDestN = mes aproximado de destete
+      const mesesLactN = Math.ceil(parseFloat(mesesLact) || 6);
+      const mesDestN   = (mesP + mesesLactN) % 12;
+      // mesRecup = mes servicio (punto donde se llega a ccServ)
+      const mesRecupN  = mesServ;
+
+      let cc;
+      if (mesP > mesServ) {
+        // Caso normal NEA: parto nov/oct, servicio dic/ene
+        // Hoy(0) → Parto → Destete → Servicio → fin año
+        if      (mi < mesP)                         cc = ccHoy    + (ccParto   - ccHoy)    * (mi / Math.max(1, mesP));
+        else if (mi < mesDestN || mesDestN <= mesP)  cc = ccParto  + (ccMinLact - ccParto)  * Math.min(1, (mi - mesP) / Math.max(1, mesesLactN));
+        else if (mi <= mesRecupN || mesRecupN < mesDestN) cc = ccMinLact + (ccServ - ccMinLact) * Math.min(1, (mi - mesDestN) / Math.max(1, (mesRecupN - mesDestN + 12) % 12 || 3));
+        else    cc = ccServ + (ccHoy - ccServ) * Math.min(1, (mi - mesRecupN) / Math.max(1, 12 - mesRecupN));
+      } else {
+        // Caso parto temprano (ene-mar): parto → destete → servicio → recuperación → parto siguiente
+        if      (mi < mesP)      cc = ccHoy + (ccParto - ccHoy) * (mi / Math.max(1, mesP));
+        else if (mi < mesDestN)  cc = ccParto + (ccMinLact - ccParto) * ((mi - mesP) / Math.max(1, mesesLactN));
+        else if (mi < mesRecupN) cc = ccMinLact + (ccServ - ccMinLact) * ((mi - mesDestN) / Math.max(1, mesRecupN - mesDestN || 2));
+        else                     cc = ccServ + (ccHoy - ccServ) * Math.min(1, (mi - mesRecupN) / Math.max(1, 12 - mesRecupN));
+      }
+      obj[ESC_NAMES[ei]] = +Math.max(1, Math.min(9, cc)).toFixed(2);
+    });
+    return obj;
+  });
+
+  const CustomDot = (props) => {
+    const { cx, cy, index, dataKey } = props;
+    if (index === mesServ) {
+      const fillColor = ESC_COLORS[ESC_NAMES.indexOf(dataKey)];
+      if (!fillColor) return null;
+      return <circle cx={cx} cy={cy} r={5} fill={fillColor} stroke={T.bg} strokeWidth={1.5} />;
+    }
+    return null;
+  };
+
+  // ── Panel 2: Requerimientos vs Aportes (Mcal/vaca/día) ──
+  // Usa escenario base (escenarios[0]) o el primero activo
+  const escBase = escenarios[0];
+  const hist        = form ? getClima(form.provincia || "Corrientes") : [];
+  const mc          = new Date().getMonth();
+  const enso        = form?.enso || "neutro";
+  const pT          = parseFloat(form?.destTrad)  || 0;
+  const pA          = parseFloat(form?.destAntic) || 0;
+  const pH          = parseFloat(form?.destHiper) || 0;
+  const totD        = pT + pA + pH || 100;
+  const mesesLactGraf = Math.max(1.5, (pT*(180/30) + pA*(90/30) + pH*(50/30)) / totD);
+  const pvVaca      = parseFloat(form?.pvVacaAdulta) || 320;
+  const nTotal      = Math.max(1, parseInt(form?.vacasN) || 0);
+  const ndviN       = parseFloat(sat?.ndvi || 0.45);
+  const mcalSuplDia = mcalSuplemento(escBase?.supl2, parseFloat(escBase?.dosis2) || 0);
+  const tray        = escBase?.tray;
+
+  const dataBal = hist.length > 0 ? MESES_C.map((mes, i) => {
+    const h      = i === mc && sat ? { t:parseFloat(sat.temp)||hist[i].t, p:parseFloat(sat.p30)||hist[i].p } : hist[i];
+    const ndviI  = i === mc ? ndviN : 0.45;
+    const fenolMs = i === mc ? (form?.fenologia || "menor_10")
+      : h.t < 15 ? "mayor_50" : h.t < 20 ? "25_50" : h.t < 25 ? "10_25" : "menor_10";
+    const sup    = parseFloat(form?.supHa)    || 100;
+    const pctM   = parseFloat(form?.pctMonte) || 0;
+    const pctN   = parseFloat(form?.pctNGan)  || 0;
+    const ofTotal = calcOfPasto(form?.vegetacion || "Pastizal natural", ndviI, h.t, h.p, enso, fenolMs) * sup * Math.max(0, 100-pctM-pctN) / 100;
+    const ofVaca  = nTotal > 0 ? ofTotal / nTotal : calcOfPasto(form?.vegetacion || "Pastizal natural", ndviI, h.t, h.p, enso, fenolMs) * 0.024 * pvVaca;
+    const enLact  = i >= mesP && i < mesP + Math.ceil(mesesLactGraf);
+    const eRep    = enLact ? "Lactación con ternero al pie" : i === ((mesP-1+12)%12) ? "Preparto (último mes)" : "Gestación media (5–7 meses)";
+    const demVaca = reqEM(pvVaca, eRep, form?.biotipo) || 13;
+    const ccMcal  = enLact && tray ? Math.min(5, parseFloat(tray.caidaLact||0) * 5.6 / mesesLactGraf) : 0;
+    const suplMcal = enLact ? mcalSuplDia : 0;
+    const deficit  = Math.max(0, demVaca - (ofVaca + ccMcal + suplMcal));
+    return {
+      mes,
+      pasto:   +Math.min(ofVaca, demVaca).toFixed(1),   // aporte pasto (capped)
+      ccComp:  +ccMcal.toFixed(1),
+      supl:    +suplMcal.toFixed(1),
+      demanda: +demVaca.toFixed(1),
+      deficit: +deficit.toFixed(1),
+    };
+  }) : [];
+
+  const hasBal = dataBal.length > 0;
+
   return (
-    <div style={{ background:faseCiclo.color+"12", border:"1px solid "+faseCiclo.color+"40",
-      borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
-      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-        <span style={{ fontSize:22 }}>{faseCiclo.icono}</span>
-        <div>
-          <div style={{ fontFamily:C.font, fontSize:9, color:faseCiclo.color, letterSpacing:1, marginBottom:2 }}>
-            {faseCiclo.label?.toUpperCase()}
-            {faseCiclo.siguiente ? " · " + faseCiclo.siguiente.label + " en " + faseCiclo.siguiente.diasFaltan + "d" : ""}
+    <div>
+      {/* ── Trayectoria CC ── */}
+      <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:4, letterSpacing:1 }}>
+        TRAYECTORIA CC ANUAL — ● = inicio servicio
+      </div>
+      <ResponsiveContainer width="100%" height={170}>
+        <LineChart data={dataMeses} margin={{ top:4, right:4, left:-28, bottom:0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(126,200,80,.06)" />
+          <XAxis dataKey="mes" tick={{ fill:T.textDim, fontSize:9, fontFamily:T.font }} />
+          <YAxis domain={[2,8]} ticks={[2,3,4,5,6,7]} tick={{ fill:T.textDim, fontSize:9, fontFamily:T.font }} />
+          <Tooltip contentStyle={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, fontFamily:T.font, fontSize:11 }}
+            formatter={(v, n) => [`CC ${parseFloat(v).toFixed(1)}`, n]} />
+          <ReferenceLine y={5.0} stroke="rgba(126,200,80,.30)" strokeDasharray="4 2"
+            label={{ value:"CC 5.0 → 55% preñez", fill:"rgba(126,200,80,.55)", fontSize:8, fontFamily:T.font, position:"insideTopRight" }} />
+          <ReferenceLine y={4.5} stroke="rgba(224,85,48,.30)"  strokeDasharray="4 2"
+            label={{ value:"CC 4.5 → 35%",        fill:"rgba(224,85,48,.55)",  fontSize:8, fontFamily:T.font, position:"insideBottomRight" }} />
+          {escenarios.map((esc, ei) => esc.tray && (
+            <Line key={ei} type="monotone" dataKey={ESC_NAMES[ei]} stroke={ESC_COLORS[ei]}
+              strokeWidth={2.5} dot={<CustomDot />} activeDot={{ r:4, fill:ESC_COLORS[ei] }}
+              name={ESC_NAMES[ei]} />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+
+      {/* ── Requerimientos vs Aportes ── */}
+      {hasBal && (
+        <div style={{ marginTop:14 }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:4, letterSpacing:1 }}>
+            REQUERIMIENTOS vs APORTES — Mcal/vaca/día (escenario base)
           </div>
-          <div style={{ fontFamily:C.font, fontSize:11, color:C.text, lineHeight:1.5 }}>
-            {faseCiclo.descripcion?.split(".")[0] + "."}
+          <ResponsiveContainer width="100%" height={170}>
+            <AreaChart data={dataBal} margin={{ top:4, right:4, left:-28, bottom:0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(126,200,80,.06)" />
+              <XAxis dataKey="mes" tick={{ fill:T.textDim, fontSize:9, fontFamily:T.font }} />
+              <YAxis tick={{ fill:T.textDim, fontSize:9, fontFamily:T.font }} domain={[0,"auto"]} />
+              <Tooltip
+                contentStyle={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, fontFamily:T.font, fontSize:11 }}
+                formatter={(v, n) => [v.toFixed(1)+" Mcal", n]}
+              />
+              {/* Aportes apilados */}
+              <Area type="monotone" dataKey="pasto"   name="Pasto (oferta)"   stackId="of" fill="rgba(126,200,80,.22)" stroke={T.green} strokeWidth={1.5} dot={false} />
+              <Area type="monotone" dataKey="ccComp"  name="CC movilizada"    stackId="of" fill="rgba(232,160,48,.22)" stroke={T.amber} strokeWidth={1}   dot={false} strokeDasharray="4 2" />
+              <Area type="monotone" dataKey="supl"    name="Suplemento"       stackId="of" fill="rgba(74,159,212,.22)" stroke={T.blue}  strokeWidth={1.5} dot={false} />
+              {/* Requerimiento como línea roja */}
+              <Line  type="monotone" dataKey="demanda" name="Requerimiento"   stroke={T.red}   strokeWidth={2} strokeDasharray="6 3" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+          {/* Leyenda compacta */}
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:6, justifyContent:"center" }}>
+            <span style={{ fontFamily:T.font, fontSize:8, color:T.green }}>▓ Pasto</span>
+            <span style={{ fontFamily:T.font, fontSize:8, color:T.amber }}>▓ CC movilizada</span>
+            <span style={{ fontFamily:T.font, fontSize:8, color:T.blue  }}>▓ Suplemento</span>
+            <span style={{ fontFamily:T.font, fontSize:8, color:T.red   }}>── Requerimiento</span>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat })
+function LoadingPanel({ msg }) {
+  return (
+    <div style={{ textAlign:"center", padding:"40px 20px" }}>
+      <div style={{ display:"flex", justifyContent:"center", gap:6, marginBottom:16 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{
+            width:8, height:8, borderRadius:4, background:T.green,
+            animation:`pulse 1.2s ease-in-out ${i*0.2}s infinite`,
+          }} />
+        ))}
+      </div>
+      <div style={{ fontFamily:T.font, fontSize:12, color:T.green, letterSpacing:1 }}>{msg}</div>
+    </div>
+  );
+}
 
-function PanelAgua({ form, set, sat })
+function PanelAgua({ form, set, sat }) {
+  const enLact       = form.eReprod === "Lactación con ternero al pie";
+  const evalAgua     = form.aguaTDS ? evaluarAgua(form.aguaTDS, form.aguaTipoSal, form.pvVacaAdulta, sat?.temp || 25, enLact, form.enso) : null;
+  const consumoBase  = calcConsumoAgua(form.pvVacaAdulta, sat?.temp || 25, enLact);
 
-function PanelGEI({ form, motor, tray, sat })
+  return (
+    <div>
+      {/* Header agua */}
+      <div style={{ background:`${C.blue}10`, border:`1px solid ${C.blue}30`, borderRadius:12, padding:12, marginBottom:14 }}>
+        <div style={{ fontFamily:C.font, fontSize:10, color:C.blue, letterSpacing:1, marginBottom:4 }}>💧 AGUA DE BEBIDA</div>
+        <div style={{ fontFamily:C.sans, fontSize:12, color:C.textDim, lineHeight:1.6 }}>
+          Agua salobre o con alta concentración de sólidos disueltos reduce el consumo de materia seca y el rendimiento productivo.
+        </div>
+      </div>
+
+      <Input label="TDS TOTAL — SÓLIDOS DISUELTOS (mg/L)" value={form.aguaTDS} onChange={v => set("aguaTDS", v)}
+        placeholder="Ej: 1500" type="number" sub="Analítica: laboratorio INTA/SENASA o tiras reactivas de campo" />
+
+      {!form.aguaTDS && (
+        <div style={{ background:"rgba(74,159,212,.06)", border:"1px solid rgba(74,159,212,.2)", borderRadius:8, padding:10, marginBottom:12 }}>
+          <div style={{ fontFamily:C.sans, fontSize:11, color:C.blue }}>Sin TDS cargado — se asume calidad aceptable ({"<"}1.000 mg/L).</div>
+        </div>
+      )}
+
+      <SelectF label="TIPO DE SAL DOMINANTE" value={form.aguaTipoSal} onChange={v => set("aguaTipoSal", v)}
+        options={[
+          ["NaCl dominante",    "NaCl (cloruros) — agua costera/subterránea"],
+          ["SO4 dominante",     "SO4 (sulfatos) — Chaco/Santiago del Estero"],
+          ["Mixta/Desconocida", "Mixta / Sin analizar (factor conservador)"],
+        ]}
+      />
+
+      <Input label="FUENTE DE AGUA" value={form.aguaFuente} onChange={v => set("aguaFuente", v)} placeholder="Pozo, laguna, arroyo, represa…" />
+
+      {/* Consumo estimado */}
+      <div style={{ background:C.card2, borderRadius:12, padding:12, border:`1px solid ${C.border}`, marginBottom:12 }}>
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>CONSUMO DE AGUA ESTIMADO</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+          <MetricCard label="HOY (T actual)"     value={consumoBase + "L"} color={C.blue}  sub={`${sat?.temp || "—"}°C · ${enLact ? "Lactando" : "Gestación"}`} />
+          <MetricCard label="EN VERANO (35°C)"   value={calcConsumoAgua(form.pvVacaAdulta, 35, enLact) + "L"} color={C.amber} sub="Pico de demanda anual" />
+        </div>
+        <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:8 }}>
+          Winchester & Morris 1956 / NRC 2000. Mín. 5 cm lineal de bebedero/vaca.
+        </div>
+      </div>
+
+      {/* Resultado evaluación */}
+      {evalAgua && (
+        <div>
+          <div style={{ background:`${evalAgua.cat.color}15`, border:`1px solid ${evalAgua.cat.color}50`, borderRadius:12, padding:12, marginBottom:10 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:evalAgua.cat.color }}>{evalAgua.cat.label}</span>
+              <span style={{ fontFamily:C.font, fontSize:11, color:C.text }}>{evalAgua.tdsN.toLocaleString()} mg/L</span>
+            </div>
+            <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginTop:4, lineHeight:1.5 }}>{evalAgua.cat.desc}</div>
+            {evalAgua.pctReducDMI > 0 && (
+              <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:"wrap" }}>
+                <Pill color={C.red}>DMI −{evalAgua.pctReducDMI.toFixed(0)}%</Pill>
+                <Pill color={C.red}>Pasto consumido −{evalAgua.pctReducPasto.toFixed(0)}%</Pill>
+                <Pill color={C.amber}>Agua ingerida −{evalAgua.pctReducWI.toFixed(0)}%</Pill>
+                {evalAgua.ts.factor > 1.1 && <Pill color={C.red}>SO4: ×{evalAgua.ts.factor}</Pill>}
+              </div>
+            )}
+          </div>
+          {evalAgua.warnings.map((w, i) => (
+            <Alerta key={i} tipo={w.nivel === "rojo" ? "error" : w.nivel === "ambar" ? "warn" : "ok"}>{w.msg}</Alerta>
+          ))}
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+function PanelGEI({ form, motor, tray, sat }) {
+  const gei = React.useMemo(() => calcGEI(form, motor, tray, sat), [form, motor, tray, sat]);
+  const [vista, setVista] = React.useState("resumen"); // resumen | categorias | pastizal | inefi
+
+  if (!gei) return null;
+
+  // Colores específicos GEI
+  const G = {
+    ch4:    "#e8a030",   // naranja = metano (calor)
+    co2:    "#4a9fd4",   // azul = CO2/secuestro
+    inefi:  "#e05530",   // rojo = ineficiencia
+    mejor:  "#7ec850",   // verde = mejora
+    neutro: "#8aaa80",
+  };
+
+  // ── KPIs superiores ───────────────────────────────────────────
+  const KpiGEI = ({ label, valor, unit, color, sub, nota }) => (
+    <div style={{ background:T.card2, border:`1px solid ${color}25`, borderRadius:12, padding:"10px 12px" }}>
+      <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:3 }}>{label}</div>
+      <div style={{ fontFamily:T.font, fontSize:18, fontWeight:700, color, lineHeight:1 }}>
+        {typeof valor === "number" ? valor.toLocaleString() : valor}
+        <span style={{ fontSize:10, color:T.textFaint, marginLeft:4 }}>{unit}</span>
+      </div>
+      {sub  && <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>{sub}</div>}
+      {nota && <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:2 }}>{nota}</div>}
+    </div>
+  );
+
+  // ── Vista resumen ────────────────────────────────────────────
+  const VistaResumen = () => (
+    <div>
+      {/* KPI principal — métrica para el productor */}
+      {gei.intensBase && (() => {
+        // Promedio nacional cría bovina extensiva: 25-35 kg CO2eq/kg PV (FAO-GLEAM 2022)
+        const promedioNacional = 30;
+        const mejor = gei.intensBase < promedioNacional;
+        return (
+          <div style={{ background:mejor ? `${G.mejor}10` : `${G.ch4}10`,
+            border:`1px solid ${mejor ? G.mejor : G.ch4}35`, borderRadius:14,
+            padding:"14px 16px", marginBottom:14 }}>
+            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>
+              HUELLA DE CARBONO — INTENSIDAD DE EMISIÓN
+            </div>
+            <div style={{ display:"flex", alignItems:"flex-end", gap:12, flexWrap:"wrap" }}>
+              <div>
+                <div style={{ fontFamily:T.font, fontSize:28, fontWeight:700,
+                  color: mejor ? G.mejor : G.ch4, lineHeight:1 }}>
+                  {gei.intensBase}
+                </div>
+                <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>
+                  kg CO₂eq por kg PV producido
+                </div>
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:10, color:T.textFaint, alignSelf:"center" }}>vs</div>
+              <div>
+                <div style={{ fontFamily:T.font, fontSize:18, fontWeight:700, color:T.textDim, lineHeight:1 }}>
+                  {promedioNacional}
+                </div>
+                <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginTop:3 }}>
+                  promedio nacional (FAO-GLEAM)
+                </div>
+              </div>
+              <div style={{ marginLeft:"auto", textAlign:"right" }}>
+                <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700,
+                  color: mejor ? G.mejor : G.ch4 }}>
+                  {mejor ? `${Math.round((1 - gei.intensBase/promedioNacional)*100)}% mejor` : `${Math.round((gei.intensBase/promedioNacional - 1)*100)}% encima`}
+                </div>
+                <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>del promedio</div>
+              </div>
+            </div>
+            {gei.intensSupl && gei.intensSupl < gei.intensBase && (
+              <div style={{ marginTop:8, padding:"4px 10px", background:`${G.mejor}15`,
+                borderRadius:6, fontFamily:T.font, fontSize:9, color:G.mejor }}>
+                Con suplementación: {gei.intensSupl} kg CO₂eq/kg PV
+                · mejora −{((1 - gei.intensSupl/gei.intensBase)*100).toFixed(1)}%
+              </div>
+            )}
+            <div style={{ marginTop:6, fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.5 }}>
+              GWP100 AR6 (IPCC, 2021) · CH₄ entérico por categoría, IPCC (2019) Tier 2, Ec.10.21
+              · Ym calibrado: Gere et al. (2019), NZ J. Agric. Res. · Terneros producidos: {gei.ternerosAnual}
+            </div>
+          </div>
+        );
+      })()}
+      {/* Comparación clave: CH4/kg MS sin vs con */}
+      <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:14, padding:14, marginBottom:12 }}>
+        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:10 }}>
+          EFICIENCIA DE EMISIÓN — g CH₄ por kg MS consumida
+        </div>
+        {gei.catData.map(c => {
+          const mejora  = c.eficSupl < c.eficBase;
+          const deltaPct= c.eficBase > 0 ? ((c.eficSupl - c.eficBase) / c.eficBase * 100).toFixed(1) : 0;
+          return (
+            <div key={c.id} style={{ marginBottom:10 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3, alignItems:"center" }}>
+                <span style={{ fontFamily:T.font, fontSize:10, color:T.text }}>{c.label}</span>
+                <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                  <span style={{ fontFamily:T.font, fontSize:10, color:G.ch4 }}>{c.eficBase} g/kg MS</span>
+                  {c.suplDosis > 0 && (
+                    <>
+                      <span style={{ color:T.textFaint, fontSize:9 }}>→</span>
+                      <span style={{ fontFamily:T.font, fontSize:10, color:mejora ? G.mejor : G.inefi, fontWeight:700 }}>
+                        {c.eficSupl} g/kg MS
+                        <span style={{ fontSize:8, marginLeft:3 }}>({deltaPct > 0 ? "+" : ""}{deltaPct}%)</span>
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+              {/* Barra doble */}
+              <div style={{ position:"relative", height:8, borderRadius:4, background:`${T.border}` }}>
+                <div style={{
+                  position:"absolute", left:0, top:0, bottom:0,
+                  width:`${Math.min(100, c.eficBase / 30 * 100)}%`,
+                  background:G.ch4, borderRadius:4, opacity:0.6,
+                }} />
+                {c.suplDosis > 0 && (
+                  <div style={{
+                    position:"absolute", left:0, top:0, bottom:0,
+                    width:`${Math.min(100, c.eficSupl / 30 * 100)}%`,
+                    background:mejora ? G.mejor : G.inefi, borderRadius:4, opacity:0.85,
+                    border:`1px solid ${mejora ? G.mejor : G.inefi}`,
+                  }} />
+                )}
+              </div>
+              {c.suplDosis > 0 && (
+                <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:2 }}>
+                  Supl {c.suplDosis} kg/d · dig promedio anual {c.digPromAnual}% → {c.digConSProm.toFixed(1)}% con supl · CV {c.cvBaseProm} → {c.suplDosis + c.cvBaseProm} kg MS/d
+                  {c.suplPb > 0 && ` · ${SUPLEMENTOS[form["supl_"+c.id]]?.label || "supl."} PB ${c.suplPb}%`}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div style={{ marginTop:8, padding:"6px 10px", background:`rgba(255,255,255,.02)`, borderRadius:8, border:`1px solid ${T.border}`, fontFamily:T.font, fontSize:8, color:T.textFaint }}>
+          Digestibilidad actual del pasto: {gei.dig}% (fenología {form.fenologia || "10_25"}) · 
+          IPCC (2019) Tier 2, Ec.10.21: EF = GEI × Ym/100 / 55.65 · Ym calibrado: Gere et al. (2019), NZ J. Agric. Res. · Suplemento ↑dig → ↓Ym → ↓CH₄
+        </div>
+      </div>
+
+      {/* Balance neto */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+        <div style={{ background:T.card2, border:`1px solid ${G.ch4}25`, borderRadius:12, padding:12 }}>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>CH₄ RODEO/AÑO</div>
+          <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.ch4 }}>
+            {gei.totalCH4Base.toLocaleString()} kg
+          </div>
+          {/* FIX 3 en acción: mostrar GWP28 Y GWP* para que el usuario entienda la diferencia */}
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>
+            GWP100: {(gei.totalCO2eqBase / 1000).toFixed(0)} t CO₂eq
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>
+            GWP* (rodeo estable): {(gei.totalCO2eqBaseSTAR / 1000).toFixed(0)} t CO₂eq
+          </div>
+          {gei.totalCH4Supl < gei.totalCH4Base && (
+            <div style={{ fontFamily:T.font, fontSize:9, color:G.mejor, marginTop:4 }}>
+              Con supl: {gei.totalCH4Supl.toLocaleString()} kg (−{(gei.totalCH4Base - gei.totalCH4Supl).toLocaleString()} kg)
+            </div>
+          )}
+        </div>
+        <div style={{ background:T.card2, border:`1px solid ${gei.co2Pastizal.esFuente ? G.inefi : G.co2}25`, borderRadius:12, padding:12 }}>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>
+            CO₂ PASTIZAL/AÑO
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700,
+            color: gei.co2Pastizal.esFuente ? G.inefi : G.co2 }}>
+            {gei.co2Pastizal.CO2_total > 0 ? "+" : ""}
+            {(gei.co2Pastizal.CO2_total / 1000).toFixed(1)} t
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>
+            {gei.co2Pastizal.esFuente ? "fuente neta" : "secuestro neto"}
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:2 }}>
+            {gei.co2Pastizal.CO2_ha > 0 ? "+" : ""}{gei.co2Pastizal.CO2_ha} kgCO₂/ha/año
+          </div>
+        </div>
+      </div>
+
+      {/* Balance neto sistema */}
+      <div style={{
+        background: gei.balanceNetoBase > 0 ? `${G.ch4}08` : `${G.mejor}08`,
+        border:`1px solid ${gei.balanceNetoBase > 0 ? G.ch4 : G.mejor}30`,
+        borderRadius:12, padding:14, marginBottom:12,
+      }}>
+        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:8 }}>
+          BALANCE NETO SISTEMA (CH₄ rodeo − secuestro pastizal)
+        </div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
+          <div>
+            <div style={{ fontFamily:T.font, fontSize:24, fontWeight:700,
+              color: gei.balanceNetoBase > 0 ? G.ch4 : G.mejor }}>
+              {(gei.balanceNetoBase / 1000).toFixed(1)} t CO₂eq/año
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>
+              {gei.balanceNetoBase > 0 ? "emisor neto" : "sumidero neto"}
+            </div>
+          </div>
+          {gei.intensBase && (
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:T.text }}>
+                {gei.intensBase} kg CO₂eq
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>por kg PV producido</div>
+            </div>
+          )}
+        </div>
+        {gei.pctReduccion > 0 && (
+          <div style={{ marginTop:8, padding:"4px 8px", background:`${G.mejor}12`, borderRadius:6,
+            fontFamily:T.font, fontSize:9, color:G.mejor }}>
+            Con suplementación: −{gei.pctReduccion}% emisiones · {(gei.reduccionCO2eq/1000).toFixed(1)} t CO₂eq/año
+            {gei.intensSupl && ` · Intensidad: ${gei.intensSupl} kg CO₂eq/kg PV`}
+          </div>
+        )}
+      </div>
+
+      {/* Nota GWP — contexto para el ganadero */}
+      <div style={{ padding:"8px 12px", background:`${G.ch4}06`, border:`1px solid ${G.ch4}20`, borderRadius:8,
+        fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.6 }}>
+        <strong style={{ color:T.textDim }}>GWP100 vs GWP*:</strong> GWP100=28 es el estándar del inventario
+        nacional (Kioto/París). GWP* (Allen 2018) es más adecuado para rodeos estables: un rodeo que
+        no crece tiene calentamiento efectivo cercano a cero. Si tu rodeo es constante en número,
+        el impacto real es 5-6× menor que el que muestra el GWP100. ·
+        Wang et al. 2023 (Nature Comms): el secuestro por suelos no puede compensar emisiones a escala global;
+        el offset mostrado es potencial y sujeto a saturación en 20-50 años.
+      </div>
+    </div>
+  );
+
+  // ── Vista categorías: tabla detallada ─────────────────────────
+  const VistaCateg = () => (
+    <div>
+      <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:10 }}>
+        CH₄ ENTÉRICO POR CATEGORÍA — g CH₄/kg MS promedio anual · GWP100 y GWP*
+      </div>
+      {gei.catData.map(c => (
+        <div key={c.id} style={{ background:T.card2, border:`1px solid ${T.border}`,
+          borderRadius:12, padding:12, marginBottom:8 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.text, fontWeight:600 }}>
+              {c.label} <span style={{ color:T.textFaint, fontWeight:400 }}>({c.n} cab.)</span>
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>
+              {c.pv} kg PV · dig anual {c.digPromAnual}%{c.suplDosis > 0 ? ` → ${c.digConSProm.toFixed(1)}% con supl` : ""}
+            </div>
+          </div>
+          {/* Comparativa SIN / CON */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div style={{ background:`${G.ch4}08`, borderRadius:8, padding:"8px 10px", border:`1px solid ${G.ch4}20` }}>
+              <div style={{ fontFamily:T.font, fontSize:8, color:G.ch4, letterSpacing:1, marginBottom:4 }}>SIN RECOMENDACIÓN</div>
+              <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:G.ch4 }}>{c.eficBase} g CH₄/kg MS</div>
+              <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>{c.ch4DiaBase} g/cab/día</div>
+              <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>{c.ch4AnoBase.toLocaleString()} kg CH₄/año</div>
+              <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>{(c.co2eqBase/1000).toFixed(1)} t CO₂eq</div>
+            </div>
+            <div style={{
+              background: c.suplDosis > 0 ? `${c.mejora ? G.mejor : G.inefi}08` : `${T.card}`,
+              borderRadius:8, padding:"8px 10px",
+              border:`1px solid ${c.suplDosis > 0 ? (c.mejora ? G.mejor : G.inefi) : T.border}20`
+            }}>
+              <div style={{ fontFamily:T.font, fontSize:8,
+                color: c.suplDosis > 0 ? (c.mejora ? G.mejor : G.inefi) : T.textFaint,
+                letterSpacing:1, marginBottom:4 }}>
+                {c.suplDosis > 0 ? "CON SUPLEMENTACIÓN" : "SIN SUPL. CARGADO"}
+              </div>
+              {c.suplDosis > 0 ? (
+                <>
+                  <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700,
+                    color:c.mejora ? G.mejor : G.inefi }}>{c.eficSupl} g CH₄/kg MS</div>
+                  <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginTop:3 }}>{c.ch4DiaSupl} g/cab/día</div>
+                  <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>{c.ch4AnoSupl.toLocaleString()} kg CH₄/año</div>
+                  <div style={{ fontFamily:T.font, fontSize:9,
+                    color:c.mejora ? G.mejor : G.inefi, fontWeight:700 }}>
+                    {c.delta > 0 ? "+" : ""}{c.delta.toLocaleString()} kg ({c.mejora ? "↓ mejora" : "↑ aumenta"})
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontFamily:T.font, fontSize:10, color:T.textFaint, marginTop:8 }}>
+                  Cargá suplemento en el paso anterior para ver el impacto
+                </div>
+              )}
+            </div>
+          </div>
+          {c.suplDosis > 0 && (
+            <div style={{ marginTop:6, fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.5 }}>
+              Mecanismo: suplemento {SUPLEMENTOS[form["supl_"+c.id]]?.label || "proteico"} (PB {c.suplPb}%, dig {c.suplDosis > 0 ? "80" : "—"}%) 
+              diluyó la fibra indigestible → dig dieta promedio {c.digPromAnual}% → {c.digConSProm.toFixed(1)}% → 
+              Ym {calcYm(c.digPromAnual).toFixed(3)} → {calcYm(c.digConSProm).toFixed(3)} · Gere et al. (2019); Beauchemin et al. (2009)
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  // ── Vista pastizal: CO₂ y factores ───────────────────────────
+  const VistaPastizal = () => {
+    const p = gei.co2Pastizal;
+    const ndviColor = gei.ndvi > 0.6 ? G.mejor : gei.ndvi > 0.4 ? G.ch4 : G.inefi;
+    return (
+      <div>
+        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:10 }}>
+          DEMANDA/SECUESTRO DE CO₂ — Pastizal · Pasturas · Bosque nativo
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+          <div style={{ background:T.card2, border:`1px solid ${ndviColor}25`, borderRadius:12, padding:12 }}>
+            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:3 }}>NDVI</div>
+            <div style={{ fontFamily:T.font, fontSize:22, fontWeight:700, color:ndviColor }}>{gei.ndvi.toFixed(2)}</div>
+            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>
+              {gei.ndvi > 0.6 ? "Alta biomasa — buen secuestro" : gei.ndvi > 0.4 ? "Biomasa moderada" : "Baja biomasa — secuestro reducido"}
+            </div>
+          </div>
+          <div style={{ background:T.card2, border:`1px solid ${T.border}`, borderRadius:12, padding:12 }}>
+            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:3 }}>PRECIPITACIÓN ANUAL</div>
+            <div style={{ fontFamily:T.font, fontSize:22, fontWeight:700, color:G.co2 }}>{Math.round(gei.precipAnual)} mm</div>
+            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>Temperatura media: {gei.t_media}°C</div>
+          </div>
+        </div>
+
+        <div style={{ background:T.card2, border:`1px solid ${T.border}`, borderRadius:12, padding:14, marginBottom:10 }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:8 }}>
+            PRODUCTIVIDAD PRIMARIA NETA (NPP)
+          </div>
+          {[
+            ["Vegetación", form.vegetacion || "Pastizal natural", T.text],
+            ["NPP real ajustada", p.NPP_real + " kgC/ha/año", G.co2],
+            ["NEP (secuestro neto)", p.NEP + " kgC/ha/año", p.NEP > 0 ? G.mejor : G.inefi],
+            ["Efecto carga animal", p.factCarga > 0 ? "+" + (p.factCarga * 100).toFixed(0) + "% (secuestro adicional)" : p.factCarga === 0 ? "Neutral" : (p.factCarga * 100).toFixed(0) + "% (degrada)", p.factCarga > 0 ? G.mejor : p.factCarga === 0 ? T.textFaint : G.inefi],
+            ["CO₂ total ha/año", (p.CO2_ha > 0 ? "+" : "") + p.CO2_ha + " kgCO₂eq", p.CO2_ha > 0 ? G.mejor : G.inefi],
+            ["CO₂ total establecimiento", (p.CO2_total > 0 ? "+" : "") + (p.CO2_total/1000).toFixed(1) + " t CO₂eq/año", p.CO2_total > 0 ? G.mejor : G.inefi],
+          ].map(([k, v, col]) => (
+            <div key={k} style={{ display:"flex", justifyContent:"space-between",
+              padding:"5px 0", borderBottom:`1px solid ${T.border}30` }}>
+              <span style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>{k}</span>
+              <span style={{ fontFamily:T.font, fontSize:10, color:col, fontWeight:600 }}>{v}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding:"8px 12px", background:`${G.co2}06`, border:`1px solid ${G.co2}20`,
+          borderRadius:8, fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.6 }}>
+          Modelo basado en: McGinn et al. 2014 · Soussana et al. (Agric.Ecosyst.) · Li et al. 2021 (Nature Comms).
+          NPP calibrada para NEA/Chaco húmedo. Respiración heterotrófica = f(T°, humedad).
+          Efecto de carga: sobrecarga &gt;1.2 EV/ha → pérdida de carbono del suelo (Li et al. 2021).
+          ⚠ Bosque nativo: mayor secuestro, pero la conversión a pasturas lo convierte en fuente neta permanente.
+        </div>
+      </div>
+    );
+  };
+
+  // ── Vista ineficiencias ───────────────────────────────────────
+  const VistaInefi = () => {
+    const inf = gei.inefi;
+    return (
+      <div>
+        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:10 }}>
+          INEFICIENCIAS PRODUCTIVAS — CH₄ emitido sin retorno económico
+        </div>
+
+        {/* Vacas vacías */}
+        <div style={{ background:`${G.inefi}08`, border:`1px solid ${G.inefi}30`, borderRadius:12, padding:14, marginBottom:10 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+            <div style={{ fontFamily:T.font, fontSize:11, color:G.inefi, fontWeight:700 }}>
+              🐄 Vacas vacías — CH₄ sin ternero
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>
+              Preñez actual: {inf.prenezPct}%
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.inefi }}>{inf.vacasVacias}</div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>vacas vacías</div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.ch4 }}>
+                {inf.ch4VacaVaciaAnual}kg
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>CH₄/vaca/año</div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.inefi }}>
+                {(inf.co2eqVacasVacias/1000).toFixed(1)}t
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>CO₂eq/año</div>
+            </div>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, lineHeight:1.5 }}>
+            Una vaca vacía emite ~55 kg CH₄/año (IPCC Tier 2, extensivo) = 1.540 kg CO₂eq sin producir ternero.
+            Mejorar preñez de {inf.prenezPct}% a 70%: −{Math.round(inf.vacasVacias * 0.3 * inf.ch4VacaVaciaAnual * GWP_CH4 / 1000)} t CO₂eq/año.
+            Wang et al. 2023: la ineficiencia reproductiva es la mayor fuente de emisiones "no productivas" en sistemas extensivos.
+          </div>
+        </div>
+
+        {/* Vaquillona con entore tardío */}
+        <div style={{ background:`${G.ch4}08`, border:`1px solid ${G.ch4}30`, borderRadius:12, padding:14, marginBottom:10 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+            <div style={{ fontFamily:T.font, fontSize:11, color:G.ch4, fontWeight:700 }}>
+              🐮 Vaquillona entore tardío — meses improductivos
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>
+              Edad entore proyectada: {gei.edadEntoreReal} meses
+            </div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:8 }}>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700,
+                color: gei.edadEntoreReal > 24 ? G.inefi : G.mejor }}>
+                {gei.edadEntoreReal} m
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>edad real entore</div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.ch4 }}>{inf.demora}</div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>meses extra</div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700,
+                color: inf.co2eqVaqTarde > 0 ? G.ch4 : G.mejor }}>
+                {inf.co2eqVaqTarde > 0 ? (inf.co2eqVaqTarde/1000).toFixed(1) + "t" : "✓ 0"}
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>CO₂eq extra</div>
+            </div>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, lineHeight:1.5 }}>
+            Objetivo INTA: entore a los 24 meses. Cada mes de demora = ~2.9 kg CH₄ = 81 kg CO₂eq adicionales por vaquillona.
+            {inf.demora > 0
+              ? ` Con suplementación invernal y verdeo, la vaquillona puede llegar a entorarse a los 24 meses — eliminando ${(inf.co2eqVaqTarde/1000).toFixed(1)} t CO₂eq/año de emisiones improductivas.`
+              : " ✅ La vaquillona llega al peso para entore a los 24 meses con el plan actual."}
+          </div>
+        </div>
+
+        {/* Total ineficiencias */}
+        <div style={{ background:`${G.inefi}06`, border:`1px solid ${G.inefi}20`, borderRadius:10, padding:12 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+            <span style={{ fontFamily:T.font, fontSize:10, color:T.textDim }}>
+              Fracción improductiva del total
+            </span>
+            <span style={{ fontFamily:T.font, fontSize:18, fontWeight:700, color:G.inefi }}>
+              {inf.pctInefi}% = {(inf.totalCO2eqInefi / 1000).toFixed(1)} t CO₂eq/año
+            </span>
+          </div>
+          {/* Barra de composición: productivo vs improductivo */}
+          <div style={{ height:10, borderRadius:5, background:`${T.border}`, overflow:"hidden", marginBottom:6 }}>
+            <div style={{ height:"100%", width:`${100 - inf.pctInefi}%`, background:G.mejor, borderRadius:"5px 0 0 5px", display:"inline-block" }} />
+            <div style={{ height:"100%", width:`${inf.pctInefi}%`, background:G.inefi, display:"inline-block" }} />
+          </div>
+          <div style={{ display:"flex", gap:12, marginBottom:6 }}>
+            <span style={{ fontFamily:T.font, fontSize:8, color:G.mejor }}>● {(100 - inf.pctInefi).toFixed(1)}% productivo</span>
+            <span style={{ fontFamily:T.font, fontSize:8, color:G.inefi }}>● {inf.pctInefi}% sin retorno económico</span>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.6 }}>
+            ⚠ Estos {(inf.totalCO2eqInefi/1000).toFixed(1)} t CO₂eq son una <em>partición</em> del total de {(gei.totalCO2eqBase/1000).toFixed(0)} t —
+            no se suman al balance. Son la fracción que emite el rodeo sin producir ternero ni carne.
+            Reducirla con manejo (preñez, entore temprano) mejora la intensidad de emisión
+            sin cambiar el total de animales. Acuerdo de París / FAO-GLEAM: prioridad de reducción en sistemas extensivos.
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.text, fontWeight:700 }}>
+          🌿 BALANCE DE GASES DE EFECTO INVERNADERO
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>
+          CH₄ entérico · CO₂ pastizal · Ineficiencias productivas
+        </div>
+      </div>
+
+      {/* ── KPIs ────────────────────────────────────────────────── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginBottom:12 }}>
+        <KpiGEI
+          label="CH₄ TOTAL RODEO"
+          valor={gei.totalCH4Base.toLocaleString()}
+          unit="kg/año"
+          color={G.ch4}
+          sub={`${(gei.totalCO2eqBase/1000).toFixed(0)} t CO₂eq (GWP28)`}
+          nota={gei.pctReduccion > 0 ? `Con supl: −${gei.pctReduccion}%` : null}
+        />
+        <KpiGEI
+          label="CO₂ PASTIZAL"
+          valor={`${gei.co2Pastizal.CO2_total > 0 ? "+" : ""}${(gei.co2Pastizal.CO2_total/1000).toFixed(1)}`}
+          unit="t/año"
+          color={gei.co2Pastizal.CO2_total > 0 ? G.co2 : G.inefi}
+          sub={gei.co2Pastizal.CO2_total > 0 ? "secuestro neto" : "fuente neta"}
+          nota={`NDVI ${gei.ndvi.toFixed(2)} · ${gei.supHa} ha · incertidumbre ±40%`}
+        />
+      </div>
+
+      {/* ── Tabs ─────────────────────────────────────────────────── */}
+      <div style={{ display:"flex", gap:4, marginBottom:12 }}>
+        {[
+          ["resumen",     "📊 Resumen"],
+          ["categorias",  "🐄 Categorías"],
+          ["pastizal",    "🌿 Pastizal"],
+          ["inefi",       "⚠ Inefic."],
+        ].map(([k, l]) => (
+          <button key={k} onClick={() => setVista(k)} style={{
+            flex:1, padding:"7px 3px", borderRadius:8, cursor:"pointer",
+            fontFamily:T.font, fontSize:8,
+            background: vista === k ? `${G.ch4}20` : "transparent",
+            border:`1px solid ${vista === k ? G.ch4 : T.border}`,
+            color: vista === k ? G.ch4 : T.textDim,
+          }}>{l}</button>
+        ))}
+      </div>
+
+      {vista === "resumen"    && <VistaResumen />}
+      {vista === "categorias" && <VistaCateg />}
+      {vista === "pastizal"   && <VistaPastizal />}
+      {vista === "inefi"      && <VistaInefi />}
+
+      {/* ── Pie de referencia ───────────────────────────────────── */}
+      <div style={{ marginTop:10, padding:"6px 10px", background:`rgba(255,255,255,.02)`,
+        border:`1px solid ${T.border}`, borderRadius:8,
+        fontFamily:T.font, fontSize:7, color:T.textFaint, lineHeight:1.7 }}>
+        McGinn et al. 2014 (J.Env.Quality) · Wang et al. 2023 (Nature Comms) · Li et al. 2021 (Nature Comms) · 
+        IPCC (2019) Tier 2, Ec.10.21 · Gere et al. (2019) NZ J. Agric. Res. · McSherry & Ritchie (2013) Global Change Biology · IPCC AR6 GWP₁₀₀=28 · 
+        GWP100 CH₄ = 28 (IPCC AR6, fossil methane equivalent)
+      </div>
+    </div>
+  );
+}
 
 export function getPasoRenders(scope) {
   // Destructurar el scope para que los renders lo usen
