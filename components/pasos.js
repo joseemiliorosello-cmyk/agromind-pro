@@ -9,7 +9,7 @@
 
 import React from "react";
 import { T as C, MESES_NOM, FORM_DEF, getBiotipo, BIOTIPOS } from "../lib/constantes";
-import { DistCC, Input, SelectF, Slider, SuplSelector, Alerta, Pill, MetricCard,
+import { DistCC, Input, SelectF, Slider, SuplSelector, Alerta, Pill, MetricCard, Toggle,
          smf, smf2, pbPasto, mcalKgAdj } from "./ui";
 import { DashboardEstablecimiento, GraficoBalance,
          TrayectoriaVaquillona, ScoreRadar } from "./dashboard";
