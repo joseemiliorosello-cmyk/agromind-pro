@@ -102,7 +102,10 @@ function CalfAIPro() {
   const [borradorRecuperado, setBorradorRecuperado] = React.useState(false);
 
   // ── Hook de persistencia ─────────────────────────────────────
-  const { guardarBorrador, restaurarBorrador, guardarEnHistorial,
+ const score = React.useMemo(() =>
+    motorEfectivo ? calcScore(motorEfectivo, form, null) : null,
+  [motorEfectivo, form]);
+         const { guardarBorrador, restaurarBorrador, guardarEnHistorial,
           leerHistorial, cargarVisita, limpiarBorrador } = usePersistencia(form, setForm);
 
   // Guardar borrador automáticamente (debounce 8s)
