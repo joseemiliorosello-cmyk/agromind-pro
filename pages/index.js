@@ -221,9 +221,9 @@ function CalfAIPro() {
   const evalAgua       = motorEfectivo?.evalAgua       ?? null;
   const sanidad        = motorEfectivo?.sanidad        ?? null;
   const baseParams     = motorEfectivo?.baseParams     ?? {};
-  const nVacas         = motorEfectivo?.nVacas         ?? parseInt(form.vacasN) || 0;
-  const nToros         = motorEfectivo?.nToros         ?? parseInt(form.torosN) || 0;
-  const nV2s           = motorEfectivo?.nV2s           ?? parseInt(form.v2sN)   || 0;
+  const nVacas         = motorEfectivo?.nVacas         ?? (parseInt(form.vacasN) || 0);
+  const nToros         = motorEfectivo?.nToros         ?? (parseInt(form.torosN) || 0);
+  const nV2s           = motorEfectivo?.nV2s           ?? (parseInt(form.v2sN)   || 0);
   const nVaq1          = motorEfectivo?.nVaq1          ?? 0;
   const nVaq2          = motorEfectivo?.nVaq2          ?? 0;
   const totalEV        = motorEfectivo?.totalEV        ?? 0;
@@ -240,7 +240,7 @@ function CalfAIPro() {
     calcConfianzaDiagnostico(form, motorEfectivo), [form, motorEfectivo]);
 
   const dispar     = sat && form.provincia ? calcDisp(form.provincia, sat.ndvi, sat.temp) : null;
-  const nVaqRepos  = motor?.nVaq1 ?? Math.round((parseInt(form.vacasN)||0) * (parseFloat(form.pctReposicion)||20) / 100);
+  const nVaqRepos  = motor?.nVaq1 ?? (Math.round((parseInt(form.vacasN) || 0)) * (parseFloat(form.pctReposicion)||20) / 100);
 
   // Coordenadas de referencia por provincia — permite traer clima sin GPS
   const COORDS_PROV = {
