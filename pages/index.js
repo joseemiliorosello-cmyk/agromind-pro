@@ -4077,59 +4077,8 @@ function CalfAIPro() {
     );
   };
 
-
-  // ── PASOS REDISEÑADOS ─────────────────────────────────────────
-  // Flujo del técnico en campo:
-  // Paso 0: Lo que ves al llegar — ubicación + el rodeo + CC (los 3 datos que cambian todo)
-  // Paso 1: El campo — forraje, suplementación, agua (lo que tiene disponible)
-  // Paso 2: Manejo y sanidad — destete, toros, vacunas
-
-  const renderCampo = () => (
-    <div>
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
-        UBICACIÓN Y RODEO — datos mínimos para el diagnóstico
-      </div>
-      {renderUbicacion()}
-      <div style={{ height:1, background:C.border, margin:"16px 0" }} />
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:6 }}>
-        🐄 EL RODEO
-      </div>
-      {renderRodeo()}
-      <div style={{ height:1, background:C.border, margin:"16px 0" }} />
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:6 }}>
-        📊 CONDICIÓN CORPORAL — escala 1-9 INTA
-      </div>
-      {renderCC()}
-    </div>
-  );
-
-  // Paso 1 — El campo: Forraje + Suplementación + Agua
-  const renderRodeoCompleto = () => (
-    <div>
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
-        FORRAJE Y SUPLEMENTACIÓN — qué come el rodeo y cuánto pasto tiene
-      </div>
-      {renderForraje()}
-      <div style={{ height:1, background:C.border, margin:"16px 0" }} />
-      {renderSuplAgua()}
-      <div style={{ height:1, background:C.border, margin:"16px 0" }} />
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
-        CATEGORÍAS — vaquillona y V2S (opcional, enriquece el diagnóstico)
-      </div>
-      {renderCategorias()}
-    </div>
-  );
-
-  // Paso 2 — Manejo: Sanidad
-  const renderManejo = () => (
-    <div>
-      {renderSanidad()}
-    </div>
-  );
-
-
   // ── Conectar renders de pasos ──────────────────────────────────
-  const { renderCampo, renderRodeoCompleto, renderManejo, renderAnalisis } =
+  const { renderCampo, renderRodeoCompleto, renderManejo } =
     getPasoRenders({
       form, set, setDist: (k,v) => setForm(f=>({...f,[k]:v})),
       step, setStep, motor, motorEfectivo, tray, balanceMensual, sat,
