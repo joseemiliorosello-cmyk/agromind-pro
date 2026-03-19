@@ -239,6 +239,9 @@ function CalfAIPro() {
   const confianza      = React.useMemo(() =>
     calcConfianzaDiagnostico(form, motorEfectivo), [form, motorEfectivo]);
 
+  const score = React.useMemo(() =>
+    motorEfectivo ? calcScore(motorEfectivo, form, null) : null,
+  [motorEfectivo, form]);
   const dispar     = sat && form.provincia ? calcDisp(form.provincia, sat.ndvi, sat.temp) : null;
   const nVaqRepos  = motor?.nVaq1 ?? (Math.round((parseInt(form.vacasN) || 0)) * (parseFloat(form.pctReposicion)||20) / 100);
 
