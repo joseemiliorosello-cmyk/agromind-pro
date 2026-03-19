@@ -239,7 +239,7 @@ function CalfAIPro() {
   const confianza      = React.useMemo(() =>
     calcConfianzaDiagnostico(form, motorEfectivo), [form, motorEfectivo]);
 
-  const score = React.useMemo(() =>
+  const score          = React.useMemo(() =>
     motorEfectivo ? calcScore(motorEfectivo, form, null) : null,
   [motorEfectivo, form]);
   const dispar     = sat && form.provincia ? calcDisp(form.provincia, sat.ndvi, sat.temp) : null;
@@ -4084,6 +4084,7 @@ function CalfAIPro() {
   const { renderCampo, renderRodeoCompleto, renderManejo } =
     getPasoRenders({
       form, set, setDist: (k,v) => setForm(f=>({...f,[k]:v})),
+      gpsClick,
       step, setStep, motor, motorEfectivo, tray, balanceMensual, sat,
       coords, setCoords, ccPondVal, evalAgua, sanidad, nVaqRepos, score,
       result, setResult, loading, setLoading, loadMsg, setLoadMsg,
