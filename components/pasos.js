@@ -9,7 +9,7 @@
 
 import React from "react";
 import { T as C, MESES_NOM, FORM_DEF, getBiotipo, BIOTIPOS } from "../lib/constantes";
-import { DistCC, Input, SelectF, Slider, SuplSelector, Alerta, Pill, MetricCard, Toggle,
+import { DistCC, Input, SelectF, Slider, SuplSelector, Alerta, Pill, MetricCard, Toggle, LoadingPanel,
          smf, smf2, pbPasto, mcalKgAdj } from "./ui";
 import { DashboardEstablecimiento, GraficoBalance,
          TrayectoriaVaquillona, ScoreRadar } from "./dashboard";
@@ -20,6 +20,46 @@ import { TabCerebro, RenderInforme, SimuladorEscenarios,
 // Uso dentro de CalfAIPro:
 //   const { renderCampo, renderRodeoCompleto, renderManejo, renderAnalisis }
 //         = getPasoRenders({ form, set, setDist, motor, tray, ... });
+
+// ─── COMPONENTES AUXILIARES ──────────────────────────────────────
+
+function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }
+
+function LoadingPanel({ msg }
+
+function PanelAgua({ form, set, sat }
+
+function PanelGEI({ form, motor, tray, sat }
+
+// ─── COMPONENTES AUXILIARES PASOS ───────────────────────────────
+
+function PanelFaseCiclo({ faseCiclo }) {
+  if (!faseCiclo || faseCiclo.fase === "SIN_FECHA") return null;
+  const C = T;
+  return (
+    <div style={{ background:faseCiclo.color+"12", border:"1px solid "+faseCiclo.color+"40",
+      borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        <span style={{ fontSize:22 }}>{faseCiclo.icono}</span>
+        <div>
+          <div style={{ fontFamily:C.font, fontSize:9, color:faseCiclo.color, letterSpacing:1, marginBottom:2 }}>
+            {faseCiclo.label?.toUpperCase()}
+            {faseCiclo.siguiente ? " · " + faseCiclo.siguiente.label + " en " + faseCiclo.siguiente.diasFaltan + "d" : ""}
+          </div>
+          <div style={{ fontFamily:C.font, fontSize:11, color:C.text, lineHeight:1.5 }}>
+            {faseCiclo.descripcion?.split(".")[0] + "."}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat })
+
+function PanelAgua({ form, set, sat })
+
+function PanelGEI({ form, motor, tray, sat })
 
 export function getPasoRenders(scope) {
   // Destructurar el scope para que los renders lo usen
