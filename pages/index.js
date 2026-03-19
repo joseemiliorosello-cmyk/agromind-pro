@@ -2619,19 +2619,34 @@ const BtnSel = ({ active, onClick, children, style: st }) => (
 );
 
 // ─── DIST CC ─────────────────────────────────────────────────────
-function DistCC({ dist, onChange, label, escala }) {
+function DistCC({ dist, onChange, label, escala, nVacas }) {
   // dist siempre en escala 1-9 internamente
   // escala = "5" o "9" — define cómo se muestran y se ingresan los valores
-  const esc = escala || "9";
+  // NUEVO: modo "cab" permite ingresar número de animales — se convierte a %
+  const esc   = escala || "9";
+  const [modo, setModo] = React.useState("pct"); // "pct" | "cab"
+  const totalVacas = parseFloat(nVacas) || 0;
 
-  // Opciones de CC según escala
   const opcionesCC9 = ["3.0","3.5","4.0","4.5","5.0","5.5","6.0","6.5","7.0","7.5","8.0"];
   const opcionesCC5 = ["1.5","2.0","2.5","3.0","3.5","4.0","4.5","5.0"];
 
-  // Mostrar valor en la escala elegida (internamente siempre 1-9)
   const mostrar = (v9) => esc === "5" ? String(Math.round(parseFloat(v9) / 1.8 * 10) / 10) : v9;
-  // Guardar: convertir de escala elegida a 1-9
   const guardar = (v) => esc === "5" ? String(Math.min(9, Math.round(parseFloat(v) * 1.8 * 10) / 10)) : v;
+
+  // Convertir cabezas → % al cambiar
+  const updCab = (i, v) => {
+    const cab   = parseFloat(v) || 0;
+    const pct   = totalVacas > 0 ? Math.round(cab / totalVacas * 100) : 0;
+    const n = [...(dist||[])];
+    n[i] = { ...n[i], pct: String(pct), _cab: String(cab) };
+    onChange(n);
+  };
+  // Mostrar cabezas desde % o desde _cab si fue ingresado en ese modo
+  const mostrarCab = (d) => {
+    if (d._cab) return d._cab;
+    const pct = parseFloat(d.pct) || 0;
+    return totalVacas > 0 ? String(Math.round(pct * totalVacas / 100)) : "";
+  };
 
   const addRow = () => onChange([...(dist || []), { cc:"4.5", pct:"" }]);
   const delRow = (i) => onChange((dist || []).filter((_, j) => j !== i));
@@ -2641,13 +2656,31 @@ function DistCC({ dist, onChange, label, escala }) {
     onChange(n);
   };
   const total  = (dist || []).reduce((s, d) => s + (parseFloat(d.pct)||0), 0);
+  const totalCab = (dist || []).reduce((s, d) => s + (parseFloat(mostrarCab(d))||0), 0);
 
   return (
     <div>
       {label && <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim, letterSpacing:1, marginBottom:8 }}>{label}</div>}
+      {/* Toggle modo % / cabezas */}
+      <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+        {[["pct","% del rodeo"],["cab","Nº animales"]].map(([m,lbl]) => (
+          <button key={m} onClick={() => setModo(m)}
+            style={{ background: modo===m ? T.blue+"20" : "none",
+              border:"1px solid "+(modo===m ? T.blue : T.border), borderRadius:6,
+              padding:"4px 10px", fontFamily:T.font, fontSize:9, cursor:"pointer",
+              color: modo===m ? T.blue : T.textDim }}>
+            {lbl}
+          </button>
+        ))}
+        {modo === "cab" && totalVacas === 0 && (
+          <span style={{ fontFamily:T.font, fontSize:8, color:T.amber, alignSelf:"center" }}>
+            Cargá el número de vacas primero
+          </span>
+        )}
+      </div>
       {(dist || []).map((d, i) => (
         <div key={i} style={{ display:"flex", gap:8, marginBottom:8, alignItems:"center" }}>
-          <div style={{ flex:1 }}>
+          <div style={{ flex:1.2 }}>
             <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginBottom:3 }}>
               CC {esc === "5" ? "(escala 1-5)" : "(escala 1-9)"}
             </div>
@@ -2663,21 +2696,52 @@ function DistCC({ dist, onChange, label, escala }) {
             </select>
           </div>
           <div style={{ flex:1 }}>
-            <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginBottom:3 }}>% del rodeo</div>
-            <input
-              type="number" value={d.pct} onChange={e => upd(i, "pct", e.target.value)}
-              placeholder="%" style={{ width:"100%", background:T.card, border:`1px solid ${T.border}`, borderRadius:8, color:T.text, padding:"9px 10px", fontFamily:T.font, fontSize:13, boxSizing:"border-box" }}
-            />
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginBottom:3 }}>
+              {modo === "cab" ? `Cabezas${totalVacas>0?" / "+totalVacas:""}` : "% del rodeo"}
+            </div>
+            {modo === "cab" ? (
+              <input
+                type="number" value={mostrarCab(d)} onChange={e => updCab(i, e.target.value)}
+                placeholder="cab" style={{ width:"100%", background:T.card, border:`1px solid ${T.border}`,
+                  borderRadius:8, color:T.text, padding:"9px 10px", fontFamily:T.font,
+                  fontSize:13, boxSizing:"border-box" }}
+              />
+            ) : (
+              <input
+                type="number" value={d.pct} onChange={e => upd(i, "pct", e.target.value)}
+                placeholder="%" style={{ width:"100%", background:T.card, border:`1px solid ${T.border}`,
+                  borderRadius:8, color:T.text, padding:"9px 10px", fontFamily:T.font,
+                  fontSize:13, boxSizing:"border-box" }}
+              />
+            )}
           </div>
-          <button onClick={() => delRow(i)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:16, padding:"0 4px", marginTop:14 }}>✕</button>
+          {/* Indicador equivalente en el otro modo */}
+          <div style={{ width:36, textAlign:"center", flexShrink:0, marginTop:14 }}>
+            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.2 }}>
+              {modo === "cab"
+                ? (parseFloat(d.pct) > 0 ? parseFloat(d.pct).toFixed(0)+"%" : "")
+                : (totalVacas > 0 && parseFloat(d.pct) > 0
+                    ? Math.round(parseFloat(d.pct)*totalVacas/100)+"v"
+                    : "")}
+            </div>
+          </div>
+          <button onClick={() => delRow(i)} style={{ background:"none", border:"none",
+            color:T.red, cursor:"pointer", fontSize:16, padding:"0 4px", marginTop:14 }}>✕</button>
         </div>
       ))}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:4 }}>
-        <button onClick={addRow} style={{ background:`${T.green}08`, border:`1px solid ${T.border}`, borderRadius:8, color:T.green, padding:"7px 14px", fontFamily:T.font, fontSize:11, cursor:"pointer" }}>
+        <button onClick={addRow} style={{ background:`${T.green}08`, border:`1px solid ${T.border}`,
+          borderRadius:8, color:T.green, padding:"7px 14px", fontFamily:T.font,
+          fontSize:11, cursor:"pointer" }}>
           + Agregar grupo
         </button>
-        <span style={{ fontFamily:T.font, fontSize:11, color: total === 100 ? T.green : T.amber }}>
-          {total}%{total !== 100 ? " ⚠" : ""}
+        <span style={{ fontFamily:T.font, fontSize:11,
+          color: modo==="cab"
+            ? (totalVacas > 0 ? (Math.abs(totalCab - totalVacas) <= 2 ? T.green : T.amber) : T.textDim)
+            : (total === 100 ? T.green : T.amber) }}>
+          {modo === "cab"
+            ? (totalVacas > 0 ? totalCab+" / "+totalVacas+"v" : totalCab+"v")
+            : total+"%"}{(modo==="pct"&&total!==100)||( modo==="cab"&&totalVacas>0&&Math.abs(totalCab-totalVacas)>2) ? " ⚠" : ""}
         </span>
       </div>
       {/* Referencia rápida escala 1-9 INTA */}
@@ -6155,6 +6219,1218 @@ function calcFaseCiclo(cadena, form, ctx) {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// ALGORITMOS CALIBRADOS CON BASE CIENTÍFICA
+// Fuentes: NRC 2000/NASEM 2016, BR-CORTE 2016, Detmann/NASSEM 2010,
+//          Chizzotti et al. 2019 (Transl. Anim. Sci.), MDPI Animals 2021,
+//          Ray 1989 / Patterson et al. 2003 (agua salina),
+//          Miranda et al. 2014 / Ferreira et al. (NDVI-biomasa Cerrado)
+// ═══════════════════════════════════════════════════════════════════
+
+// ── 1. DEMANDA: reqEM mejorado con coeficientes BR-CORTE / NASEM ────
+// El modelo anterior usaba un factor fijo de biotipo.
+// BR-CORTE (Valadares Filho et al. 2016) establece:
+//   NEm Bos indicus = 0.077 Mcal/kg PV^0.75 /día
+//   NEm Bos taurus  = 0.086 Mcal/kg PV^0.75 /día
+//   Diferencia: 10–11% menor para Zebu (Chizzotti et al. 2019, Transl. Anim. Sci. 3:991-998)
+// Factor grazing (+20–30% NRC 2000): pastoreo extensivo agrega actividad
+// Factor lactación (+20% NEm durante lactación vs gestación, NRC 2000):
+//   "About 20% difference exists between these two periods" (AN190/IFAS)
+
+function calcReqEMCategoriaV2(cat, form, mes) {
+  const pv     = parseFloat(cat.pv) || 300;
+  const pvMet  = Math.pow(pv, 0.75); // peso metabólico
+
+  // Coeficiente NEm base según biotipo (BR-CORTE 2016 / Chizzotti 2019)
+  const biotipo = form.biotipo || "Brangus 3/8";
+  const pctIndicusMap = {
+    "Nelore puro":         1.00,
+    "Brahman puro":        1.00,
+    "Brangus 3/8":         0.375,
+    "Braford 3/8":         0.375,
+    "Bradford 5/8":        0.625,
+    "Brangus 5/8":         0.625,
+    "Cruzado F1":          0.50,
+    "Aberdeen Angus":      0.00,
+    "Hereford":            0.00,
+    "Shorthorn":           0.00,
+    "Compuesto taurus":    0.00,
+  };
+  const pctIndicus = pctIndicusMap[biotipo] ?? 0.375;
+
+  // NEm base interpolado linealmente entre taurus (0.086) e indicus (0.077)
+  // Chizzotti et al. 2019: "Bos taurus indicus presents 10% to 8% lower NEm"
+  const nemBase = 0.086 - (0.086 - 0.077) * pctIndicus; // Mcal/kg PV^0.75/día
+
+  // Factor de actividad en pastoreo extensivo (NRC 2000)
+  // "the difference in maintenance requirements for grazing cattle could be 10–50%"
+  // Para pastizal extensivo NEA: +25% sobre base confinamiento
+  const factGrazing = 1.25;
+
+  // Factor de fase fisiológica
+  const fase = cat.fase || "mantenimiento";
+  const factFase = {
+    mantenimiento:  1.00,
+    gestacion_1:    1.00,  // sin efecto hasta mes 7 de gestación
+    gestacion_3:    1.10,  // último tercio +10% por feto
+    lactacion:      1.20,  // +20% NEm durante lactación (NRC 2000 / AN190 IFAS)
+    crecimiento:    1.00,  // crecimiento calculado aparte como NEg
+  }[fase] || 1.00;
+
+  // NEm diario base en Mcal/día
+  const nemDia = nemBase * pvMet * factGrazing * factFase;
+
+  // NEg: energía neta de crecimiento para categorías en desarrollo
+  // NRC 2000: NEg = 0.0557 × PV^0.75 × GDP^1.097 × (1 / Ef)
+  // Ef para C4 pastizal (TDN ~55%): ~0.28
+  let negDia = 0;
+  const gdpObj = cat.gdpObj || 0; // g/día objetivo
+  if (gdpObj > 0 && fase === "crecimiento") {
+    const ef = 0.28; // eficiencia energética neta para ganancia en dieta tropical
+    negDia = 0.0557 * pvMet * Math.pow(gdpObj/1000, 1.097) / ef;
+  }
+
+  // NEp: energía neta de preñez — último tercio de gestación
+  // NRC 2000: NEp = (0.00318 × DíasGest - 0.0352) × (CBW/0.95) / 0.13
+  // Simplificado: ~2.0–2.5 Mcal/día en mes 8–9
+  const diasGest = cat.diasGest || 0;
+  let nepDia = 0;
+  if (diasGest > 190) {
+    nepDia = Math.max(0, (0.00318 * diasGest - 0.0352) * (40 / 0.95) / 0.13);
+    nepDia = Math.min(nepDia, 2.5); // máximo razonable
+  }
+
+  // NEl: energía neta de lactación
+  // NRC 2000: NEl = kg_leche × (0.0929 × %grasa + 0.0547 × %proteina + 0.0395 × %lactosa)
+  // Para Brangus/cruza tropical: ~4 kg/día pico, grasa 4.5%, prot 3.5%, lactosa 4.8%
+  let nelDia = 0;
+  const btMilk = getBiotipo?.(biotipo);
+  const leche = btMilk?.leche || 4.0; // kg/día
+  if (fase === "lactacion") {
+    nelDia = leche * (0.0929 * 4.5 + 0.0547 * 3.5 + 0.0395 * 4.8);
+    nelDia = Math.max(nelDia, 0);
+  }
+
+  // Total EM diario (Mcal/día)
+  // Conversión: EM = NE / km donde km ≈ 0.62–0.65 para pasturas tropicales
+  const km = 0.63; // eficiencia ME→NE para mantenimiento en C4 (Detmann/NASSEM 2010)
+  const emTotal = (nemDia + negDia + nepDia + nelDia) / km;
+
+  // Factor de estrés calórico (reduce consumo voluntario pero aumenta req de mantenimiento)
+  // NRC 2000: "heat stress reduces dry matter intake"
+  // >35°C: +5% NEm por termorregulación
+  const tempMes = parseFloat(form._tempMes || 20);
+  const factCalor = tempMes > 35 ? 1.05 : 1.0;
+
+  return {
+    nemDia: Math.round(nemDia * 100) / 100,
+    negDia: Math.round(negDia * 100) / 100,
+    nepDia: Math.round(nepDia * 100) / 100,
+    nelDia: Math.round(nelDia * 100) / 100,
+    emTotal: Math.round(emTotal * factCalor * 100) / 100,
+    pvMet: Math.round(pvMet),
+    nemBase: Math.round(nemBase * 1000) / 1000,
+    pctIndicus: Math.round(pctIndicus * 100),
+    // Referencias:
+    // nemBase: BR-CORTE (Valadares Filho et al. 2016) + Chizzotti et al. 2019
+    // factGrazing: NRC 2000 (10-50% adicional en pastoreo extensivo, usado 25%)
+    // factLactacion: NRC 2000 / AN190 IFAS (20% adicional durante lactación)
+  };
+}
+
+// ── 2. OFERTA C4: calibración NDVI→biomasa con curva estacional ─────
+// Miranda et al. 2014 (Cerrado): biomasa aérea total ~7 t/ha
+// Ferreira et al. (MODIS): variación NDVI agosto→febrero ~130% en Cerrado
+// Kalahari (Penning de Vries / Minson 1990): valores mínimos PB C4 = mitad de C3
+// Meta-análisis C4 (PMC 9311783): digestibilidad media C4 = 57.9%, Brachiaria = 58.1%
+// Digestibilidad por fenología — curva calibrada:
+//   <10% floración (rebrote activo): DIG 62%, PB 12%   → 2.15 Mcal/kg MS
+//   10-25% floración: DIG 58%, PB 9%                   → 2.05 Mcal/kg MS
+//   25-50% floración: DIG 52%, PB 6%                   → 1.85 Mcal/kg MS
+//   >50% floración (encañado, C4 lignificado): DIG 45%, PB 4% → 1.62 Mcal/kg MS
+// Fuente: Minson 1990 + meta-análisis PMC 9311783 + calibración NEA
+
+const CALIDAD_C4_CALIBRADA = {
+  menor_10: { dig: 0.62, pb: 12, mcalKg: 2.15, label: "rebrote activo" },
+  "10_25":  { dig: 0.58, pb: 9,  mcalKg: 2.05, label: "macollaje–elongación" },
+  "25_50":  { dig: 0.52, pb: 6,  mcalKg: 1.85, label: "floración parcial" },
+  mayor_50: { dig: 0.45, pb: 4,  mcalKg: 1.62, label: "encañado–lignificado" },
+};
+
+// Factor NDVI → kg MS/ha disponibles
+// Ferreira et al. 2011: correlación NDVI-biomasa en Cerrado
+// NDVI 0.70 (verano húmedo) → ~3500 kg MS/ha disponible (verde)
+// NDVI 0.35 (invierno seco) → ~800 kg MS/ha disponible (verde)
+// Función lineal calibrada para pastizal natural NEA:
+function ndviABiomasa(ndvi, supHa, altPasto, tipoPasto) {
+  if (!ndvi || ndvi <= 0) return null;
+
+  // Relación NDVI → % cobertura verde (r=0.95, Miranda et al. 2014)
+  const pctVerde = Math.min(95, Math.max(5, (ndvi - 0.15) / (0.75 - 0.15) * 90 + 5));
+
+  // Biomasa total estimada según tipo de vegetación
+  // Pastizal natural NEA/Cerrado: 2500–4000 kg MS/ha en verano, 600–1200 en invierno
+  const biomasaBase = {
+    "Pastizal natural":         { verano: 3200, invierno: 900 },
+    "Pastizal degradado":       { verano: 1800, invierno: 500 },
+    "Brachiaria spp.":          { verano: 4500, invierno: 1200 },
+    "Gatton panic / Buffel":    { verano: 3800, invierno: 800 },
+    "Pasto miel / Setaria":     { verano: 3500, invierno: 1000 },
+    "Mixto gramínea-leguminosa":{ verano: 3200, invierno: 900 },
+  }[tipoPasto] || { verano: 3000, invierno: 850 };
+
+  // Interpolar según NDVI: 0.35 → invierno, 0.70 → verano
+  const t = Math.max(0, Math.min(1, (ndvi - 0.35) / (0.70 - 0.35)));
+  const kgMsHa = biomasaBase.invierno + t * (biomasaBase.verano - biomasaBase.invierno);
+
+  // Capacidad de cosecha del animal: 50% disponible de la biomasa total
+  // (pisoteo, rechazo, inaccesible por altura)
+  const utilizable = kgMsHa * 0.50;
+
+  // Efecto altura del pasto sobre la ingesta selectiva
+  const alt = parseFloat(altPasto) || 20;
+  const factAlt = alt < 5 ? 0.65 : alt < 10 ? 0.80 : alt < 20 ? 0.95 : 1.0;
+
+  return {
+    ndvi, pctVerde: Math.round(pctVerde),
+    kgMsHa:    Math.round(kgMsHa),
+    utilizable: Math.round(utilizable * factAlt),
+    kgMsTotal:  Math.round(utilizable * factAlt * (supHa || 1)),
+    // Fuentes:
+    // Miranda et al. 2014 (Cerrado biomass): ~7 t/ha total biomass
+    // Ferreira et al. 2011 (MODIS-NDVI): variación 130% verano-invierno
+    // Utilización 50%: estándar manejo extensivo pastizal natural
+  };
+}
+
+function calcOfertaMensualCalibrada(form, sat, mes) {
+  const fenol   = form.fenologia || "mayor_50";
+  const calidad = CALIDAD_C4_CALIBRADA[fenol] || CALIDAD_C4_CALIBRADA.mayor_50;
+  const supHa   = parseFloat(form.supHa) || 0;
+  const pctMonte= parseFloat(form.pctMonte) || 30; // % superficie con monte (menor productividad)
+  const pctNGan  = parseFloat(form.pctNGan)  || 0;  // % no ganadero
+
+  // Superficie efectiva para pastoreo
+  const supEfectiva = supHa * (1 - pctMonte/100 * 0.5) * (1 - pctNGan/100);
+
+  // NDVI: usar sat si disponible, si no usar histórico mensual
+  const ndviReal = parseFloat(sat?.ndvi) || null;
+  const ndviHist = {
+    0: 0.65, 1: 0.68, 2: 0.60, 3: 0.50, 4: 0.42,
+    5: 0.38, 6: 0.35, 7: 0.36, 8: 0.40, 9: 0.48,
+    10: 0.57, 11: 0.62
+  }[mes] || 0.45;
+  const ndvi = ndviReal ?? ndviHist;
+
+  // Biomasa disponible
+  const biomasa = ndviABiomasa(ndvi, supEfectiva, form.altPasto, form.tipoPasto);
+  const kgMsDisp = biomasa?.kgMsTotal || 0;
+
+  // Oferta energética total del pasto (Mcal/día)
+  const mcalDia = kgMsDisp / 30 * calidad.mcalKg; // mensual → diario
+
+  // Límite por consumo voluntario real (factor PB)
+  // Detmann/NASSEM 2010: cuando PB < 7%, consumo voluntario cae 20-45%
+  const factCV = calidad.pb >= 10 ? 1.00 : calidad.pb >= 7 ? 0.80 : 0.55;
+  const mcalDisponible = mcalDia * factCV;
+
+  return {
+    ndvi,
+    kgMsHa:    biomasa?.kgMsHa || 0,
+    kgMsDisp,
+    mcalDia:   Math.round(mcalDia),
+    mcalDisponible: Math.round(mcalDisponible),
+    dig:       calidad.dig,
+    pb:        calidad.pb,
+    mcalKg:    calidad.mcalKg,
+    fenolLabel: calidad.label,
+    factCV,
+    supEfectiva: Math.round(supEfectiva),
+    // Fuentes oferta:
+    // Calibración NDVI→biomasa: Miranda et al. 2014, Ferreira et al. 2011
+    // Mcal/kg MS por fenología: Minson 1990 + PMC 9311783 meta-análisis C4
+    // Factor consumo voluntario: Detmann/NASSEM 2010 (PB<7% → microflora paralizada)
+  };
+}
+
+// ── 3. AGUA: curva TDS→reducción DMI calibrada (NRC 2000 / Ray 1989) ─
+// NRC 2000 / Oregon State: TDS seguro <3000 ppm
+// Ray 1989 (citado en OSU Extension): 10% reducción GDP e ingesta a ~5000 ppm
+// Patterson et al. 2003: declinación cuadrática de DMI entre 400–4700 ppm sulfato
+// Tablas NRC 1974: clasificación de salinidad para ganado bovino
+
+function calcImpactoAguaCalibrado(tds, tipoSal, pvVaca, temperatura) {
+  if (!tds || tds <= 0) return { hayProblema: false, pctReducDMI: 0, conclusion: "Sin datos de agua." };
+
+  // Umbrales NRC 2000 / OSU Extension para ganado bovino
+  const UMBRALES = [
+    { max: 1000,  nivel: "Excelente", reducDMI: 0,   riesgo: false, label: "agua de calidad óptima" },
+    { max: 2999,  nivel: "Satisfactorio", reducDMI: 0, riesgo: false, label: "agua aceptable" },
+    { max: 4999,  nivel: "Marginal", reducDMI: 5,   riesgo: true,  label: "puede causar leve reducción de ingesta" },
+    { max: 6999,  nivel: "Riesgo",   reducDMI: 12,  riesgo: true,  label: "reducción de ingesta y GDP" },
+    { max: 9999,  nivel: "Alto riesgo", reducDMI: 22, riesgo: true, label: "reducción severa de ingesta, abortos posibles" },
+    { max: 99999, nivel: "Peligroso",   reducDMI: 35, riesgo: true, label: "tóxico — alta mortalidad" },
+  ];
+
+  const nivel = UMBRALES.find(u => tds <= u.max) || UMBRALES[UMBRALES.length - 1];
+
+  // Ajuste por tipo de sal (sulfatos son más tóxicos que NaCl)
+  // Patterson et al. 2003: sulfato → declinación cuadrática de GDP
+  const factorTipoSal = {
+    "sulfatos":    1.4,  // sulfatos mucho más dañinos
+    "bicarbonatos":0.7,  // menos palatabilidad pero menos tóxico
+    "cloruros":    1.0,  // referencia NaCl
+    "mixto":       1.1,
+    "nitrates":    1.3,
+  }[tipoSal?.toLowerCase()] || 1.0;
+
+  const pctReduccionReal = Math.min(40, nivel.reducDMI * factorTipoSal);
+
+  // Impacto sobre consumo voluntario
+  const cvTeorico  = pvVaca * 0.028; // kg MS/día al 2.8% PV
+  const cvPerdido  = Math.round(cvTeorico * pctReduccionReal / 100 * 10) / 10;
+  const cvReal     = Math.round((cvTeorico - cvPerdido) * 10) / 10;
+
+  // Impacto con calor (agua salada + calor = efecto multiplicado)
+  const temp = parseFloat(temperatura) || 20;
+  const factCalor = temp > 30 ? 1.20 : temp > 25 ? 1.10 : 1.0;
+  const pctReducFinal = Math.min(45, pctReduccionReal * factCalor);
+
+  // Equivalente en suplemento: cuánto suplemento compensa esta pérdida
+  const mcalPerdidas = cvPerdido * 2.05; // Mcal/día perdidas por ingesta reducida
+  const kgSuplEquiv  = Math.round(mcalPerdidas / 2.5 * 10) / 10; // kg expeller girasol equiv
+
+  let conclusion = `TDS ${tds.toLocaleString("es-AR")} ppm (${nivel.nivel}) — ${nivel.label}. `;
+
+  if (nivel.riesgo) {
+    conclusion += `Reduce consumo voluntario ${Math.round(pctReducFinal)}% → pierde ${cvPerdido} kg MS/vaca/día. `;
+    conclusion += `Equivale a eliminar ${kgSuplEquiv} kg/vaca de suplemento diario. `;
+    if (tipoSal === "sulfatos") {
+      conclusion += `Sulfatos > 1000 ppm: riesgo de polioencefalomalacia en terneros (Patterson et al. 2003). `;
+    }
+    if (pctReducFinal > 20) {
+      conclusion += `PRIORIDAD CRÍTICA: ningún plan nutricional funciona con este nivel de agua. Filtrar o cambiar la fuente antes que cualquier suplemento.`;
+    } else {
+      conclusion += `Mejorar la fuente aumentaría la respuesta a cualquier suplemento.`;
+    }
+  } else {
+    conclusion += `Calidad adecuada — sin impacto significativo sobre el consumo voluntario.`;
+  }
+
+  return {
+    tds, tipoSal, nivel: nivel.nivel,
+    pctReducDMI: Math.round(pctReducFinal),
+    cvPerdido, cvReal, mcalPerdidas: Math.round(mcalPerdidas * 10) / 10,
+    kgSuplEquiv,
+    hayProblema: nivel.riesgo,
+    // Fuentes:
+    // Umbrales NRC 1974 / NRC 2000 / Ray 1989 (Oregon State Extension)
+    // Sulfatos: Patterson et al. 2003 (J. Anim. Sci. 79:2941-2948)
+    // Factor calor: Sanchez et al. 1994 (citado en NASEM 2021)
+    conclusion,
+  };
+}
+
+// ── 4. SANIDAD: penalidades sobre preñez y GDP calibradas ──────────
+// Fuentes: literatura internacional + datos INTA NEA
+// Aftosa: riesgo comercial, no impacta directamente GDP si vacunado
+// Brucelosis: 2-8% abortos (SENASA), -8pp preñez en rodeos infectados
+// Parasitosis: reducción GDP 15-25% en terneros (Herrera 2021, INTA)
+// Toros: CC < 5.0 → -10-15pp preñez por lote (Chenoweth 1994)
+// Cola preñez: cada mes de retraso en primer parto → -1 ternero total de vida
+
+function calcPenalidadSanidad(form, motor) {
+  const penalidades = [];
+  let ppPrenezTotal = 0;
+  let pctGdpPerdido = 0;
+
+  // Brucelosis sin control
+  if (form.sanBrucelosis !== "si") {
+    penalidades.push({
+      factor: "Brucelosis sin vacunar",
+      ppPrenez: 8,
+      detalle: "Riesgo de abortos en 7° mes. Infección activa → 2-8% abortos. Obligatorio SENASA Res. 114/21.",
+      urgencia: "URGENTE",
+    });
+    ppPrenezTotal += 8;
+  }
+
+  // Abortos registrados
+  if (form.sanAbortos === "si") {
+    penalidades.push({
+      factor: "Abortos registrados en el rodeo",
+      ppPrenez: 12,
+      detalle: "Abortos activos sin diagnóstico → agente causal desconocido. Brucella, IBR, Leptospira o TVB pendiente de diagnóstico.",
+      urgencia: "URGENTE",
+    });
+    ppPrenezTotal += 12;
+  }
+
+  // Toros sin revisación
+  if (form.sanToros !== "con_control") {
+    penalidades.push({
+      factor: "Toros sin revisación andrológica",
+      ppPrenez: 10,
+      detalle: "Toro con defecto no detectado puede dejar 15-20 vacas vacías silenciosamente. Revisación de campo: 30 min (Chenoweth 1994).",
+      urgencia: "P1",
+    });
+    ppPrenezTotal += 10;
+  }
+
+  // Parasitosis externa/interna → GDP
+  if (form.sanParasitoExt === "con_problema" || form.sanParasitoInt === "con_problema") {
+    penalidades.push({
+      factor: "Parasitosis activa",
+      pctGdpPerdido: 20,
+      ppPrenez: 3,
+      detalle: "Parasitosis interna/externa → reduce GDP terneros 15-25% y CC vacas en lactación. Desparasitación estratégica mejora respuesta a suplemento.",
+      urgencia: "P2",
+    });
+    ppPrenezTotal += 3;
+    pctGdpPerdido += 20;
+  }
+
+  // Sin programa sanitario estructurado
+  if (!form.sanPrograma) {
+    penalidades.push({
+      factor: "Sin programa sanitario estructurado",
+      ppPrenez: 4,
+      detalle: "Vacunaciones reactivas vs programa preventivo. Los costos de tratamiento superan el costo de prevención.",
+      urgencia: "P3",
+    });
+    ppPrenezTotal += 4;
+  }
+
+  const prenezEst = motor?.tray?.pr || 0;
+  const prenezConSanidad = Math.max(20, prenezEst - ppPrenezTotal);
+
+  return {
+    penalidades,
+    ppPrenezTotal,
+    pctGdpPerdido,
+    prenezEst,
+    prenezConSanidad,
+    esCritico: ppPrenezTotal > 15 || penalidades.some(p => p.urgencia === "URGENTE"),
+    // Fuentes:
+    // Brucelosis: SENASA Res. 114/21, literatura INTA
+    // Toros: Chenoweth 1994 (Vet. Clin. North Am. Food Anim. Pract.)
+    // Parasitosis: Herrera et al. 2021 (INTA Colonia Benítez)
+  };
+}
+
+
+
+// ALGORITMOS INTERPRETATIVOS — Calf AI
+// Cada función lee datos del motor/form/sat y produce una conclusión
+// en texto + números ya calculados. La IA recibe conclusiones, no datos crudos.
+// ═══════════════════════════════════════════════════════════════════
+
+function interpretarRecursoForrajero(form, motor, sat) {
+  const fenol    = form.fenologia || "mayor_50";
+  const PB       = { menor_10:12, "10_25":9, "25_50":6, mayor_50:4 }[fenol] || 6;
+  const dispMS   = motor.disponMS?.msHa || 0;
+  const ndvi     = parseFloat(sat?.ndvi) || motor.ndviN || null;
+  const veg      = form.vegetacion || "Pastizal natural";
+  const supHa    = parseFloat(form.supHa) || 0;
+  const pvVaca   = parseFloat(form.pvVacaAdulta) || 320;
+
+  // Tipo de déficit
+  const esCalidad  = PB < 7;
+  const esCantidad = dispMS > 0 && dispMS < 1200;
+  const esMixto    = esCalidad && esCantidad;
+
+  // Consumo voluntario teórico vs real
+  const cvTeorico = pvVaca * 0.028; // kg MS/día al 2.8% PV
+  const factPB    = PB >= 10 ? 1.0 : PB >= 7 ? 0.80 : 0.55;
+  const cvReal    = Math.round(cvTeorico * factPB * 10) / 10;
+  const cvPerdido = Math.round((cvTeorico - cvReal) * 10) / 10;
+
+  // Oferta total estimada en verano/invierno
+  const ofVerano = motor.balanceMensual?.[0]?.ofPastoTotal || 0; // enero
+  const ofInv    = motor.balanceMensual?.[6]?.ofPastoTotal || 0; // julio
+
+  // NDVI contexto
+  const ndviCtx = ndvi !== null
+    ? (ndvi < 0.35 ? `NDVI ${ndvi.toFixed(2)} — campo seco, por debajo del umbral mínimo productivo`
+      : ndvi > 0.65 ? `NDVI ${ndvi.toFixed(2)} — excelente cobertura vegetal`
+      : `NDVI ${ndvi.toFixed(2)} — cobertura moderada`)
+    : null;
+
+  let conclusion = `${veg} · PB ${PB}% · `;
+
+  if (esMixto) {
+    conclusion += `déficit MIXTO (calidad y cantidad). `;
+    conclusion += `Pasto encañado paraliza microflora ruminal (Detmann/NASSEM 2010) — `;
+    conclusion += `el animal no puede digerir la fibra aunque haya. `;
+    conclusion += `Consumo voluntario real: ${cvReal} kg MS/vaca/día vs teórico ${cvTeorico.toFixed(1)} — pierde ${cvPerdido} kg/día. `;
+    conclusion += `Suplemento ENERGÉTICO-PROTEICO resuelve ambos déficits.`;
+  } else if (esCalidad) {
+    conclusion += `déficit de CALIDAD — cantidad disponible pero no aprovechable. `;
+    conclusion += `PB ${PB}% bloquea la microflora ruminal (mínimo 7-8% para funcionar). `;
+    conclusion += `Con ${cvPerdido} kg MS/vaca/día no aprovechados, el suplemento PROTEICO `;
+    conclusion += `desbloquea la digestión de fibra disponible y puede recuperar hasta ${Math.round(cvPerdido*0.8*10)/10} kg/día extra.`;
+  } else if (esCantidad) {
+    conclusion += `déficit de CANTIDAD — pasto escaso (${dispMS} kg MS/ha). `;
+    conclusion += `Suplemento ENERGÉTICO compensa la energía faltante. `;
+    conclusion += `Con diario obligatorio para evitar acidosis.`;
+  } else {
+    conclusion += `recurso forrajero adecuado. `;
+    if (ofVerano > 0) conclusion += `Oferta estimada verano: ${ofVerano} Mcal/d. `;
+    conclusion += `Monitorear NDVI mensual para anticipar cambios.`;
+  }
+
+  if (ndviCtx) conclusion += ` ${ndviCtx}.`;
+  if (supHa > 0) conclusion += ` Superficie: ${supHa} ha.`;
+
+  return {
+    tipo:        esMixto ? "EP" : esCalidad ? "P" : esCantidad ? "E" : "ok",
+    PB, dispMS, cvReal, cvPerdido,
+    esCalidad, esCantidad, esMixto,
+    conclusion,
+  };
+}
+
+function interpretarCCEnTiempo(tray, balanceMensual, mesesDeficit) {
+  if (!tray) return null;
+
+  const ccHoy       = tray.ccHoy       || 0;
+  const ccParto     = tray.ccParto     || 0;
+  const ccMinLact   = tray.ccMinLact   || 0;
+  const ccServ      = tray.ccServ      || 0;
+  const ccServAntic = tray.ccServAntic || 0;
+  const ccServHiper = tray.ccServHiper || 0;
+  const mesesLact   = parseFloat(tray.mesesLact) || 6;
+  const caidaLact   = parseFloat(tray.caidaLact) || 0;
+  const prenez      = tray.pr          || 0;
+  const prAntic     = tray.prAntic     || prenez;
+  const prHiper     = tray.prHiper     || prenez;
+  const anestro     = tray.anestro?.dias || 0;
+
+  // Erosión anual por déficit invernal
+  const erosionAnual = mesesDeficit >= 2 ? 0.35 : mesesDeficit === 1 ? 0.15 : 0;
+  const ciclosAlColapso = erosionAnual > 0 && ccServ > 3.5
+    ? Math.max(1, Math.ceil((ccServ - 3.5) / erosionAnual)) : null;
+
+  // Ganancia al actuar
+  const ppGananciaAntic = Math.max(0, prAntic - prenez);
+  const ppGananciaHiper = Math.max(0, prHiper - prenez);
+  const mejorEscenario  = ccServHiper > ccServAntic ? "hiperprecoz" : "anticipado";
+  const mejorCC         = mejorEscenario === "hiperprecoz" ? ccServHiper : ccServAntic;
+  const mejorPP         = mejorEscenario === "hiperprecoz" ? ppGananciaHiper : ppGananciaAntic;
+
+  let conclusion = "";
+
+  // Trayectoria
+  conclusion += `CC tacto ${ccHoy.toFixed(1)} → parto ${ccParto.toFixed(1)} → `;
+  conclusion += `mínima lactación ${ccMinLact.toFixed(1)} (caída ${caidaLact} puntos en ${mesesLact.toFixed(0)} meses) → `;
+  conclusion += `servicio ${ccServ.toFixed(1)}. `;
+
+  // Estado al servicio
+  if (ccServ < 4.0) {
+    conclusion += `CC CRÍTICA al servicio — preñez ${prenez}%, anestro prolongado ${anestro}d (Short et al. 1990). `;
+  } else if (ccServ < 4.5) {
+    conclusion += `CC por debajo del umbral 4.5 — preñez ${prenez}%, vulnerable a variaciones climáticas. `;
+  } else {
+    conclusion += `CC adecuada al servicio — preñez proyectada ${prenez}%. `;
+  }
+
+  // Escenarios de destete
+  if (mejorPP > 0) {
+    conclusion += `Con destete ${mejorEscenario}: CC sube a ${mejorCC.toFixed(1)} → preñez ${prenez + mejorPP}% (+${mejorPP}pp). `;
+  }
+
+  // Proyección temporal
+  if (ciclosAlColapso) {
+    conclusion += `ALERTA: déficit invernal erosiona ${erosionAnual} CC/año — `;
+    conclusion += `en ${ciclosAlColapso} ciclo${ciclosAlColapso > 1 ? "s" : ""} sin corrección `;
+    conclusion += `la CC al servicio llega a 3.5 y la preñez colapsa a <50%.`;
+  } else {
+    conclusion += `Sin déficit invernal persistente — CC puede mantenerse estable ciclo a ciclo.`;
+  }
+
+  return {
+    ccServ, ccServAntic, ccServHiper, prenez, prAntic, prHiper,
+    caidaLact, mesesLact, anestro, erosionAnual, ciclosAlColapso,
+    mejorEscenario, mejorCC, mejorPP, ppGananciaAntic, ppGananciaHiper,
+    conclusion,
+  };
+}
+
+function interpretarSuplementacion(form, motor, recursoForrajero) {
+  const suplMeses = (form.suplMeses || ["5","6","7"]).map(Number);
+  const diasCamp  = suplMeses.length * 30;
+  const MESES     = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const mesIni    = suplMeses.length > 0 ? Math.min(...suplMeses) : 5;
+  const mesFin    = suplMeses.length > 0 ? Math.max(...suplMeses) : 7;
+  const pbPasto   = recursoForrajero?.PB || 6;
+  const tipoNeces = recursoForrajero?.tipo || "P";
+
+  // Categorías con suplemento cargado
+  const cats = [
+    { label:"Vacas",  supl: form.supl_vacas || form.supl1, dosis: parseFloat(form.dosis_vacas||form.dosis1||0), n: parseInt(form.vacasN)||0 },
+    { label:"V2S",    supl: form.supl_v2s,   dosis: parseFloat(form.dosis_v2s||0),   n: parseInt(form.v2sN)||0 },
+    { label:"Vaq1",   supl: form.supl_vaq1,  dosis: parseFloat(form.dosis_vaq1||0),  n: motor.nVaq1||0 },
+    { label:"Vaq2",   supl: form.supl_vaq2,  dosis: parseFloat(form.dosis_vaq2||0),  n: parseInt(form.vaq2N)||0 },
+    { label:"Toros",  supl: form.supl_toros, dosis: parseFloat(form.dosis_toros||0), n: parseInt(form.torosN)||0 },
+  ].filter(c => c.supl && c.dosis > 0 && c.n > 0);
+
+  // Calcular boost proteico si el suplemento activa microflora
+  const boostDesc = pbPasto < 7 && cats.some(c => SUPLEMENTOS[c.supl]?.tipo === "P")
+    ? `Con PB pasto ${pbPasto}%, el suplemento proteico activa microflora ruminal → el animal aprovecha la fibra disponible (Detmann/NASSEM 2010). Efecto adicional: +0.8 kg MS pasto consumida por kg de suplemento proteico.`
+    : "";
+
+  // Total kg campaña
+  const kgTotalCamp = cats.reduce((s, c) => s + c.dosis * c.n * diasCamp, 0);
+
+  let conclusion = "";
+
+  if (cats.length === 0) {
+    conclusion += `Sin suplementación cargada para la campaña ${MESES[mesIni]}–${MESES[mesFin]}. `;
+    if (tipoNeces === "P") {
+      conclusion += `Con PB pasto ${pbPasto}%, la microflora ruminal está por debajo del umbral mínimo. `;
+      conclusion += `SIN suplemento proteico: CC vacas pierde 0.3–0.4 puntos extra en invierno, `;
+      conclusion += `vaquillona 1° inv GDP cae a 40–60 g/d (no llega al entore). `;
+      conclusion += `RECOMENDACIÓN: proteico 0.4–0.5 kg/cab/día 2–3 veces/semana.`;
+    } else if (tipoNeces === "E") {
+      conclusion += `Déficit energético sin compensar — la CC cae y el GDP queda limitado. `;
+      conclusion += `RECOMENDACIÓN: energético (sorgo/maíz) diario para evitar acidosis.`;
+    } else {
+      conclusion += `Monitorear disponibilidad forrajera. Sin suplemento por ahora.`;
+    }
+  } else {
+    conclusion += `Suplementación activa ${MESES[mesIni]}–${MESES[mesFin]} (${diasCamp}d): `;
+    cats.forEach(c => {
+      const s = SUPLEMENTOS[c.supl];
+      const tipo = s?.tipo || "?";
+      const freq = tipo === "E" ? "DIARIO" : "2–3×/sem";
+      const kgCat = Math.round(c.dosis * c.n * diasCamp / 100) / 10;
+      conclusion += `${c.label} [${tipo}] ${c.dosis} kg ${c.supl} · ${freq} · ${kgCat} tn. `;
+    });
+    conclusion += `Total campaña: ${(kgTotalCamp/1000).toFixed(1)} tn. `;
+
+    // ¿Está bien elegido el tipo?
+    const tiposCargados = [...new Set(cats.map(c => SUPLEMENTOS[c.supl]?.tipo).filter(Boolean))];
+    if (tipoNeces === "P" && !tiposCargados.includes("P") && !tiposCargados.includes("EP")) {
+      conclusion += `⚠ INCONSISTENCIA: pasto PB ${pbPasto}% requiere proteico pero el suplemento cargado no activa microflora. `;
+    } else if (tipoNeces === "E" && tiposCargados.includes("E")) {
+      conclusion += `Tipo correcto para el recurso actual. `;
+    }
+
+    if (boostDesc) conclusion += boostDesc;
+  }
+
+  return {
+    cats, diasCamp, mesIni, mesFin, kgTotalCamp, tipoNeces, boostDesc,
+    haySupl: cats.length > 0,
+    conclusion,
+  };
+}
+
+function interpretarVerdeo(form, motor) {
+  if (form.tieneVerdeo !== "si" || !parseFloat(form.verdeoHa)) {
+    return { tieneVerdeo: false, conclusion: "Sin verdeo de invierno cargado." };
+  }
+
+  const ha        = parseFloat(form.verdeoHa) || 0;
+  const tipo      = form.verdeoTipo || "Avena / Raigrás / Melilotus";
+  const dest      = form.verdeoDestinoVaq || "si";
+  const nVaq1     = motor.nVaq1 || 0;
+  const nV2s      = parseInt(form.v2sN) || 0;
+  const pvVaq1    = motor.pvEntVaq1 || Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40);
+
+  // Parámetros por tipo
+  const PARAMS = {
+    "Avena / Raigrás / Melilotus": { msHa:2800, mcalKg:2.10, pb:18, util:0.50 },
+    "Melilotus":                   { msHa:2200, mcalKg:2.15, pb:22, util:0.55 },
+    "Raigrás anual":               { msHa:3200, mcalKg:2.20, pb:20, util:0.52 },
+    "Triticale":                   { msHa:3000, mcalKg:2.05, pb:14, util:0.48 },
+    "Gramínea + leguminosa":       { msHa:2600, mcalKg:2.18, pb:20, util:0.52 },
+  };
+  const p = PARAMS[tipo] || PARAMS["Avena / Raigrás / Melilotus"];
+
+  // Oferta total del verdeo
+  const kgMsTotales = Math.round(ha * p.msHa * p.util);
+  const mcalDia     = Math.round(ha * p.msHa * p.mcalKg * p.util / 90); // 90 días
+
+  // GDP en verdeo vs pastizal
+  const gdpVerdeo   = 350; // g/d referencia campo
+  const gdpPastizal = motor.vaq1E?.gdpReal || 45;
+
+  // Capacidad: cuántas categorías puede recibir el verdeo
+  const consumoVaq1 = pvVaq1 * 0.028 * nVaq1; // kg MS/día
+  const consumoV2s  = (parseFloat(form.pvVacaAdulta)||320) * 0.88 * 0.028 * nV2s;
+  const diasVerdeoVaq1 = consumoVaq1 > 0 ? Math.round(kgMsTotales / consumoVaq1) : 0;
+  const diasVerdeoV2s  = consumoV2s  > 0 ? Math.round(kgMsTotales / consumoV2s)  : 0;
+
+  let conclusion = `${ha} ha de ${tipo} (PB ${p.pb}% · ${p.msHa} kg MS/ha · util ${Math.round(p.util*100)}%). `;
+  conclusion += `Oferta total: ${kgMsTotales.toLocaleString("es-AR")} kg MS · ${mcalDia} Mcal/día durante 90 días. `;
+
+  if (dest === "si" || dest === "todo") {
+    if (nVaq1 > 0) {
+      conclusion += `Para ${nVaq1} vaquillona 1° inv: ${diasVerdeoVaq1} días disponibles. `;
+      conclusion += `GDP en verdeo ~${gdpVerdeo} g/d vs ${gdpPastizal} g/d en pastizal — `;
+      conclusion += `${Math.round(gdpVerdeo/Math.max(1,gdpPastizal))}x mayor. `;
+      if (diasVerdeoVaq1 >= 60) {
+        conclusion += `RECOMENDACIÓN: destinar vaquillona 1° inv al verdeo — elimina necesidad de suplemento proteico adicional.`;
+      } else {
+        conclusion += `Verdeo no suficiente para toda la campaña — complementar con suplemento proteico en los meses restantes.`;
+      }
+    }
+  } else if (dest === "v2s") {
+    conclusion += `Destinado a V2S (${nV2s} cab): ${diasVerdeoV2s} días. `;
+    conclusion += `PB ${p.pb}% alivia el anestro posparto y mejora la recuperación de CC.`;
+  }
+
+  return {
+    ha, tipo, pb: p.pb, mcalDia, kgMsTotales, gdpVerdeo, gdpPastizal,
+    diasVerdeoVaq1, diasVerdeoV2s, tieneVerdeo: true,
+    conclusion,
+  };
+}
+
+function interpretarSanidadReproductiva(form, motor) {
+  const ccToros    = parseFloat(form.torosCC) || 0;
+  const nToros     = parseInt(form.torosN) || 0;
+  const nVacas     = parseInt(form.vacasN) || 0;
+  const relAT      = nToros > 0 ? Math.round(nVacas / nToros) : null;
+  const diasServ   = motor.cadena?.diasServ || null;
+  const diasHastaServ = motor.cadena?.ini
+    ? Math.max(0, Math.round((new Date(motor.cadena.ini) - new Date()) / 86400000)) : null;
+
+  const sinAftosa   = form.sanAftosa     !== "si";
+  const sinBruc     = form.sanBrucelosis !== "si";
+  const sinRevToros = form.sanToros      !== "con_control";
+  const hayAbortos  = form.sanAbortos    === "si";
+
+  let issues = [];
+  let conclusion = "";
+
+  // Vacunas obligatorias
+  if (sinAftosa)   issues.push("⚠ Aftosa sin vacunar — obligatorio SENASA, riesgo de clausura comercial");
+  if (sinBruc)     issues.push("⚠ Brucelosis incompleta — aborto masivo en 7° mes, zoonosis (SENASA RES.114/21)");
+  if (hayAbortos)  issues.push("⚠ Abortos registrados — diagnóstico urgente de agente causal antes del próximo servicio");
+  if (sinRevToros) issues.push("⚠ Sin revisación andrológica de toros — riesgo silencioso: 15-20 vacas vacías sin diagnóstico hasta el tacto");
+
+  // Toros — CC y timing
+  if (ccToros > 0) {
+    const diasPreparo = Math.round((5.5 - ccToros) / 0.018);
+    if (ccToros < 5.0) {
+      const urgente = diasHastaServ !== null && diasHastaServ < diasPreparo + 15;
+      issues.push(`${urgente ? "⚡ URGENTE" : "→"} Toros CC ${ccToros.toFixed(1)} — necesitan ${diasPreparo}d de preparo para llegar a CC 5.5 al servicio`);
+    } else {
+      conclusion += `Toros CC ${ccToros.toFixed(1)} — condición adecuada para el servicio. `;
+    }
+  }
+
+  // Relación toro:vaca
+  if (relAT !== null) {
+    if (relAT > 35) issues.push(`⚠ Relación ${relAT}:1 toro:vaca — por encima del límite recomendado (25-30:1)`);
+    else conclusion += `Relación toro:vaca ${relAT}:1 — dentro del rango adecuado. `;
+  }
+
+  if (issues.length === 0 && !conclusion) {
+    conclusion = "Sanidad reproductiva en orden. Continuar con el calendario programado.";
+  } else {
+    conclusion = issues.join(". ") + (conclusion ? ". " + conclusion : "");
+  }
+
+  // Agregar penalidades calibradas sobre preñez y GDP
+  const penal = calcPenalidadSanidad(form, motor);
+
+  return {
+    sinAftosa, sinBruc, sinRevToros, hayAbortos,
+    ccToros, relAT, diasHastaServ,
+    nIssues: issues.length,
+    penalidades: penal.penalidades,
+    ppPrenezTotal: penal.ppPrenezTotal,
+    esCritico: penal.esCritico,
+    conclusion: penal.esCritico
+      ? conclusion + ` IMPACTO ESTIMADO EN PREÑEZ: −${penal.ppPrenezTotal}pp`
+      : conclusion,
+  };
+}
+
+function interpretarEficienciaReproductiva(form, motor, tray) {
+  const impactoCola  = motor.impactoCola || null;
+  const prenez       = tray?.pr          || 0;
+  const prenezHist   = parseFloat(form.prenez) || 0;
+  const mesesLact    = parseFloat(tray?.mesesLact) || 6;
+  const anestro      = tray?.anestro?.dias || 0;
+  const diasServ     = motor.cadena?.diasServ || 90;
+  const nVacas       = parseInt(form.vacasN) || 0;
+
+  // Cola de parición — impacto en kg ternero
+  const kgPerdidos  = impactoCola?.kgPerdidosCola || 0;
+  const kgExtra     = impactoCola?.kgExtraHiperprecoz || 0;
+  const nCab        = Math.round(nVacas * prenez / 100);
+  const kgSistemaCola = Math.round(kgPerdidos * nCab);
+
+  // Gap preñez actual vs histórica
+  const gapHistorico = prenezHist > 0 ? prenezHist - prenez : 0;
+
+  let conclusion = "";
+
+  // Anestro posparto
+  if (anestro > 60) {
+    conclusion += `Anestro posparto ${anestro}d — por encima del óptimo (≤60d para preñez en servicio de ${diasServ}d). `;
+    conclusion += `Con anestro actual y servicio de ${diasServ}d: ${Math.max(0, Math.round(100*(1-anestro/diasServ)))}% de las vacas ciclan antes del cierre. `;
+  } else if (anestro > 0) {
+    conclusion += `Anestro ${anestro}d — dentro del rango aceptable para el servicio planificado. `;
+  }
+
+  // Cola de parición
+  if (kgPerdidos > 5 && nCab > 0) {
+    conclusion += `Cola de parición: servicio ${diasServ}d genera parición extendida — terneros tardíos llegan ${Math.round(kgPerdidos)} kg más livianos al destete (Maresca/INTA 2022). `;
+    conclusion += `Impacto total en el rodeo: ${kgSistemaCola.toLocaleString("es-AR")} kg MS perdidos. `;
+    conclusion += `Acortando el servicio a 60d: terneros ${Math.round(kgExtra)} kg más pesados al destete, sin cambiar el rodeo.`;
+  }
+
+  // Gap histórico
+  if (gapHistorico > 5) {
+    conclusion += ` Preñez actual ${prenez}% vs histórica ${prenezHist}% — brecha de ${Math.round(gapHistorico)}pp. Revisar si el deterioro es progresivo (balance invernal) o puntual (año climático).`;
+  } else if (gapHistorico < -5) {
+    conclusion += ` Preñez actual ${prenez}% superior al histórico ${prenezHist}% — mejora positiva. Identificar qué cambió para sostenerlo.`;
+  }
+
+  if (!conclusion) conclusion = "Eficiencia reproductiva dentro de parámetros normales para el sistema.";
+
+  return {
+    prenez, prenezHist, gapHistorico, anestro, diasServ,
+    kgPerdidos, kgExtra, kgSistemaCola,
+    conclusion,
+  };
+}
+
+function interpretarAgua(form, motor) {
+  const tds     = parseFloat(form.aguaTDS) || 0;
+  const evalAg  = motor.evalAgua || null;
+  const pvVaca  = parseFloat(form.pvVacaAdulta) || 320;
+  const nVacas  = parseInt(form.vacasN) || 0;
+
+  if (!tds || tds <= 0 || !evalAg) {
+    return { hayProblema: false, conclusion: "Sin datos de calidad de agua. Carga TDS para diagnóstico completo." };
+  }
+
+  const pctReduc  = evalAg.pctReducDMI || 0;
+  const kgPerdido = Math.round(pctReduc / 100 * 2.8 * pvVaca * 0.024 * 10) / 10;
+  const hayProblem = pctReduc > 10;
+
+  let conclusion = `Agua TDS ${tds.toLocaleString("es-AR")} mg/L (${form.aguaTipoSal || "tipo mixto"}). `;
+
+  if (pctReduc > 25) {
+    conclusion += `CRÍTICO — reduce consumo voluntario ${Math.round(pctReduc)}% → pierde ${kgPerdido} kg MS/vaca/día. `;
+    conclusion += `Equivale a eliminar TODO el suplemento planeado. `;
+    conclusion += `NINGÚN plan nutricional funciona con esta agua. `;
+    conclusion += `Filtrar o cambiar la fuente ES LA PRIMERA PRIORIDAD — antes que cualquier suplemento.`;
+  } else if (pctReduc > 10) {
+    conclusion += `Reduce consumo ${Math.round(pctReduc)}% → pierde ${kgPerdido} kg MS/vaca/día. `;
+    conclusion += `Impacto acumulado en ${nVacas} vacas: ${Math.round(kgPerdido * nVacas)} kg MS/día no consumida. `;
+    conclusion += `Filtrar o mejorar la fuente mejora la respuesta a cualquier suplemento.`;
+  } else {
+    conclusion += `Calidad aceptable — impacto mínimo sobre el consumo voluntario.`;
+  }
+
+  return {
+    tds, pctReduc, kgPerdido, hayProblema: hayProblem,
+    conclusion,
+  };
+}
+
+function interpretarMomentoOptimo(form, motor, tray, sat) {
+  const mesHoy       = new Date().getMonth();
+  const MESES        = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const cadena       = motor.cadena || null;
+  const mesServR     = cadena?.ini ? new Date(cadena.ini).getMonth() : null;
+  const mesParto     = cadena?.partoTemp ? cadena.partoTemp.getMonth() : null;
+  const diasHastaServ = cadena?.ini
+    ? Math.max(0, Math.round((new Date(cadena.ini) - new Date()) / 86400000)) : null;
+
+  const ccServ       = tray?.ccServ || 0;
+  const mesesDeficit = [5,6,7].filter(i => (motor.balanceMensual?.[i]?.balance ?? 0) < 0).length;
+  const ndvi         = parseFloat(sat?.ndvi) || null;
+
+  // Ventanas críticas de acción
+  const ventanas = [];
+
+  // Ventana suplemento — comprar antes de mayo
+  if (mesesDeficit > 0) {
+    const mesCompra = 3; // abril
+    const diasParaCompra = ((mesCompra - mesHoy + 12) % 12) * 30;
+    ventanas.push({
+      mes: mesCompra,
+      urgencia: diasParaCompra < 45 ? "URGENTE" : "PLANIFICAR",
+      accion: "Comprar suplemento para campaña invernal",
+      detalle: `${mesesDeficit}/3 meses con déficit — comprar antes de ${MESES[mesCompra]} para tener stock en junio`,
+    });
+  }
+
+  // Ventana destete
+  if (ccServ < 4.5 && mesServR !== null) {
+    const mesDestete = (mesServR - 3 + 12) % 12;
+    const diasParaDest = ((mesDestete - mesHoy + 12) % 12) * 30;
+    ventanas.push({
+      mes: mesDestete,
+      urgencia: diasParaDest < 30 ? "URGENTE" : diasParaDest < 90 ? "PRÓXIMO" : "PLANIFICAR",
+      accion: `Destete ${tray?.recDestete?.tipo === "hiperprecoz" ? "hiperprecoz" : "anticipado"}`,
+      detalle: `CC ${ccServ.toFixed(1)} al servicio — actuar ${MESES[mesDestete]} para llegar en condición`,
+    });
+  }
+
+  // Ventana preparo toros
+  if (parseFloat(form.torosCC) > 0 && parseFloat(form.torosCC) < 5.0 && mesServR !== null) {
+    const diasPreparo = Math.round((5.5 - parseFloat(form.torosCC)) / 0.018);
+    const mesPrep = ((mesServR - Math.ceil(diasPreparo/30)) + 12) % 12;
+    ventanas.push({
+      mes: mesPrep,
+      urgencia: diasHastaServ !== null && diasHastaServ < diasPreparo + 15 ? "URGENTE" : "PLANIFICAR",
+      accion: "Iniciar preparo toros",
+      detalle: `CC ${form.torosCC} → 5.5 al servicio — ${diasPreparo}d de preparo`,
+    });
+  }
+
+  // Ordenar por urgencia y proximidad
+  const urgOrd = { URGENTE:0, PRÓXIMO:1, PLANIFICAR:2 };
+  ventanas.sort((a, b) => {
+    const ua = urgOrd[a.urgencia] ?? 3;
+    const ub = urgOrd[b.urgencia] ?? 3;
+    if (ua !== ub) return ua - ub;
+    return ((a.mes - mesHoy + 12) % 12) - ((b.mes - mesHoy + 12) % 12);
+  });
+
+  // Contexto climático actual
+  let ctxClima = "";
+  if (ndvi !== null) {
+    if ([5,6,7].includes(mesHoy) && ndvi < 0.40) {
+      ctxClima = `NDVI ${ndvi.toFixed(2)} en invierno — campo por debajo del promedio histórico. Suplementación más crítica que en años normales.`;
+    } else if (ndvi > 0.65) {
+      ctxClima = `NDVI ${ndvi.toFixed(2)} — excelente condición forrajera actual. Aprovechar para mejorar CC antes del invierno.`;
+    }
+  }
+
+  let conclusion = `Hoy: ${MESES[mesHoy]}. `;
+  if (mesServR !== null) conclusion += `Servicio: ${MESES[mesServR]}${diasHastaServ !== null ? " (" + diasHastaServ + "d)" : ""}. `;
+  if (mesParto !== null) conclusion += `Parición: ${MESES[mesParto]}. `;
+
+  if (ventanas.length > 0) {
+    conclusion += `Ventanas de acción: `;
+    ventanas.slice(0, 3).forEach((v, i) => {
+      conclusion += `${i+1}) [${v.urgencia}] ${v.accion} → ${MESES[v.mes]}: ${v.detalle}. `;
+    });
+  } else {
+    conclusion += `Sin acciones críticas urgentes en los próximos 3 meses.`;
+  }
+
+  if (ctxClima) conclusion += ctxClima;
+
+  return { mesHoy, mesServR, mesParto, diasHastaServ, ventanas, ctxClima, conclusion };
+}
+
+
+// ── ALGORITMO FUNDAMENTAL: Amplitud de parición → viabilidad del destete ──────
+// Modela la lógica que el técnico sabe de campo pero el sistema no calculaba:
+// Servicio largo → parición extendida → vaca tardía no puede destetar en tiempo
+// para recuperar CC antes del próximo servicio.
+// Esto aplica SOLO a vacas adultas y V2S — NO a vaquillona (sin ternero).
+function interpretarAmplitudParicion(form, motor, tray) {
+  const cadena = motor.cadena;
+  if (!cadena) return {
+    conclusion: "Sin fechas de servicio — cargá las fechas para analizar la amplitud de parición.",
+    viable: null,
+  };
+
+  const diasServ    = cadena.diasServ || 0;
+  const partoTemp   = cadena.partoTemp;
+  const partoTard   = cadena.partoTard;
+  const mesServIni  = cadena.ini ? new Date(cadena.ini).getMonth() : null;
+  const MESES       = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  // Destete real según modalidad cargada
+  const destTrad  = parseFloat(form.destTrad)  || 0;
+  const destAntic = parseFloat(form.destAntic) || 0;
+  const destHiper = parseFloat(form.destHiper) || 0;
+  const tot = destTrad + destAntic + destHiper;
+
+  // Modalidad dominante del rodeo
+  const modalidad = destTrad >= 50 ? "tradicional" : destAntic >= 40 ? "anticipado" : "hiperprecoz";
+  const diasLactModal = modalidad === "tradicional" ? 180 : modalidad === "anticipado" ? 90 : 50;
+
+  // Vaca que parió EN LA CABEZA (partoTemp): tiene diasServ + 280 días de ventaja
+  // Vaca que parió AL FINAL (partoTard): desteta diasServ días después que la primera
+  // Diferencia de recuperación entre cabeza y cola:
+  const diasRecupCabeza = partoTemp && mesServIni !== null
+    ? Math.max(0, Math.round((cadena.ini - new Date(partoTemp.getTime() + diasLactModal*86400000)) / 86400000))
+    : null;
+  const diasRecupCola = partoTard && mesServIni !== null
+    ? Math.max(0, Math.round((cadena.ini - new Date(partoTard.getTime() + diasLactModal*86400000)) / 86400000))
+    : null;
+
+  // CC al servicio según posición en la parición (Short 1990: 0.3-0.5 CC/mes)
+  const tasaRecup = 0.013; // CC/día recuperación promedio
+  const ccMinLact = tray?.ccMinLact || 3.0;
+  const ccServCabeza = diasRecupCabeza !== null
+    ? Math.min(tray?.ccServ || 4.5, +(ccMinLact + diasRecupCabeza * tasaRecup).toFixed(2))
+    : null;
+  const ccServCola = diasRecupCola !== null
+    ? Math.max(1.5, +(ccMinLact + Math.max(0, diasRecupCola) * tasaRecup).toFixed(2))
+    : null;
+
+  // Preñez estimada por posición
+  const interpPrenez = (cc) => cc >= 5.5 ? 93 : cc >= 5.0 ? 88 : cc >= 4.5 ? 80 : cc >= 4.0 ? 70 : cc >= 3.5 ? 50 : 28;
+  const prenezCabeza = ccServCabeza !== null ? interpPrenez(ccServCabeza) : null;
+  const prenezCola   = ccServCola   !== null ? interpPrenez(ccServCola)   : null;
+
+  // ¿Es viable el destete tradicional para la vaca tardía?
+  const colaConProblema = diasRecupCola !== null && diasRecupCola < 45;
+  const brechaCCCabezaCola = ccServCabeza !== null && ccServCola !== null
+    ? Math.round((ccServCabeza - ccServCola) * 10) / 10 : null;
+
+  // Recomendación según amplitud
+  let recAmplitud = "";
+  if (diasServ > 90) {
+    recAmplitud = diasServ > 120
+      ? `Servicio de ${diasServ}d — parición muy extendida (${MESES[partoTemp?.getMonth()]}–${MESES[partoTard?.getMonth()]}). `
+      : `Servicio de ${diasServ}d — parición extendida. `;
+  }
+
+  let conclusion = "";
+
+  // Diagnóstico por categoría
+  conclusion += `VAQUILLONA 1° y 2° inv: sin ternero al pie → el déficit se corrige con SUPLEMENTACIÓN o PASTURAS DE CALIDAD (verdeo/proteico). `;
+  conclusion += `El manejo de la lactancia NO aplica — la solución es nutrición externa. `;
+  conclusion += `GDP objetivo: ≥300 g/d para llegar al entore en 24 meses. `;
+
+  if (diasServ > 0) {
+    conclusion += `
+VACAS ADULTAS y V2S: el déficit se corrige con MANEJO DEL TERNERO, no con suplemento. `;
+    conclusion += `Con destete ${modalidad} (${diasLactModal}d): `;
+
+    if (ccServCabeza !== null) {
+      conclusion += `vaca que parió en la cabeza → CC servicio ${ccServCabeza.toFixed(1)} → preñez ${prenezCabeza}%. `;
+    }
+    if (ccServCola !== null && brechaCCCabezaCola !== null) {
+      conclusion += `vaca que parió al final → CC servicio ${ccServCola.toFixed(1)} → preñez ${prenezCola}% `;
+      conclusion += `(${brechaCCCabezaCola} CC menos que la cabeza = ${Math.round((prenezCabeza||0)-(prenezCola||0))}pp menos de preñez). `;
+    }
+
+    if (colaConProblema && modalidad === "tradicional") {
+      conclusion += `⚠ PROBLEMA: con servicio de ${diasServ}d y destete tradicional, `;
+      conclusion += `la vaca tardía desteta apenas ${Math.max(0,diasRecupCola)}d antes del próximo servicio — `;
+      conclusion += `tiempo insuficiente para recuperar CC. `;
+      conclusion += `SOLUCIÓN: destete anticipado (90d) en vacas tardías `;
+      conclusion += `o acortar el servicio a ≤75d para concentrar la parición.`;
+    } else if (modalidad === "anticipado" || modalidad === "hiperprecoz") {
+      conclusion += `Con destete ${modalidad}, incluso las vacas tardías tienen `;
+      conclusion += `${Math.max(0,diasRecupCola)}d para recuperar CC antes del servicio. `;
+      if (diasRecupCola !== null && diasRecupCola > 45) {
+        conclusion += `Tiempo suficiente para recuperar ≥0.5 CC con buen pasto.`;
+      }
+    }
+  }
+
+  return {
+    diasServ, modalidad, diasLactModal,
+    diasRecupCabeza, diasRecupCola,
+    ccServCabeza, ccServCola,
+    prenezCabeza, prenezCola,
+    brechaCCCabezaCola,
+    colaConProblema,
+    conclusion,
+  };
+}
+
+// ── ORQUESTADOR: corre todos los algoritmos y devuelve conclusiones ──
+function interpretarSistemaCompleto(form, motor, sat, tray) {
+  if (!motor || !form) return null;
+
+  const recurso    = interpretarRecursoForrajero(form, motor, sat);
+  const ccTiempo   = interpretarCCEnTiempo(tray, motor.balanceMensual, [5,6,7].filter(i=>(motor.balanceMensual?.[i]?.balance??0)<0).length);
+  const supl       = interpretarSuplementacion(form, motor, recurso);
+  const verdeo     = interpretarVerdeo(form, motor);
+  const sanidad    = interpretarSanidadReproductiva(form, motor);
+  const eficiencia = interpretarEficienciaReproductiva(form, motor, tray);
+  const agua       = interpretarAgua(form, motor);
+  const momento    = interpretarMomentoOptimo(form, motor, tray, sat);
+
+  const amplitud   = interpretarAmplitudParicion(form, motor, tray);
+  return { recurso, ccTiempo, supl, verdeo, sanidad, eficiencia, agua, momento, amplitud };
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════════
+// OPTIMIZADOR PARA SISTEMAS BUENOS
+// Cuando el sistema supera la meta (≥75% preñez, sin déficit),
+// el análisis no termina — busca la mejora marginal posible.
+// "Sacar agua de las piedras" — diferencial técnico real.
+// ═══════════════════════════════════════════════════════════════════
+function analizarMargenOptimizacion(form, motor, tray, interp) {
+  const prenez       = tray?.pr || 0;
+  const ccServ       = tray?.ccServ || 0;
+  const mesesDeficit = [5,6,7].filter(i => (motor.balanceMensual?.[i]?.balance??0) < 0).length;
+  const diasServ     = motor.cadena?.diasServ || 90;
+  const nVacas       = parseInt(form.vacasN) || 0;
+  const pvVaca       = parseFloat(form.pvVacaAdulta) || 320;
+  const pctDestete   = parseFloat(form.pctDestete) || 90;
+  const MESES        = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const mesServR     = motor.cadena?.ini ? new Date(motor.cadena.ini).getMonth() : null;
+
+  const oportunidades = [];
+
+  // ── 1. COLA DE PARICIÓN — el limitante silencioso más frecuente ──
+  // Impacto cola (Maresca/INTA): cada mes de retraso en parición
+  // → ternero más liviano al destete. Con servicio > 75 días, la cola pierde.
+  const kgPerdidosCola  = motor.impactoCola?.kgPerdidosCola || 0;
+  const kgExtraAcortar  = motor.impactoCola?.kgExtraHiperprecoz || 0;
+  if (diasServ > 75) {
+    const kgGanancia = Math.round(kgPerdidosCola * nVacas * prenez / 100 * 0.95);
+    oportunidades.push({
+      id:       "acortar_servicio",
+      potencia: kgGanancia > 5000 ? "alta" : kgGanancia > 2000 ? "media" : "baja",
+      titulo:   `Acortar servicio a 60d — parición concentrada en la cabeza`,
+      impacto:  `+${Math.round(kgPerdidosCola)} kg/ternero en cola → +${kgGanancia.toLocaleString("es-AR")} kg MS totales en el rodeo`,
+      accion:   `Retirar toros a los 60d de iniciado el servicio (${mesServR !== null ? MESES[(mesServR+2)%12] : "2 meses después"}). Sin cambios en el rodeo.`,
+      mecanismo:"Terneros de la cabeza de parición llegan ${Math.round(kgPerdidosCola)} kg más pesados al destete que los de la cola. El servicio largo distribuye parición en 4–5 meses.",
+      referencia:"Maresca et al. (INTA) / impactoCola calculado por el motor",
+    });
+  }
+
+  // ── 2. CC al servicio — margen de mejora ≥ 0.3 puntos ──────────
+  // Si ccServ está entre 4.5 y 5.0, subir a 5.0 sube preñez ~9pp
+  // "Sacar agua" = exprimir la última mejora que sea costo-efectiva
+  if (ccServ >= 4.5 && ccServ < 5.2) {
+    const ccObjetivo  = 5.0;
+    const ppMejora    = Math.round((ccObjetivo - ccServ) * 18);
+    const ternerosEx  = Math.round(nVacas * ppMejora / 100);
+    if (ppMejora > 0) {
+      oportunidades.push({
+        id:       "cc_mejora_marginal",
+        potencia: ppMejora >= 5 ? "alta" : "media",
+        titulo:   `CC ${ccServ.toFixed(1)} → 5.0 — margen reproductivo disponible`,
+        impacto:  `+${ppMejora}pp preñez → +${ternerosEx} terneros sobre la base actual`,
+        accion:   ccServ < 4.8
+          ? `Destete anticipado selectivo en vacas CC 4.5–4.8 — no es urgente pero deja margen para años climáticamente adversos`
+          : `CC buena — sostener con manejo de carga y pastoreo rotativo. Buffer para años malos.`,
+        mecanismo:"Con CC 5.0 al servicio la preñez se estabiliza en el máximo sostenible del biotipo. Cada 0.1 CC adicional sobre 4.5 suma 1.8pp de preñez (Short et al. 1990).",
+        referencia:"Short R.E. et al. (1990). J. Anim. Sci. 68:799-811.",
+      });
+    }
+  }
+
+  // ── 3. CARGA GANADERA — ajuste fino ────────────────────────────
+  // Si la carga es moderada pero el NDVI muestra campo degradado o seco
+  const cargaEV   = motor.cargaEV_ha || 0;
+  const ndvi      = parseFloat(form._ndviHoy) || motor.ndviN || null;
+  const campoSeco = ndvi !== null && ndvi < 0.38;
+  if (cargaEV > 0 && (cargaEV > 0.9 || campoSeco)) {
+    oportunidades.push({
+      id:       "ajuste_carga",
+      potencia: campoSeco ? "alta" : "media",
+      titulo:   `Carga ${cargaEV.toFixed(2)} EV/ha${campoSeco ? " + campo seco" : ""} — ajuste preventivo`,
+      impacto:  campoSeco
+        ? "NDVI bajo → reducir carga 15–20% previene deterioro acelerado del pastizal y protege la CC"
+        : "Carga alta → el pastizal no recupera entre pastoreos → calidad cae → CC cae en 2–3 ciclos",
+      accion:   `Diferir 1 potrero en invierno. Pastoreo rotativo con 35–45 días de descanso en C4. En años Niña: descarga anticipada.`,
+      mecanismo:"La oferta forrajera de calidad (PB > 8%) es la variable más costo-efectiva del sistema. Mantenerla es más barato que suplementar.",
+      referencia:"Peruchena C.O. (2003). Manejo CC rodeos de cría NEA. INTA Colonia Benítez.",
+    });
+  }
+
+  // ── 4. EFICIENCIA DE CONVERSIÓN — vaquillona como inversión ────
+  // Un sistema con buena preñez debe también optimizar la reposición
+  const nVaq1       = motor.nVaq1 || 0;
+  const gdpVaq1     = motor.vaq1E?.gdpReal || 0;
+  const llegaVaq1   = motor.pvSalidaVaq1 >= Math.round(pvVaca * 0.65);
+  if (nVaq1 > 0 && gdpVaq1 >= 200 && llegaVaq1) {
+    // Ya llega — el margen es llegar más temprano (24 meses vs 30)
+    oportunidades.push({
+      id:       "entore_temprano_vaq1",
+      potencia: "media",
+      titulo:   `Vaquillona 1°inv en condición — analizar entore a 24 meses`,
+      impacto:  `Entore a 24 meses (vs 30): 1 ternero adelantado por vaquillona × ${nVaq1} cab = ${nVaq1} terneros adicionales en el ciclo`,
+      accion:   `Verificar PV al servicio: debe superar ${Math.round(pvVaca * 0.65)} kg (65% PV adulto = ${Math.round(pvVaca * 0.65)} kg). Si lo alcanza a los 18–20 meses → entore temprano viable.`,
+      mecanismo:"Cada ciclo de parición ganado en la vida productiva de la vaquillona equivale a 1 ternero por cabeza de vida útil. Sin costo adicional si la nutrición está cubierta.",
+      referencia:"Bavera G.A. (2005). FAV UNRC.",
+    });
+  }
+
+  // ── 5. VERDEO — maximizar el uso si hay buen sistema ──────────
+  if (form.tieneVerdeo === "si" && parseFloat(form.verdeoHa) > 0) {
+    const verdeoHa = parseFloat(form.verdeoHa) || 0;
+    const v2sN     = parseInt(form.v2sN) || 0;
+    // ¿El verdeo se está usando de la mejor manera?
+    const destActual = form.verdeoDestinoVaq || "si";
+    if (v2sN > 0 && destActual !== "v2s") {
+      oportunidades.push({
+        id:       "verdeo_v2s",
+        potencia: "alta",
+        titulo:   `${verdeoHa} ha de verdeo — priorizar V2S reduce anestro posparto`,
+        impacto:  `V2S con acceso a verdeo de alta PB: anestro posparto se reduce 15–20 días → preñez en primer servicio +8–12pp`,
+        accion:   `Destinar parte del verdeo (al menos 30%) a V2S en el período posparto inmediato (primeros 60 días). La PB alta del verdeo es clave en este momento crítico.`,
+        mecanismo:"PB verdeo 14–22% vs PB pastizal invierno 4% → V2S necesita proteína urgente para reactivar ciclos. La lactación sumada al crecimiento propio la pone en déficit proteico.",
+        referencia:"Balbuena O. (2003). Nutrición y recría NEA. INTA EEA El Colorado.",
+      });
+    }
+  }
+
+  // ── 6. SANIDAD SUBCLÍNICA — cuando todo parece bien ────────────
+  // "Las fallas son de los temas simples" — revisación andrológica,
+  // BVD subclínico, parasitosis larvaria que no se ve en el campo
+  const sinRevAndr  = form.sanToros !== "con_control";
+  const sinBVD      = !form.sanVacunas || !String(form.sanVacunas).includes("BVD");
+  if (sinRevAndr && prenez >= 75) {
+    oportunidades.push({
+      id:       "revision_andrológica",
+      potencia: "media",
+      titulo:   `Revisación andrológica pendiente — riesgo silencioso con buenos números`,
+      impacto:  `Con preñez 75%+ un toro con defecto no detectado puede bajar la preñez 10–15pp en 1 servicio y no se detecta hasta el tacto siguiente`,
+      accion:   `Revisación clínica de campo antes de cada servicio: CC, aplomos, prepucio, libido observable. 30 minutos. Costo: mínimo.`,
+      mecanismo:"Los sistemas buenos se deterioran por fallas puntuales no monitoreadas. El toro es la variable de mayor impacto que menos se controla.",
+      referencia:"Chenoweth P.J. (1994). Vet. Clin. North Am. Food Anim. Pract. 10(3).",
+    });
+  }
+
+  // ── 7. ENSO / CLIMA — anticipar el próximo año ─────────────────
+  const enso = form.enso || "neutro";
+  if (enso === "nina") {
+    oportunidades.push({
+      id:       "enso_nina_prep",
+      potencia: "alta",
+      titulo:   `Niña proyectada — preparar el sistema para déficit hídrico`,
+      impacto:  `Años Niña en NEA: déficit forrajero 20–35% vs promedio histórico. Sistema con buena preñez hoy puede colapsar en 1 ciclo si no se ajusta.`,
+      accion:   `Adelantar descarga: vender vacas no preñadas del tacto anterior en lugar de invernada. Comprar suplemento antes de mayo. Diferir potreros desde marzo.`,
+      mecanismo:"El ENSO es el predictor de largo plazo más confiable del Chaco húmedo. Actuar en año Niña antes del invierno es la decisión más costo-efectiva.",
+      referencia:"IRI Columbia University. ENSO outlook actualizado.",
+    });
+  } else if (enso === "nino") {
+    oportunidades.push({
+      id:       "enso_nino_oportunidad",
+      potencia: "media",
+      titulo:   `Niño proyectado — ventana de aumento de carga o mejora CC`,
+      impacto:  `Años Niño en NEA: exceso de pasto → oportunidad de mejorar CC sin costo en suplemento, o aumentar carga transitoriamente`,
+      accion:   `Diferir potreros para verano. Si CC está bien, aprovechar la condición forrajera para mejorar la carga animal en el período verde. Cuidado con el exceso de humedad en partos.`,
+      mecanismo:"El Niño genera excedentes forrajeros que si no se capitalizan se pierden por senescencia del pasto.",
+      referencia:"",
+    });
+  }
+
+  // Ordenar por potencia
+  const ordPot = { alta:0, media:1, baja:2 };
+  oportunidades.sort((a,b) => (ordPot[a.potencia]??3) - (ordPot[b.potencia]??3));
+
+  const hayOportunidades = oportunidades.length > 0;
+  const parrafoOptim = hayOportunidades
+    ? `Sistema sobre la meta de preñez. ${oportunidades.length} oportunidad${oportunidades.length>1?"es":""} de mejora marginal identificada${oportunidades.length>1?"s":""}. El diferencial técnico está en los detalles: ${oportunidades.slice(0,2).map(o=>o.titulo).join(" · ")}.`
+    : `Sistema optimizado. Sin oportunidades de mejora marginal inmediata. Mantener el monitoreo mensual de CC y NDVI.`;
+
+  return {
+    oportunidades,
+    hayOportunidades,
+    parrafoOptim,
+    esSistemaOptimizable: prenez >= 75 && oportunidades.some(o => o.potencia === "alta"),
+  };
+}
+
 function calcCerebro(motor, form, sat) {
   if (!motor) return null;
 
@@ -6367,7 +7643,9 @@ function calcCerebro(motor, form, sat) {
   const ppLimBalance = mesesDeficit >= 2 ? 10 : mesesDeficit === 1 ? 4 : 0;
   const ppLimToros   = (ccToros > 0 && ccToros < 4.5) ? 12 : (ccToros > 0 && ccToros < 5.0) ? 6 : 0;
   const ppLimAgua    = reduccionDMI > 25 ? 8 : reduccionDMI > 10 ? 4 : 0;
-  const ppLimSanidad = (!sanAftosa ? 5 : 0) + (!sanBrucelosis ? 8 : 0);
+  // Usar calcPenalidadSanidad para cuantificar el impacto real
+  const penalidadSan = calcPenalidadSanidad(form, motor);
+  const ppLimSanidad = penalidadSan.ppPrenezTotal || ((!sanAftosa ? 5 : 0) + (!sanBrucelosis ? 8 : 0));
   const prenezSustentable = Math.max(20, prenezEst - ppLimCC - ppLimBalance - ppLimToros - ppLimAgua - ppLimSanidad);
   const esSustentable     = prenezSustentable >= META_PRENEZ;
 
@@ -6448,6 +7726,12 @@ function calcCerebro(motor, form, sat) {
   });
 
   // ── CC AL SERVICIO — limitante reproductivo central ──────────
+  // Usar interpretarAmplitudParicion para entender el problema real:
+  // vacas tardías con servicio largo no pueden recuperar CC con destete tradicional
+  const amplitudCalc = interpretarAmplitudParicion(form, motor, tray);
+  const colaConProblema = amplitudCalc?.colaConProblema || false;
+  const brechaCola      = amplitudCalc?.brechaCCCabezaCola || 0;
+
   if (ccServ > 0 && ccServ < 4.5) {
     const urgCC       = ccServ < 4.0 ? "URGENTE" : "P1";
     const mesAccDest  = mesServR !== null ? (mesServR - 3 + 12) % 12 : 3;
@@ -6460,8 +7744,12 @@ function calcCerebro(motor, form, sat) {
     añadir({
       id: "cc_serv", prioridad: urgCC, icono: "🐄",
       titulo: `CC ${ccServ.toFixed(1)} al servicio — preñez ${prenezEst}% (meta ${META_PRENEZ}%)`,
-      impacto: `Brecha: −${GAP_PRENEZ}pp · Con ${labelDest}: CC ${ccSiActua?.toFixed(1)||"?"} → preñez ${(prenezEst+ppGanados)||"?"}% (+${ppGanados||"?"}pp · +${ternerosDest} terneros)`,
-      solucion: recDestete?.tipo === "hiperprecoz"
+      impacto: colaConProblema
+        ? `Servicio ${amplitudCalc?.diasServ||"?"}d → parición extendida: vaca cabeza CC ${amplitudCalc?.ccServCabeza?.toFixed(1)||"?"} (${amplitudCalc?.prenezCabeza||"?"}% preñez) vs vaca tardía CC ${amplitudCalc?.ccServCola?.toFixed(1)||"?"} (${amplitudCalc?.prenezCola||"?"}% preñez) — brecha ${brechaCola} CC · ${brechaCola > 0 ? Math.round(brechaCola*18)+"pp menos en la cola" : ""}`
+        : `Brecha: −${GAP_PRENEZ}pp · Con ${labelDest}: CC ${ccSiActua?.toFixed(1)||"?"} → preñez ${(prenezEst+ppGanados)||"?"}% (+${ppGanados||"?"}pp · +${ternerosDest} terneros)`,
+      solucion: colaConProblema
+        ? `Vacas tardías (últimos ${Math.round((amplitudCalc?.diasServ||90)/2)}d del servicio) → destete anticipado (90d). Vacas cabeza → seguir el plan actual (${labelDest}). Próximo servicio: acortar a ≤75d para concentrar la parición y uniformizar la recuperación de CC.`
+        : recDestete?.tipo === "hiperprecoz"
         ? `Destete hiperprecoz (≤50d) en vacas CC <4.0 — libera 6–8 Mcal/día → cicla en 10–14d`
         : `Destete anticipado (90d) en vacas CC 4.0–4.5 — CC sube ${(ccServAntic-ccServ).toFixed(1)} antes del servicio`,
       cuandoActuar: `${fmtMes(mesAccDest)} — ${mesAccDest < mesHoy ? "ventana pasada, actuar igual" : Math.round(Math.abs(mesAccDest-mesHoy)) + " meses para actuar"}`,
@@ -6722,8 +8010,27 @@ function calcCerebro(motor, form, sat) {
   const iniServDate  = cadena?.ini || null;
   const fmtFechaCorta = (d) => d ? new Date(d).toLocaleDateString("es-AR",{day:"2-digit",month:"short"}) : null;
 
+  // ── CAPA 8: ANÁLISIS DE OPTIMIZACIÓN PARA SISTEMAS BUENOS ──────
+  // Cuando puedeAlcanzarMeta = true, el análisis no termina — busca el margen
+  const optimizacion = puedeAlcanzarMeta || prenezEst >= 70
+    ? analizarMargenOptimizacion(form, motor, tray, null)
+    : { oportunidades: [], hayOportunidades: false, parrafoOptim: "" };
+
   return {
-    parrafo, tarjetas: limitantes, contextoClima, alertaSat,
+    parrafo: optimizacion.hayOportunidades && puedeAlcanzarMeta
+      ? optimizacion.parrafoOptim
+      : parrafo,
+    tarjetas: puedeAlcanzarMeta
+      ? optimizacion.oportunidades.map(o => ({
+          id: o.id, prioridad: o.potencia === "alta" ? "P1" : o.potencia === "media" ? "P2" : "P3",
+          icono: "🎯", titulo: o.titulo, impacto: o.impacto,
+          solucion: o.accion, cuandoActuar: "", categoria: "Optimización",
+          cuantifica: o.referencia || "",
+        }))
+      : limitantes,
+    tarjetasOptim: optimizacion.oportunidades,
+    limitantes,
+    contextoClima, alertaSat,
     campoSeco, campoExcelente, callorExtremo, faltaAgua,
     cronograma, diagnosticoSustentabilidad,
     calendarioAcciones: { eventos, hitos, mesServR, mesParto, mesDestR },
@@ -6879,7 +8186,7 @@ function TrayectoriaVaquillona({ motor, form }) {
 
 // ── DASHBOARD DEL ESTABLECIMIENTO ─────────────────────────────────────
 // Pantalla de presentación — lo primero que ve el productor en la visita
-function DashboardEstablecimiento({ motor, form, sat, score, onTab }) {
+function DashboardEstablecimiento({ motor, form, sat, score, confianza, onTab }) {
   const hoy     = new Date();
   const mesHoy  = hoy.getMonth();
   const MESES   = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -6935,13 +8242,36 @@ function DashboardEstablecimiento({ motor, form, sat, score, onTab }) {
             {[form.localidad, form.provincia, form.zona].filter(Boolean).join(" · ")} · {hoy.toLocaleDateString("es-AR",{day:"2-digit",month:"long",year:"numeric"})}
           </div>
         </div>
-        {score && (
-          <div style={{ textAlign:"center", flexShrink:0 }}>
-            <div style={{ fontFamily:C.font, fontSize:32, fontWeight:700, color:score.colorTotal, lineHeight:1 }}>{score.total}</div>
-            <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, letterSpacing:1 }}>SCORE</div>
-          </div>
-        )}
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, flexShrink:0 }}>
+          {score && (
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:C.font, fontSize:32, fontWeight:700, color:score.colorTotal, lineHeight:1 }}>{score.total}</div>
+              <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, letterSpacing:1 }}>SCORE</div>
+            </div>
+          )}
+          {/* ── Indicador real vs estimado ── */}
+          {confianza && (
+            <div style={{ textAlign:"center", padding:"3px 8px", borderRadius:6,
+              background:confianza.color+"15", border:"1px solid "+confianza.color+"40" }}>
+              <div style={{ fontFamily:C.font, fontSize:10, fontWeight:700, color:confianza.color, lineHeight:1 }}>
+                {confianza.score}%
+              </div>
+              <div style={{ fontFamily:C.font, fontSize:7, color:confianza.color, letterSpacing:0.5, marginTop:1 }}>
+                {confianza.label.toUpperCase()}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+      {/* Banner datos faltantes */}
+      {confianza && confianza.faltantes.length > 0 && (
+        <div style={{ background:C.amber+"10", border:"1px solid "+C.amber+"30",
+          borderRadius:8, padding:"6px 12px", marginBottom:10,
+          fontFamily:C.font, fontSize:9, color:C.amber }}>
+          📊 Mejoraría el diagnóstico si cargás: {confianza.faltantes.slice(0,3).join(" · ")}
+          {confianza.faltantes.length > 3 ? ` · +${confianza.faltantes.length-3} más` : ""}
+        </div>
+      )}
 
       {/* ── FASE DEL CICLO — la frase más importante ── */}
       {faseCiclo && faseCiclo.fase !== "SIN_FECHA" && (
@@ -7747,93 +9077,57 @@ const FORM_DEF = {
 };
 
 // ─── SYSTEM PROMPT ───────────────────────────────────────────────
-const SYS_FULL = `Sos un asesor técnico ganadero sénior con 20 años de campo en sistemas de cría extensiva de NEA, NOA, Paraguay, Bolivia y Brasil. Hablás con veterinarios asesores privados — gente técnicamente sólida que no necesita explicaciones básicas.
+const SYS_FULL = `Sos un asesor técnico ganadero sénior — 20 años de campo en sistemas de cría extensiva NEA, NOA, Paraguay, Bolivia y Brasil. Hablás con veterinarios asesores privados que conocen el campo. Sin explicaciones básicas, sin relleno.
 
-El motor de Calf AI ya calculó TODO: score por dimensión, trayectoria CC, balance forrajero mensual, estado de vaquillona, cadena reproductiva, sanidad, GEI e impacto de cola de preñez. Tenés el diagnóstico completo en el prompt.
+El motor de Calf AI ya calculó TODO el sistema: clima satelital + oferta forrajera NDVI + balance energético mensual + trayectoria CC por fase del ciclo + preñez proyectada + escenarios de destete + vaquillona GDP real vs objetivo + sanidad + suplementación + carga + agua + impacto cola de preñez. El prompt tiene TODOS esos números.
 
-TU TRABAJO es:
-1. INTEGRAR todos los datos en un diagnóstico coherente del sistema
-2. IDENTIFICAR los 2-3 cuellos de botella reales ordenados por impacto en kg de ternero
-3. CUANTIFICAR el beneficio de cada acción (en terneros adicionales, kg al destete, días menos de anestro)
-4. DAR acciones concretas con dosis, alimento específico, momento y frecuencia
+TU TRABAJO — RAZONÁS COMO UN SISTEMA:
+Leés todos los datos juntos. No analizás cada variable en silos. La CC baja + el déficit invernal + el pasto encañado + la suplementación insuficiente son UN SOLO PROBLEMA que se refuerza solo. El cronograma mensual te dice cuándo el sistema falla y cuándo hay ventana para actuar.
 
-REGLA FUNDAMENTAL — DATO REAL vs ESTIMADO:
-El prompt marca cada dato como REAL (ingresado por el usuario) o ESTIMADO (calculado por defecto).
-- Si la CC no fue cargada: decí "sin CC registrada — el análisis asume CC estimada de [valor]"
-- Si el destete fue cargado: usá ese dato sin aclaración — es real
-- Si la suplementación fue cargada: mencioná el alimento específico que usa el productor
-- NUNCA presentés un valor estimado como si fuera un dato real del campo
-- Si el usuario cargó suplemento específico (ej: expeller girasol), recomendá ESE alimento, no pellet de trigo genérico
+REGLAS DE RAZONAMIENTO:
+1. TEMPORALIDAD — cada recomendación tiene un mes concreto anclado al calendario real del rodeo (no "antes del servicio" sino "octubre, 45d antes del inicio del servicio del 15/11")
+2. CAUSALIDAD — siempre explicás la cadena: pasto PB 4% → microflora paralizada → digestión de fibra cae → CC baja → anestro prolongado → preñez 58% → 27 terneros menos
+3. CUANTIFICACIÓN — nunca "puede haber déficit", siempre "déficit de 180 Mcal/día en julio con el rodeo actual"
+4. SUSTENTABILIDAD — si el sistema no puede sostener ≥75% sin corrección, decís cuántos ciclos hasta el colapso y por qué
+5. PRIORIZACIÓN — ordenás por impacto en kg de ternero producido, no por urgencia percibida
 
-ESTRUCTURA DEL INFORME (seguí este orden exacto, usá estos emojis):
-1️⃣ SITUACIÓN HOY — frase de la fase del ciclo + 3 números clave (CC al servicio, preñez est., balance invernal)
-2️⃣ CUELLO DE BOTELLA 1 — el limitante más importante + impacto cuantificado en terneros/kg
-3️⃣ CUELLO DE BOTELLA 2 — segundo limitante + acción concreta con dosis y alimento real
-4️⃣ VAQUILLONA — estado de la reposición + si llega o no llega al entore y por qué
-5️⃣ CRONOGRAMA — tabla: MES | ACCIÓN | CATEGORÍA | RESULTADO ESPERADO (próximos 4 meses)
+DATOS REALES vs ESTIMADOS:
+El prompt marca cada dato. Si no fue cargado por el técnico, lo decís: "Sin CC registrada — análisis con CC estimada 4.5". Nunca presentás un estimado como dato real.
+Si el técnico cargó suplemento específico (expeller girasol), recomendás ESE, no uno genérico.
 
-NO repitas datos del diagnóstico visible en pantalla. ARRANCÁ directo con la situación actual.
-Usá **negrita** para los números clave y las acciones concretas.
-Máximo 400 palabras por sección.
+ESTRUCTURA DEL INFORME:
 
-REGLA FUNDAMENTAL — DATO REAL vs ASUMIDO:
-- Cada dato del prompt está marcado como real (ingresado por el usuario) o como valor por defecto del sistema.
-- Si algo no fue ingresado por el usuario, SIEMPRE decirlo: "No se registró [dato] — el análisis asume [valor] como escenario de trabajo."
-- NUNCA presentar un valor por defecto como si fuera un dato real del establecimiento.
-- Si el tipo de destete de vaquillona no fue cargado, NO decir "vaquillona con destete hiperprecoz" — decir "sin dato de destete de vaquillona, el análisis proyecta el escenario sin suplemento como referencia".
+1️⃣ SITUACIÓN HOY — LECTURA INTEGRADA DEL SISTEMA
+Una sola sección (4–5 oraciones). Integrás: fase del ciclo + clima/NDVI de hoy + CC del rodeo + balance forrajero + suplementación activa. Todo junto, no por partes. Terminás con el número más importante: "preñez proyectada X% — el sistema puede sostener Y% con los recursos actuales".
 
-REGLAS DE ESCRITURA — OBLIGATORIAS:
-- Escribí como si le hablaras al productor cara a cara. Claro, técnico pero sin jerga innecesaria.
-- Cada sección empieza con una frase diagnóstica contundente. No empieces con "En base a los datos..."
-- Usá números concretos siempre: Mcal, kg MS, días, porcentajes. Nunca digas "puede haber déficit" — calculá y decí cuánto.
-- Cuando hay un problema grave, decilo sin rodeos: "Esto está mal y hay que corregirlo antes del servicio."
-- Las recomendaciones tienen que tener ACCIÓN + DOSIS + MOMENTO + POR QUÉ. No des opciones vagas.
-- Largo mínimo por sección: 100 palabras. El informe completo mínimo 600 palabras.
-- Citas bibliográficas integradas en el texto con formato (Autor, año) donde corresponda al cálculo.
-- Al FINAL del informe, SIEMPRE incluir una sección "## Bibliografía" con SOLO las referencias que se usaron en ese informe.
+2️⃣ ANÁLISIS TEMPORAL — QUÉ PASA MES A MES
+Describís los meses críticos con sus datos: balance Mcal/día, PB pasto, temperatura, suplemento activo, hitos del ciclo. Identificás las ventanas de acción y los meses de riesgo. Proyectás la trayectoria de CC mes a mes si no se actúa.
 
-ESTRUCTURA — 4 SECCIONES OBLIGATORIAS:
+3️⃣ PUNTOS CRÍTICOS — ORDENADOS POR IMPACTO EN TERNEROS
+Máximo 3 puntos críticos. Para cada uno:
+→ Causa raíz con número exacto
+→ Efecto en la cadena (pp preñez o kg ternero perdidos)
+→ Solución: ACCIÓN + TIPO SUPLEMENTO (P/E/EP) + DOSIS + FRECUENCIA + MOMENTO EXACTO + KG TOTALES A COMPRAR
+→ Resultado esperado si se actúa: "preñez sube de X% a Y%"
+Orden: 1° mayor impacto en preñez · 2° mayor impacto en kg ternero · 3° mayor impacto en eficiencia
 
-1️⃣ SITUACIÓN HOY — FASE DEL CICLO Y CLIMA
-Una sola sección corta (3–4 oraciones). Qué fase del ciclo estamos, qué está pasando en el campo (temperatura, NDVI, lluvia), y cómo se conecta eso con el momento más urgente del rodeo. Si hay helada proyectada, mencionarlo.
+4️⃣ VAQUILLONA — TRAYECTORIA Y DECISIÓN
+GDP real vs GDP necesario para el entore. Si no llega: suplemento concreto, dosis, mes de inicio, kg totales para la campaña. Si hay verdeo: si conviene destinarlo a la vaquillona y por qué.
 
-2️⃣ PUNTOS CRÍTICOS — ORDENADOS POR IMPACTO
-Máximo 3 puntos. Para CADA uno:
-- Cuál es el problema exacto (con número: kg que faltan, Mcal de déficit, días de anestro, puntos de CC)
-- Por qué importa (impacto en pp preñez o kg ternero)
-- Qué hacer: ACCIÓN + DOSIS + MOMENTO. Concreto, sin vaguedades.
-- Cuánto mejora si se actúa: "Con esta corrección, la preñez proyectada sube de X% a Y%"
-Orden obligatorio: 1° lo que más impacta en preñez · 2° lo que más impacta en kg ternero · 3° lo que más impacta en eficiencia del sistema.
-
-3️⃣ VAQUILLONA — TRAYECTORIA REAL VS OBJETIVO
-Solo si hay datos de vaquillona cargados. Si no hay datos, decirlo y omitir la sección.
-Para cada categoría con datos:
-- PV actual estimado vs objetivo para la fase (con número)
-- GDP necesario vs GDP del pasto solo (con número)
-- Si no llega: cuánto suplemento, qué tipo, cuándo empezar, costo estimado vs valor del ternero postergado
-Si no se cargó tipo de destete: "Sin dato de manejo de vaquillona — proyección basada en crecimiento de pasto solo."
-
-4️⃣ CRONOGRAMA — PRÓXIMOS 3 MESES
-Un renglón por mes con formato: MES: acción específica · categoría · resultado esperado.
-Solo incluir acciones que no se estén haciendo ya según los datos cargados.
+5️⃣ CRONOGRAMA — PRÓXIMOS 4 MESES
+Formato: MES: acción · categoría · resultado esperado · kg/tn a gestionar
+Solo acciones no cubiertas por los datos actuales.
 
 ## Bibliografía
-SOLO las referencias usadas en este informe, en formato: Autor/es (año). Título. Revista. DOI si disponible.
-Referencias disponibles:
-• NRC (2000). Nutrient Requirements of Beef Cattle, 7th ed. National Academies Press.
-• Peruchena C.O. (2003). Manejo de la condición corporal en rodeos de cría del NEA. INTA Colonia Benítez.
-• Short R.E. et al. (1990). Estrous cycles, ovulation, and conception in post-partum beef cows. J. Anim. Sci. 68:799-811.
-• Detmann E. et al. (2010). NASSEM — Nutrição de Animais de Sistemas de Criação Extensivos. Suprema, MG.
-• Balbuena O. (2003). Nutrición y manejo del destete y recría de terneros en el NEA. INTA EEA El Colorado.
-• Lippke H. (1980). Forage characteristics and animal performance. J. Anim. Sci. 51:952-961.
-• Minson D.J. (1990). Forage in Ruminant Nutrition. Academic Press.
-• IPCC (2019). 2019 Refinement to 2006 IPCC Guidelines, Vol.4 Agriculture.
-• Gere J.I. et al. (2019). Methane emissions from grazing beef cattle. N.Z. J. Agric. Res. 62(3):346-360.
-• INTA EEA Colonia Benítez (2025). Protocolos de manejo reproductivo en rodeos de cría NEA.
-• Bavera G.A. (2005). Cursos de producción bovina de carne. FAV UNRC.
+SOLO referencias usadas en este informe:
+• NRC (2000). Nutrient Requirements of Beef Cattle. National Academies Press.
+• Peruchena C.O. (2003). Manejo de la CC en rodeos de cría del NEA. INTA Colonia Benítez.
+• Short R.E. et al. (1990). Estrous cycles post-partum beef cows. J. Anim. Sci. 68:799-811.
+• Detmann E. et al. (2010). NASSEM. Suprema, MG.
+• Balbuena O. (2003). Nutrición y recría en el NEA. INTA EEA El Colorado.
+• Bavera G.A. (2005). Producción bovina de carne. FAV UNRC.
 • Wiltbank J.N. (1990). Beef cattle reproductive management. Colorado State Univ.
 `;
-
 
 // ─── APP PRINCIPAL ────────────────────────────────────────────────
 export default function Page() {
@@ -7842,6 +9136,220 @@ export default function Page() {
       <CalfAIPro />
     </SessionProvider>
   );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// PERSISTENCIA Y HISTORIAL DE ESTABLECIMIENTOS
+// Guarda el form automáticamente en localStorage.
+// Permite recuperar sesiones anteriores por establecimiento.
+// ═══════════════════════════════════════════════════════════════════
+
+const STORAGE_KEY_FORM    = "calfai_form_draft";
+const STORAGE_KEY_HIST    = "calfai_historial";
+const MAX_HISTORIAL       = 20;
+
+function usePersistencia(form, setForm) {
+  // Guardar borrador automáticamente
+  const guardarBorrador = React.useCallback(() => {
+    try {
+      const draft = { ...form, _guardadoEn: new Date().toISOString() };
+      localStorage.setItem(STORAGE_KEY_FORM, JSON.stringify(draft));
+    } catch(e) {}
+  }, [form]);
+
+  // Restaurar borrador al cargar
+  const restaurarBorrador = React.useCallback(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_FORM);
+      if (!raw) return false;
+      const draft = JSON.parse(raw);
+      if (!draft || !draft.vacasN) return false;
+      setForm(f => ({ ...f, ...draft }));
+      return draft;
+    } catch(e) { return false; }
+  }, [setForm]);
+
+  // Guardar en historial (visita completa)
+  const guardarEnHistorial = React.useCallback((formData, motor, resultado) => {
+    try {
+      const raw  = localStorage.getItem(STORAGE_KEY_HIST);
+      const hist = raw ? JSON.parse(raw) : [];
+      const entrada = {
+        id:           Date.now(),
+        fecha:        new Date().toISOString(),
+        productor:    formData.nombreProductor || "Sin nombre",
+        localidad:    formData.localidad || formData.provincia || "",
+        vacasN:       formData.vacasN,
+        prenezEst:    motor?.tray?.pr || 0,
+        ccServ:       motor?.tray?.ccServ || 0,
+        mesesDeficit: [5,6,7].filter(i => (motor?.balanceMensual?.[i]?.balance ?? 0) < 0).length,
+        nivelRiesgo:  motor?.nivelRiesgo || "—",
+        colorRiesgo:  motor?.colorRiesgo || "#888",
+        tieneResultado: !!resultado,
+        form:         formData,  // snapshot completo del form
+      };
+      // Deduplicar por productor + fecha (mismo día = actualizar)
+      const mismoProductor = hist.findIndex(h =>
+        h.productor === entrada.productor &&
+        h.fecha.slice(0,10) === entrada.fecha.slice(0,10)
+      );
+      if (mismoProductor >= 0) hist[mismoProductor] = entrada;
+      else hist.unshift(entrada);
+      // Limitar
+      if (hist.length > MAX_HISTORIAL) hist.splice(MAX_HISTORIAL);
+      localStorage.setItem(STORAGE_KEY_HIST, JSON.stringify(hist));
+      return entrada.id;
+    } catch(e) { return null; }
+  }, []);
+
+  // Leer historial
+  const leerHistorial = React.useCallback(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_HIST);
+      return raw ? JSON.parse(raw) : [];
+    } catch(e) { return []; }
+  }, []);
+
+  // Cargar visita anterior
+  const cargarVisita = React.useCallback((entrada) => {
+    try {
+      if (entrada?.form) {
+        setForm({ ...FORM_DEF, ...entrada.form });
+        return true;
+      }
+      return false;
+    } catch(e) { return false; }
+  }, [setForm]);
+
+  // Limpiar borrador
+  const limpiarBorrador = React.useCallback(() => {
+    try { localStorage.removeItem(STORAGE_KEY_FORM); } catch(e) {}
+  }, []);
+
+  return { guardarBorrador, restaurarBorrador, guardarEnHistorial,
+           leerHistorial, cargarVisita, limpiarBorrador };
+}
+
+// Panel de historial — modal liviano
+function PanelHistorial({ onCargar, onCerrar, C }) {
+  const [hist, setHist] = React.useState([]);
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_HIST);
+      setHist(raw ? JSON.parse(raw) : []);
+    } catch(e) { setHist([]); }
+  }, []);
+
+  const MESES_CORTO = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const fmtFecha = (iso) => {
+    const d = new Date(iso);
+    return `${d.getDate()} ${MESES_CORTO[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)",
+      zIndex:999, display:"flex", alignItems:"center", justifyContent:"center" }}
+      onClick={onCerrar}>
+      <div style={{ background:C.card, border:"1px solid "+C.border, borderRadius:16,
+        padding:"20px 20px 16px", width:"min(420px,94vw)", maxHeight:"80vh",
+        overflowY:"auto", boxShadow:"0 8px 32px rgba(0,0,0,0.18)" }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+          marginBottom:14 }}>
+          <div style={{ fontFamily:C.font, fontSize:11, color:C.textFaint,
+            letterSpacing:1 }}>ESTABLECIMIENTOS RECIENTES</div>
+          <button onClick={onCerrar}
+            style={{ background:"none", border:"none", color:C.textDim,
+              fontSize:16, cursor:"pointer", padding:"2px 6px" }}>✕</button>
+        </div>
+        {hist.length === 0 ? (
+          <div style={{ fontFamily:C.sans, fontSize:12, color:C.textDim,
+            textAlign:"center", padding:"20px 0" }}>
+            Sin establecimientos guardados aún
+          </div>
+        ) : hist.map((h,i) => (
+          <div key={h.id} onClick={() => { onCargar(h); onCerrar(); }}
+            style={{ padding:"10px 12px", borderRadius:10, marginBottom:6,
+              background:C.card2, border:"1px solid "+C.border,
+              cursor:"pointer", transition:"border-color 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.borderColor=C.blue}
+            onMouseLeave={e => e.currentTarget.style.borderColor=C.border}>
+            <div style={{ display:"flex", justifyContent:"space-between",
+              alignItems:"flex-start" }}>
+              <div>
+                <div style={{ fontFamily:C.sans, fontSize:13, fontWeight:500,
+                  color:C.text, marginBottom:2 }}>
+                  {h.productor || "Sin nombre"}
+                </div>
+                <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim }}>
+                  {h.localidad && h.localidad + " · "}{fmtFecha(h.fecha)}
+                </div>
+              </div>
+              <div style={{ textAlign:"right", flexShrink:0 }}>
+                <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700,
+                  color: h.prenezEst >= 75 ? C.green : h.prenezEst >= 60 ? C.amber : C.red,
+                  lineHeight:1 }}>{h.prenezEst || "—"}%</div>
+                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+                  preñez · {h.vacasN || "?"} vac
+                </div>
+              </div>
+            </div>
+            {h.mesesDeficit > 0 && (
+              <div style={{ marginTop:4, fontFamily:C.font, fontSize:8,
+                color:C.amber }}>
+                ⚡ déficit {h.mesesDeficit}/3 meses inv · CC serv {h.ccServ?.toFixed?.(1)||"—"}
+              </div>
+            )}
+          </div>
+        ))}
+        <div style={{ marginTop:10, fontFamily:C.font, fontSize:8,
+          color:C.textFaint, textAlign:"center" }}>
+          Guardado localmente en este dispositivo
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// INDICADOR REAL vs ESTIMADO
+// Calcula un score de confianza del diagnóstico según cuántos datos
+// críticos fueron cargados vs cuántos son valores por defecto.
+// ═══════════════════════════════════════════════════════════════════
+function calcConfianzaDiagnostico(form, motor) {
+  const checks = [
+    // Datos críticos — peso 3
+    { campo:"vacasN",      peso:3, label:"N° vacas",       ok: !!form.vacasN && parseFloat(form.vacasN) > 0 },
+    { campo:"distribucionCC", peso:3, label:"CC del rodeo", ok: (form.distribucionCC||[]).some(d => parseFloat(d.pct)>0) },
+    { campo:"iniServ",     peso:3, label:"Fechas servicio", ok: !!form.iniServ && !!form.finServ },
+    { campo:"biotipo",     peso:2, label:"Biotipo",         ok: !!form.biotipo },
+    // Datos importantes — peso 2
+    { campo:"supHa",       peso:2, label:"Hectáreas",       ok: !!form.supHa && parseFloat(form.supHa) > 0 },
+    { campo:"fenologia",   peso:2, label:"Fenología pasto", ok: !!form.fenologia },
+    { campo:"destTrad",    peso:2, label:"Modalidad destete", ok: (parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0) === 100 },
+    { campo:"pvVacaAdulta",peso:2, label:"PV vaca",         ok: !!form.pvVacaAdulta && parseFloat(form.pvVacaAdulta) > 0 },
+    // Datos útiles — peso 1
+    { campo:"sanVacunas",  peso:1, label:"Sanidad",         ok: !!form.sanVacunas },
+    { campo:"aguaTDS",     peso:1, label:"Calidad agua",    ok: !!form.aguaTDS && parseFloat(form.aguaTDS) > 0 },
+    { campo:"torosCC",     peso:1, label:"CC toros",        ok: !!form.torosCC && parseFloat(form.torosCC) > 0 },
+    { campo:"vegetacion",  peso:1, label:"Tipo vegetación", ok: !!form.vegetacion },
+    { campo:"enso",        peso:1, label:"ENSO/Clima",      ok: !!form.enso },
+    { campo:"prenez",      peso:1, label:"Preñez histórica",ok: !!form.prenez && parseFloat(form.prenez) > 0 },
+  ];
+
+  const total    = checks.reduce((s,c) => s + c.peso, 0);
+  const cargados = checks.reduce((s,c) => s + (c.ok ? c.peso : 0), 0);
+  const score    = Math.round(cargados / total * 100);
+
+  const faltantes = checks.filter(c => !c.ok && c.peso >= 2).map(c => c.label);
+
+  const nivel = score >= 85 ? "alto" : score >= 60 ? "medio" : "bajo";
+  const color = score >= 85 ? "#639922" : score >= 60 ? "#BA7517" : "#A32D2D";
+  const label = score >= 85 ? "Alta confianza" : score >= 60 ? "Confianza media" : "Datos incompletos";
+
+  return { score, nivel, color, label, faltantes, checks };
 }
 
 function CalfAIPro() {
@@ -7861,6 +9369,26 @@ function CalfAIPro() {
   const [potreros,    setPotreros]    = useState([{ ha:"", veg:"Pastizal natural", fenol:"menor_10" }]);
   const [vistaSupl,   setVistaSupl]   = useState("cuadrantes");
   const [bannerProductor, setBannerProductor] = useState(null); // datos autocargados del productor
+  const [showHistorial,   setShowHistorial]   = React.useState(false);
+  const [borradorRecuperado, setBorradorRecuperado] = React.useState(false);
+
+  // ── Hook de persistencia ─────────────────────────────────────
+  const { guardarBorrador, restaurarBorrador, guardarEnHistorial,
+          leerHistorial, cargarVisita, limpiarBorrador } = usePersistencia(form, setForm);
+
+  // Guardar borrador automáticamente (debounce 8s)
+  React.useEffect(() => {
+    if (!form.vacasN) return;
+    const t = setTimeout(guardarBorrador, 8000);
+    return () => clearTimeout(t);
+  }, [form]);
+
+  // Recuperar borrador al cargar
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const draft = restaurarBorrador();
+    if (draft && draft.vacasN) setBorradorRecuperado(true);
+  }, []);
 
   const set     = (k, v) => setForm(f => ({ ...f, [k]:v }));
   const setDist = (k, v) => setForm(f => ({ ...f, [k]:v }));
@@ -7908,20 +9436,8 @@ function CalfAIPro() {
   // Un único hook que propaga todos los cambios en cascada
   const motor = useMotor(form, sat, potreros, usaPotreros);
 
-  // Desestructurar el estado del motor (con fallbacks seguros)
-  const cadena         = motor?.cadena         ?? calcCadena(form.iniServ, form.finServ);
-  const disponMS       = motor?.disponMS       ?? calcDisponibilidadMS(form.altPasto, form.tipoPasto);
-  const ccPondVal      = motor?.ccPondVal      ?? ccPond(form.distribucionCC);
-  const ndviN          = motor?.ndviN          ?? (sat?.ndvi || 0.45);
-  const tcSave         = motor?.tcSave         ?? null;
-  const impactoCola    = motor?.impactoCola    ?? null;
-  const vaq1E          = motor?.vaq1E          ?? null;
-  const pvSalidaVaq1   = motor?.pvSalidaVaq1   ?? "";
-  const pvEntradaVaq2  = motor?.pvEntradaVaq2  ?? "";
-  const vaq2E          = motor?.vaq2E          ?? null;
-  const evalAgua       = motor?.evalAgua       ?? null;
-  const sanidad        = motor?.sanidad        ?? null;
-  const baseParams     = motor?.baseParams     ?? {};
+  // Desestructurar via motorEfectivo (ver abajo — incluye fallback síncrono)
+  // Las variables individuales se declaran después de motorEfectivo
   // tray: usar motor como fuente primaria
   // Si motor aún no corrió (null), calcular tray directamente desde form
   // Esto elimina el flash de "sin datos" al cargar la página
@@ -7959,6 +9475,8 @@ function CalfAIPro() {
   const scoreRiesgo    = motorEfectivo?.scoreRiesgo    ?? 0;
   const nivelRiesgo    = motorEfectivo?.nivelRiesgo    ?? "—";
   const colorRiesgo    = motorEfectivo?.colorRiesgo    ?? C.textDim;
+  const confianza      = React.useMemo(() =>
+    calcConfianzaDiagnostico(form, motorEfectivo), [form, motorEfectivo]);
   const cargaEV_ha     = motorEfectivo?.cargaEV_ha     ?? null;
   const impactoCola    = motorEfectivo?.impactoCola    ?? null;
   const vaq1E          = motorEfectivo?.vaq1E          ?? null;
@@ -8085,6 +9603,28 @@ function CalfAIPro() {
         t += "ALERTAS MOTOR (" + alertasMotor.length + "): " + alertasMotor.map(a=>a.tipo+": "+a.msg.slice(0,60)).join(" | ") + "\n";
       }
       if (cargaEV_ha) t += "CARGA REAL: " + cargaEV_ha + " EV/ha (factor oferta: " + motor.factorCarga + ")\n";
+      // Diagnóstico de sustentabilidad — lo más importante para el cerebro
+      const cerebTemp = calcCerebro(motorEfectivo || motor, form, sat);
+      if (cerebTemp?.diagnosticoSustentabilidad) {
+        const dx = cerebTemp.diagnosticoSustentabilidad;
+        t += `\nDIAGNÓSTICO SUSTENTABILIDAD:\n`;
+        t += `  ${dx.resumen}\n`;
+        if (dx.ciclosAlColapso) t += `  ⏱ CICLOS AL COLAPSO SIN CORRECCIÓN: ${dx.ciclosAlColapso} (erosión CC: ${dx.erosionCCAnual}/año por déficit invernal)\n`;
+        t += `  Preñez sustentable sin corrección: ${dx.prenezSustentable}% (meta: 75%)\n`;
+        if (dx.factoresLimitantes?.length > 0) {
+          t += `  Factores limitantes:\n`;
+          dx.factoresLimitantes.forEach(f => t += `    · ${f}\n`);
+        }
+        // Cronograma temporal
+        if (cerebTemp.cronograma?.length > 0) {
+          t += `\nCRONOGRAMA TEMPORAL MES A MES:\n`;
+          cerebTemp.cronograma.forEach(m => {
+            if (m.riesgos?.length > 0) {
+              t += `  ${m.mes}: ${m.riesgos.map(r => r.label).join(" · ")} (bal:${Math.round(m.bal)}M/d PB:${m.pbPas}%)\n`;
+            }
+          });
+        }
+      }
       if (motor.factorAgua < 1) t += "FACTOR AGUA: " + motor.factorAgua.toFixed(2) + " (agua salobre reduce oferta efectiva)\n";
       if (motor.verdeoAporteMcalMes > 0) t += "VERDEO APORTE: +" + motor.verdeoAporteMcalMes + " Mcal/día rodeo desde mes " + (motor.verdeoMesInicio+1) + "\n";
     }
@@ -8157,6 +9697,14 @@ function CalfAIPro() {
       t += `\nTRAYECTORIA CC (rodeo promedio):\n`;
       t += `  HOY:${tray.ccHoy} → PARTO:${tray.ccParto} → SERV.:${tray.ccServ} (mín lactación: ${tray.ccMinLact})\n`;
       t += `  Preñez est.: ${tray.pr}% · Anestro: ${tray.anestro?.dias}d (${tray.anestro?.riesgo?"⚠️ riesgo":"✅ ok"}) · Caída lactación: −${tray.caidaLact} CC en ${tray.mesesLact} meses\n`;
+      if (tray.recDestete) {
+        t += `  RECOMENDACIÓN DESTETE: ${tray.recDestete.label} (${tray.recDestete.urgencia})\n`;
+        if (tray.ccServAntic) t += `  CC serv. con anticipado: ${tray.ccServAntic} → preñez ${tray.prAntic}% (+${(tray.prAntic-tray.pr)||0}pp)\n`;
+        if (tray.ccServHiper) t += `  CC serv. con hiperprecoz: ${tray.ccServHiper} → preñez ${tray.prHiper}% (+${(tray.prHiper-tray.pr)||0}pp)\n`;
+      }
+      t += `  Escenarios CC servicio: actual ${tray.ccServ} · con anticipado ${tray.ccServAntic||"—"} · con hiperprecoz ${tray.ccServHiper||"—"}\n`;
+      t += `  Preñez escenarios: actual ${tray.pr}% · anticipado ${tray.prAntic||"—"}% · hiperprecoz ${tray.prHiper||"—"}%\n`;
+      if (tray.recDestete) t += `  RECOMENDACIÓN DESTETE: ${tray.recDestete.label} — ${tray.recDestete.motivo||""}\n`;
     }
 
     // Suplementación por categoría
@@ -8309,22 +9857,89 @@ function CalfAIPro() {
     }
 
     // ── DIAGNÓSTICO CEREBRO (cuellos de botella) ─────────────────
-    const cerebroData = calcCerebro(motor, form, sat);
-    if (cerebroData) {
-      t += `\nDIAGNÓSTICO INTEGRADO (calcCerebro):\n`;
-      t += `  Score riesgo: ${cerebroData.resumen?.scoreRiesgo || "—"}/100 · Nivel: ${cerebroData.resumen?.nivelRiesgo || "—"}\n`;
-      t += `  Preñez actual: ${cerebroData.resumen?.prenez || "—"}% · Potencial con correcciones: ${cerebroData.resumen?.prenezPot || "—"}%\n`;
-      if (cerebroData.resumen?.ternerosDif > 0) {
-        t += `  Terneros adicionales posibles: ${cerebroData.resumen.ternerosDif} cab · Valor: $${cerebroData.resumen.valorDif?.toLocaleString("es-AR")}\n`;
+    // ── CONCLUSIONES ALGORÍTMICAS PRE-CALCULADAS ─────────────────
+    // Los algoritmos interpretativos ya razonaron — la IA recibe conclusiones verificadas
+    const interp = interpretarSistemaCompleto(form, motor, sat, tray);
+    if (interp) {
+      t += `\n═══ ANÁLISIS INTERPRETATIVO DEL SISTEMA ═══\n`;
+      if (interp.recurso?.conclusion) {
+        const c4cal = CALIDAD_C4_CALIBRADA[form.fenologia||"mayor_50"];
+        t += `RECURSO FORRAJERO: ${interp.recurso.conclusion}\n`;
+        t += `  CALIDAD C4 CALIBRADA: DIG ${c4cal?.dig||"?"} · PB ${c4cal?.pb||"?"}% · ${c4cal?.mcalKg||"?"} Mcal/kg MS (Minson 1990, meta-análisis PMC 9311783)\n`;
       }
-      if (cerebroData.tarjetas?.length > 0) {
-        t += `  CUELLOS DE BOTELLA (${cerebroData.tarjetas.length} acciones):\n`;
-        cerebroData.tarjetas.slice(0, 8).forEach(c => {
-          t += `    [${c.prioridad}] ${c.titulo}: ${c.descripcion?.slice(0,100)}\n`;
+      if (interp.ccTiempo?.conclusion)   t += `TRAYECTORIA CC TEMPORAL: ${interp.ccTiempo.conclusion}\n`;
+      if (interp.supl?.conclusion)       t += `SUPLEMENTACIÓN: ${interp.supl.conclusion}\n`;
+      if (interp.verdeo?.conclusion)     t += `VERDEO: ${interp.verdeo.conclusion}\n`;
+      if (interp.sanidad?.conclusion)    t += `SANIDAD REPRODUCTIVA: ${interp.sanidad.conclusion}\n`;
+      if (interp.eficiencia?.conclusion) t += `EFICIENCIA REPRODUCTIVA: ${interp.eficiencia.conclusion}\n`;
+      if (interp.agua?.hayProblema)      t += `AGUA: ${interp.agua.conclusion}\n`;
+      if (interp.amplitud?.conclusion)   t += `AMPLITUD PARICIÓN Y MANEJO LACTANCIA: ${interp.amplitud.conclusion}\n`;
+      if (interp.momento?.conclusion)    t += `MOMENTO ÓPTIMO DE ACCIÓN: ${interp.momento.conclusion}\n`;
+      if (interp.amplitud?.conclusion)   t += `AMPLITUD DE PARICIÓN Y VIABILIDAD DEL DESTETE: ${interp.amplitud.conclusion}\n`;
+
+      // Si el sistema está bien — oportunidades de mejora marginal
+      const optim = cerebroData?.tarjetasOptim || [];
+      if (optim.length > 0) {
+        t += `\n═══ SISTEMA SOBRE LA META — OPORTUNIDADES DE MEJORA MARGINAL ═══\n`;
+        t += `El sistema supera ≥75% preñez. El análisis busca el margen adicional — "sacar agua de las piedras".\n`;
+        optim.forEach(o => {
+          t += `\n[${o.potencia?.toUpperCase()||"?"} PRIORIDAD] ${o.titulo}\n`;
+          t += `  IMPACTO: ${o.impacto}\n`;
+          t += `  ACCIÓN: ${o.accion}\n`;
+          if (o.mecanismo) t += `  MECANISMO: ${o.mecanismo}\n`;
+          if (o.referencia) t += `  REF: ${o.referencia}\n`;
         });
       }
-      if (cerebroData.parrafo) {
-        t += `  SITUACIÓN DEL SISTEMA: ${cerebroData.parrafo.slice(0, 300)}\n`;
+    }
+
+    const cerebroData = calcCerebro(motor, form, sat);
+    if (cerebroData) {
+      t += `\n═══ DIAGNÓSTICO INTEGRAL DEL SISTEMA ═══\n`;
+
+      // Sustentabilidad — la pregunta central
+      const ds = cerebroData.diagnosticoSustentabilidad;
+      if (ds) {
+        t += `SUSTENTABILIDAD: ${ds.resumen}\n`;
+        t += `  Preñez actual: ${ds.prenezActual||cerebroData.resumen?.prenez||"—"}% · Sustentable con recursos actuales: ${ds.prenezSustentable||"—"}% · Meta: ${ds.PRENEZ_OBJETIVO||75}%\n`;
+        if (ds.ciclosAlColapso) t += `  ALERTA TEMPORAL: sin corrección el sistema colapsa en ${ds.ciclosAlColapso} ciclo${ds.ciclosAlColapso>1?"s":""} (erosión CC ${ds.erosionCCAnual?.toFixed(1)||"0.2"} puntos/año)\n`;
+        if (ds.factoresLimitantes?.length > 0) t += `  Factores limitantes: ${ds.factoresLimitantes.join(" | ")}\n`;
+      }
+
+      // Preñez y terneros adicionales
+      t += `\nPREÑEZ Y PRODUCCIÓN:\n`;
+      t += `  Actual: ${cerebroData.resumen?.prenez||"—"}% → Potencial con correcciones: ${cerebroData.resumen?.prenezPot||"—"}%\n`;
+      if (cerebroData.resumen?.ternerosDif > 0) {
+        t += `  Terneros adicionales posibles: ${cerebroData.resumen.ternerosDif} cab si se corrigen los limitantes\n`;
+      }
+
+      // Parrafo ejecutivo del cerebro
+      if (cerebroData.parrafo) t += `\nSITUACIÓN ACTUAL: ${cerebroData.parrafo}\n`;
+
+      // Alertas satelitales
+      if (cerebroData.alertaSat) t += `\nCONDICIÓN DEL CAMPO HOY (satélite): ${cerebroData.alertaSat}\n`;
+
+      // Puntos críticos con TODO su contenido
+      if (cerebroData.tarjetas?.length > 0) {
+        t += `\nPUNTOS CRÍTICOS — ORDENADOS POR IMPACTO (${cerebroData.tarjetas.length} limitantes):\n`;
+        cerebroData.tarjetas.forEach((c, idx) => {
+          t += `\n[${c.prioridad}] ${c.titulo}\n`;
+          if (c.impacto)       t += `  IMPACTO: ${c.impacto}\n`;
+          if (c.solucion)      t += `  SOLUCIÓN: ${c.solucion}\n`;
+          if (c.cuandoActuar)  t += `  CUÁNDO: ${c.cuandoActuar}\n`;
+          if (c.cuantifica)    t += `  CANTIDAD: ${c.cuantifica}\n`;
+          if (c.tipoSupl)      t += `  TIPO SUPLEMENTO: ${c.tipoSupl} (${c.tipoSupl==="P"?"Proteico — activa microflora, 2-3x/semana":c.tipoSupl==="E"?"Energético — almidón, DIARIO obligatorio":"Energético-Proteico — déficit mixto"})\n`;
+        });
+      }
+
+      // Cronograma temporal mes a mes
+      if (cerebroData.cronograma?.length > 0) {
+        t += `\nCRONOGRAMA ANUAL (análisis mes a mes):\n`;
+        cerebroData.cronograma.forEach(m => {
+          const riesgosStr = m.riesgos.map(r => r.label).join(", ");
+          if (riesgosStr || m.esActual) {
+            t += `  ${m.mes}${m.esActual?" [HOY]":""}${m.esInv?" [INV]":""}: bal ${m.bal>0?"+":""}${Math.round(m.bal)}M/d · PB pasto ${m.pbPas||"—"}% · ${riesgosStr||"sin eventos"}\n`;
+          }
+        });
       }
     }
 
@@ -8337,6 +9952,8 @@ function CalfAIPro() {
     let mi = 0;
     const iv = setInterval(() => { setLoadMsg(MSGS[mi % MSGS.length]); mi++; }, 2200);
     try {
+      // Guardar en historial antes de analizar
+      guardarEnHistorial(form, motorEfectivo, null);
       const prompt = buildPromptFull();
       const res  = await fetch("/api/analyze", {
         method:"POST",
@@ -9204,6 +10821,7 @@ function CalfAIPro() {
       <DistCC
         dist={form.distribucionCC}
         escala={form.escalaCC || "9"}
+        nVacas={form.vacasN}
         onChange={v => {
           // Si el usuario usa escala 1-5, convertir los valores a 1-9 antes de guardar
           if ((form.escalaCC || "9") === "5") {
@@ -10648,8 +12266,8 @@ function CalfAIPro() {
           {/* ═══ TAB RESUMEN — dashboard del establecimiento ═══ */}
           {tab === "resumen" && (
             <DashboardEstablecimiento
-              motor={motor} form={form} sat={sat} score={score}
-              onTab={setTab}
+              motor={motorEfectivo} form={form} sat={sat} score={score}
+              confianza={confianza} onTab={setTab}
             />
           )}
 
@@ -11156,6 +12774,269 @@ function CalfAIPro() {
                     cadena={cadena} mesesLact={tray.mesesLact || 6} form={form} sat={sat}
                   />
                 )}
+
+                {/* ── GRÁFICO: ENERGÍA POR FUENTE (apilado) ── */}
+                {bm.length === 12 && (() => {
+                  const W=340, H=160, padX=18, padY=14, colW=(W-padX*2)/12;
+                  // Calcular máximo para escalar
+                  const maxOf = Math.max(1, ...bm.map(m => (m.ofPastoTotal||0)+(m.suplAporte||0)+(m.verdeoAporte||0)+(m.ccAporte||0)));
+                  const maxDem = Math.max(1, ...bm.map(m => m.demanda||0));
+                  const maxY = Math.max(maxOf, maxDem) * 1.1;
+                  const MESES_C = ["E","F","M","A","M","J","J","A","S","O","N","D"];
+                  const yOf = (v) => padY + (H - padY*2) * (1 - v / maxY);
+                  const yH = H - padY;
+                  return (
+                    <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:12, padding:"12px 14px", marginTop:10 }}>
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:4 }}>
+                        ENERGÍA POR FUENTE — Mcal/día · de dónde viene la oferta cada mes
+                      </div>
+                      <div style={{ display:"flex", gap:12, marginBottom:8, flexWrap:"wrap" }}>
+                        {[
+                          ["Pasto C4",  "#378ADD"],
+                          ["CC vaca",   "#7ec850"],
+                          ["Suplemento","#4a9fd4"],
+                          ["Verdeo",    "#97C459"],
+                          ["Demanda",   "#e8a030"],
+                        ].map(([l,c]) => (
+                          <div key={l} style={{ display:"flex", alignItems:"center", gap:4, fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+                            <div style={{ width:8, height:8, borderRadius:1, background:c }} />
+                            {l}
+                          </div>
+                        ))}
+                      </div>
+                      <svg viewBox={"0 0 "+W+" "+H} style={{ width:"100%", display:"block" }}>
+                        {/* Fondo invierno */}
+                        {[5,6,7].map(i => (
+                          <rect key={i} x={padX+i*colW} y={padY} width={colW} height={H-padY*2} fill={C.amber+"08"} />
+                        ))}
+                        {/* Línea cero */}
+                        <line x1={padX} y1={yH} x2={W-padX} y2={yH} stroke={C.textFaint} strokeWidth="0.5" />
+
+                        {/* Barras apiladas por fuente */}
+                        {bm.map((m, i) => {
+                          const x   = padX + i * colW + 1;
+                          const bw  = colW - 2;
+                          const pasto  = m.ofPastoTotal || 0;
+                          const cc     = Math.max(0, m.ccAporte || 0);
+                          const supl   = m.suplAporte   || 0;
+                          const verd   = m.verdeoAporte || 0;
+                          const total  = pasto + cc + supl + verd;
+                          // Apilar desde abajo
+                          let yBase = yH;
+                          const capas = [
+                            { v: pasto, c: "#378ADD" },
+                            { v: cc,    c: "#7ec850" },
+                            { v: supl,  c: "#4a9fd4" },
+                            { v: verd,  c: "#97C459" },
+                          ];
+                          return (
+                            <g key={i}>
+                              {capas.map((cap, ci) => {
+                                if (cap.v <= 0) return null;
+                                const h = Math.max(0, (H - padY*2) * cap.v / maxY);
+                                yBase -= h;
+                                return <rect key={ci} x={x} y={yBase} width={bw} height={h} fill={cap.c+"cc"} />;
+                              })}
+                              {/* Etiqueta mes */}
+                              <text x={x+bw/2} y={H-2} textAnchor="middle"
+                                style={{ fontFamily:C.font, fontSize:"6px",
+                                  fill: i===new Date().getMonth() ? C.green : [5,6,7].includes(i) ? C.amber : C.textFaint,
+                                  fontWeight: [5,6,7].includes(i) ? "700" : "400" }}>
+                                {MESES_C[i]}
+                              </text>
+                            </g>
+                          );
+                        })}
+
+                        {/* Línea de demanda */}
+                        <polyline
+                          points={bm.map((m,i) => `${padX+i*colW+colW/2},${yOf(m.demanda||0)}`).join(" ")}
+                          fill="none" stroke={C.amber} strokeWidth="1.5" strokeDasharray="3,2"
+                        />
+                        {/* Leyenda demanda */}
+                        <text x={W-padX-2} y={padY+8} textAnchor="end"
+                          style={{ fontFamily:C.font, fontSize:"6px", fill:C.amber }}>── demanda</text>
+                      </svg>
+                    </div>
+                  );
+                })()}
+
+                {/* ── GRÁFICO: CC + PREÑEZ COMPARADO (sin corrección vs con corrección) ── */}
+                {tray && (() => {
+                  const fases = ["Tacto/Parto","Mín. Lact.","Destete","Servicio"];
+                  const sinCorr = [tray.ccParto||0, tray.ccMinLact||0, tray.ccDestete||0, tray.ccServ||0];
+                  const conAntic = [tray.ccParto||0, Math.min((tray.ccMinLact||0)+0.4, tray.ccParto||0), (tray.ccDestete||0)+0.3, tray.ccServAntic||tray.ccServ||0];
+                  const conHiper = [tray.ccParto||0, Math.min((tray.ccMinLact||0)+0.7, tray.ccParto||0), (tray.ccDestete||0)+0.5, tray.ccServHiper||tray.ccServ||0];
+                  const allVals = [...sinCorr, ...conAntic, ...conHiper];
+                  const minCC = Math.max(0, Math.min(...allVals) - 0.5);
+                  const maxCC = Math.min(9, Math.max(...allVals) + 0.5);
+                  const W=340, H=140, padL=28, padR=12, padT=14, padB=20;
+                  const gW = W - padL - padR;
+                  const gH = H - padT - padB;
+                  const xOf = (i) => padL + i * gW / (fases.length - 1);
+                  const yOf = (v) => padT + gH * (1 - (v - minCC) / (maxCC - minCC));
+                  const path = (arr) => arr.map((v,i) => `${i===0?"M":"L"}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(" ");
+
+                  // Preñez estimada por CC al servicio
+                  const interpPrenez = (cc) => cc >= 5.5 ? 93 : cc >= 5.0 ? 88 : cc >= 4.5 ? 80 : cc >= 4.0 ? 70 : cc >= 3.5 ? 50 : 28;
+                  const prSin   = interpPrenez(tray.ccServ || 0);
+                  const prAntic = interpPrenez(tray.ccServAntic || tray.ccServ || 0);
+                  const prHiper = interpPrenez(tray.ccServHiper || tray.ccServ || 0);
+                  const hayCambio = prAntic > prSin || prHiper > prSin;
+
+                  return (
+                    <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:12, padding:"12px 14px", marginTop:10 }}>
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:4 }}>
+                        TRAYECTORIA CC — escenarios de corrección y efecto en preñez
+                      </div>
+                      <div style={{ display:"flex", gap:12, marginBottom:6, flexWrap:"wrap" }}>
+                        {[["Sin corrección",C.red],["Dest. anticipado",C.amber],["Hiperprecoz",C.green]].map(([l,c]) => (
+                          <div key={l} style={{ display:"flex", alignItems:"center", gap:4, fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+                            <div style={{ width:16, height:2, background:c }} />{l}
+                          </div>
+                        ))}
+                      </div>
+                      <svg viewBox={"0 0 "+W+" "+H} style={{ width:"100%", display:"block" }}>
+                        {/* Zona mínima 4.5 */}
+                        <rect x={padL} y={yOf(4.5)} width={gW} height={H-padB-yOf(4.5)}
+                          fill={C.red+"08"} />
+                        <line x1={padL} y1={yOf(4.5)} x2={W-padR} y2={yOf(4.5)}
+                          stroke={C.red} strokeWidth="0.8" strokeDasharray="3,3" />
+                        <text x={W-padR-2} y={yOf(4.5)-3} textAnchor="end"
+                          style={{ fontFamily:C.font, fontSize:"6px", fill:C.red }}>mín 4.5</text>
+
+                        {/* Eje Y */}
+                        {[3.5,4.0,4.5,5.0,5.5].filter(v => v >= minCC && v <= maxCC).map(v => (
+                          <g key={v}>
+                            <line x1={padL-3} y1={yOf(v)} x2={padL} y2={yOf(v)} stroke={C.textFaint} strokeWidth="0.5" />
+                            <text x={padL-5} y={yOf(v)+3} textAnchor="end"
+                              style={{ fontFamily:C.font, fontSize:"6px", fill:C.textFaint }}>{v.toFixed(1)}</text>
+                          </g>
+                        ))}
+
+                        {/* Líneas de escenarios */}
+                        <path d={path(sinCorr)}  fill="none" stroke={C.red}   strokeWidth="2" />
+                        <path d={path(conAntic)}  fill="none" stroke={C.amber} strokeWidth="1.5" strokeDasharray="5,3" />
+                        <path d={path(conHiper)}  fill="none" stroke={C.green} strokeWidth="1.5" strokeDasharray="5,3" />
+
+                        {/* Puntos al servicio con preñez */}
+                        {[
+                          { v:sinCorr[3],  pr:prSin,   c:C.red,   label:"Sin corr." },
+                          { v:conAntic[3], pr:prAntic, c:C.amber, label:"Anticipado" },
+                          { v:conHiper[3], pr:prHiper, c:C.green, label:"Hiperprecoz" },
+                        ].map((sc, i) => (
+                          <g key={i}>
+                            <circle cx={xOf(3)} cy={yOf(sc.v)} r={4} fill={sc.c} />
+                            <text x={xOf(3)+6+i*2} y={yOf(sc.v)+(i-1)*12}
+                              style={{ fontFamily:C.font, fontSize:"7px", fill:sc.c, fontWeight:"700" }}>
+                              {sc.pr}%
+                            </text>
+                          </g>
+                        ))}
+
+                        {/* Etiquetas fases */}
+                        {fases.map((f, i) => (
+                          <text key={i} x={xOf(i)} y={H-4} textAnchor="middle"
+                            style={{ fontFamily:C.font, fontSize:"6.5px", fill:C.textFaint }}>
+                            {f}
+                          </text>
+                        ))}
+                      </svg>
+                      {hayCambio && (
+                        <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:6 }}>
+                          ✓ Con destete anticipado: preñez {prAntic}% (+{prAntic-prSin}pp) · Con hiperprecoz: {prHiper}% (+{prHiper-prSin}pp)
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* ── GRÁFICO: EFECTO DEL SUPLEMENTO EN GDP VAQUILLONA ── */}
+                {motor?.vaq1E && (() => {
+                  const gdpSin  = motor.vaq1E.gdpReal   || 0;
+                  const gdpCon  = motor.vaq1E.gdpRecom  || 300;
+                  const gdpObj  = 300;
+                  const pvIni   = motor.pvEntVaq1        || Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40);
+                  const pvObj   = Math.round((parseFloat(form.pvVacaAdulta)||320)*0.65);
+                  // Proyectar PV mes a mes Mayo→Agosto (4 meses)
+                  const meses   = ["May","Jun","Jul","Ago"];
+                  const pvSin   = meses.map((_,i) => Math.round(pvIni + gdpSin/1000*30*(i+1)));
+                  const pvCon   = meses.map((_,i) => Math.round(pvIni + gdpCon/1000*30*(i+1)));
+                  const pvMax   = Math.max(pvObj + 20, ...pvCon);
+                  const pvMin   = pvIni - 10;
+                  const W=340, H=130, padL=32, padR=12, padT=10, padB=18;
+                  const gW = W-padL-padR, gH = H-padT-padB;
+                  const n   = meses.length;
+                  const xOf = (i) => padL + i * gW / (n-1);
+                  const yOf = (v) => padT + gH * (1 - (v-pvMin)/(pvMax-pvMin));
+                  const llegaSin = pvSin[n-1] >= pvObj;
+                  const llegaCon = pvCon[n-1] >= pvObj;
+                  return (
+                    <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:12, padding:"12px 14px", marginTop:10 }}>
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:4 }}>
+                        VAQUILLONA 1° INV — PV proyectado May→Ago con y sin suplemento
+                      </div>
+                      <div style={{ display:"flex", gap:12, marginBottom:6 }}>
+                        {[["Sin supl.",C.red],["Con supl.",C.green],["Obj. entore",C.amber]].map(([l,c]) => (
+                          <div key={l} style={{ display:"flex", alignItems:"center", gap:4, fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+                            <div style={{ width:16, height:2, background:c }} />{l}
+                          </div>
+                        ))}
+                      </div>
+                      <svg viewBox={"0 0 "+W+" "+H} style={{ width:"100%", display:"block" }}>
+                        {/* Línea objetivo */}
+                        <line x1={padL} y1={yOf(pvObj)} x2={W-padR} y2={yOf(pvObj)}
+                          stroke={C.amber} strokeWidth="1" strokeDasharray="4,3" />
+                        <text x={W-padR-2} y={yOf(pvObj)-3} textAnchor="end"
+                          style={{ fontFamily:C.font, fontSize:"6px", fill:C.amber }}>{pvObj}kg (entore)</text>
+
+                        {/* Zona deficit */}
+                        <rect x={padL} y={yOf(pvObj)} width={gW} height={H-padB-yOf(pvObj)}
+                          fill={C.red+"06"} />
+
+                        {/* Eje Y */}
+                        {[pvMin+10, Math.round((pvMin+pvMax)/2), pvMax-10].map(v => (
+                          <g key={v}>
+                            <text x={padL-4} y={yOf(v)+3} textAnchor="end"
+                              style={{ fontFamily:C.font, fontSize:"6px", fill:C.textFaint }}>{Math.round(v)}</text>
+                          </g>
+                        ))}
+
+                        {/* Línea sin suplemento */}
+                        <polyline points={pvSin.map((v,i)=>`${xOf(i)},${yOf(v)}`).join(" ")}
+                          fill="none" stroke={C.red} strokeWidth="2" />
+                        {pvSin.map((v,i) => <circle key={i} cx={xOf(i)} cy={yOf(v)} r={3} fill={C.red} />)}
+
+                        {/* Línea con suplemento */}
+                        <polyline points={pvCon.map((v,i)=>`${xOf(i)},${yOf(v)}`).join(" ")}
+                          fill="none" stroke={C.green} strokeWidth="2" />
+                        {pvCon.map((v,i) => <circle key={i} cx={xOf(i)} cy={yOf(v)} r={3} fill={C.green} />)}
+
+                        {/* PV agosto — resultado */}
+                        <text x={xOf(n-1)+4} y={yOf(pvSin[n-1])+3}
+                          style={{ fontFamily:C.font, fontSize:"7px", fill:C.red, fontWeight:"700" }}>
+                          {pvSin[n-1]}kg {llegaSin?"✓":"✗"}
+                        </text>
+                        <text x={xOf(n-1)+4} y={yOf(pvCon[n-1])-4}
+                          style={{ fontFamily:C.font, fontSize:"7px", fill:C.green, fontWeight:"700" }}>
+                          {pvCon[n-1]}kg {llegaCon?"✓":"✗"}
+                        </text>
+
+                        {/* Etiquetas eje X */}
+                        {meses.map((m,i) => (
+                          <text key={i} x={xOf(i)} y={H-3} textAnchor="middle"
+                            style={{ fontFamily:C.font, fontSize:"7px", fill:C.textFaint }}>{m}</text>
+                        ))}
+                      </svg>
+                      <div style={{ fontFamily:C.font, fontSize:9, marginTop:6,
+                        color: llegaCon ? C.green : C.red }}>
+                        GDP sin supl: {gdpSin} g/d · Con supl: {gdpCon} g/d ·
+                        {llegaCon ? ` ✓ Llega al entore (${pvCon[n-1]} kg)` : ` ✗ No llega al entore sin corrección (${pvCon[n-1]} kg vs ${pvObj} kg objetivo)`}
+                      </div>
+                    </div>
+                  );
+                })()}
+
               </div>
             );
           })()}
@@ -11528,8 +13409,45 @@ function CalfAIPro() {
           <button onClick={()=>signOut()} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.textDim, padding:"5px 10px", fontFamily:C.font, fontSize:10, cursor:"pointer" }}>
             salir
           </button>
+          <button
+            onClick={() => setShowHistorial(true)}
+            style={{ background:"none", border:"1px solid "+C.border, borderRadius:8,
+              padding:"6px 12px", fontFamily:C.font, fontSize:9, cursor:"pointer",
+              color:C.textDim, display:"flex", alignItems:"center", gap:5 }}>
+            📁 Establecimientos
+          </button>
         </div>
       </div>
+
+      {/* ── Banner: borrador recuperado ── */}
+      {borradorRecuperado && !bannerProductor && (
+        <div style={{ background:C.blue+"12", border:"1px solid "+C.blue+"40",
+          borderRadius:0, padding:"8px 16px", display:"flex", alignItems:"center",
+          justifyContent:"space-between", gap:10 }}>
+          <div style={{ fontFamily:C.font, fontSize:10, color:C.blue }}>
+            📋 Borrador recuperado — continuás donde dejaste
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={() => { limpiarBorrador(); setForm(FORM_DEF); setBorradorRecuperado(false); }}
+              style={{ background:"none", border:"1px solid "+C.border, borderRadius:6,
+                padding:"3px 10px", fontFamily:C.font, fontSize:9, cursor:"pointer",
+                color:C.textDim }}>
+              Nuevo
+            </button>
+            <button onClick={() => setBorradorRecuperado(false)}
+              style={{ background:"none", border:"none", color:C.textFaint,
+                fontSize:14, cursor:"pointer", padding:"0 4px" }}>✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal historial ── */}
+      {showHistorial && (
+        <PanelHistorial
+          onCargar={(h) => { cargarVisita(h); setShowHistorial(false); setBorradorRecuperado(false); }}
+          onCerrar={() => setShowHistorial(false)}
+          C={C} />
+      )}
 
       {/* ── Banner: datos del productor autocargados ── */}
       {bannerProductor && (
