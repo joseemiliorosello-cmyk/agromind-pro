@@ -318,7 +318,16 @@ function SuplSelector({ label, supl, dosis, onSuplChange, onDosisChange, fenolPa
   );
 }
 
+// ─── METRICCARD ───
+const MetricCard = ({ label, value, color = T.green, sub, style: st }) => (
+  <div style={{ background:T.card2, borderRadius:T.radius, padding:"10px 12px", border:`1px solid ${T.border}`, ...st }}>
+    <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, letterSpacing:1, marginBottom:3 }}>{label}</div>
+    <div style={{ fontFamily:T.font, fontSize:18, fontWeight:700, color, lineHeight:1 }}>{value}</div>
+    {sub && <div style={{ fontFamily:T.fontSans, fontSize:10, color:T.textFaint, marginTop:2 }}>{sub}</div>}
+  </div>
+);
+
 export {
   Pill, Alerta, Slider, DistCC, LoadingPanel, Input, SelectF, SuplSelector,
-  smf, smf2, mcalKgAdj, pbPasto, fAprovFenol,
+  smf, smf2, mcalKgAdj, pbPasto, fAprovFenol, MetricCard,
 };
