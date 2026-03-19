@@ -327,7 +327,21 @@ const MetricCard = ({ label, value, color = T.green, sub, style: st }) => (
   </div>
 );
 
+// ─── TOGGLE ───
+const Toggle = ({ label, value, onChange }) => (
+  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:`1px solid ${T.border}` }}>
+    <span style={{ fontFamily:T.fontSans, fontSize:13, color:T.text }}>{label}</span>
+    <div
+      onClick={() => onChange(!value)}
+      style={{ width:44, height:24, borderRadius:12, background:value ? T.green : "rgba(255,255,255,.1)", cursor:"pointer", position:"relative", transition:"all .2s" }}
+    >
+      <div style={{ position:"absolute", top:3, left:value ? 22 : 3, width:18, height:18, borderRadius:9, background:"white", transition:"all .2s" }} />
+    </div>
+  </div>
+);
+
+
 export {
   Pill, Alerta, Slider, DistCC, LoadingPanel, Input, SelectF, SuplSelector,
-  smf, smf2, mcalKgAdj, pbPasto, fAprovFenol, MetricCard,
+  smf, smf2, mcalKgAdj, pbPasto, fAprovFenol, MetricCard, Toggle,
 };
