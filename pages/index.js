@@ -6,12 +6,12 @@ import { T as C, FORM_DEF, MESES_NOM, CALIDAD_C4_CALIBRADA } from "../lib/consta
 import { correrMotor, useMotor, calcCadena, calcConsumoAgua, calcDisp,
          calcScore, calcGEI, calcTrayectoriaCC, calcDisponibilidadMS,
          calcSupervivencia, calcV2S, mcalSuplemento, fetchSat,
-         fmtFecha, dZona, dProv, smf, smf2, diagnosticarSistema,
+         fmtFecha, dZona, dProv, smf, diagnosticarSistema,
          calcImpactoCola } from "../lib/motor";
 import { calcCerebro, buildPromptFull, SYS_FULL,
          interpretarSistemaCompleto } from "../lib/cerebro";
 import { usePersistencia, PanelHistorial } from "../lib/persistencia";
-import { Pill, Alerta } from "../components/ui";
+import { Pill, Alerta, smf2 } from "../components/ui";
 import { DashboardEstablecimiento, ScoreRadar } from "../components/dashboard";
 import { getPasoRenders } from "../components/pasos";
 
