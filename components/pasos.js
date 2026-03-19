@@ -23,15 +23,95 @@ import { TabCerebro, RenderInforme, SimuladorEscenarios,
 
 // ─── COMPONENTES AUXILIARES ──────────────────────────────────────
 
-function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }
+function LoadingPanel({ msg }) {
+  return (
+    <div style={{ textAlign:"center", padding:"40px 20px" }}>
+      <div style={{ display:"flex", justifyContent:"center", gap:6, marginBottom:16 }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{
+            width:8, height:8, borderRadius:4, background:T.green,
+            animation:`pulse 1.2s ease-in-out ${i*0.2}s infinite`,
+          }} />
+        ))}
+      </div>
+      <div style={{ fontFamily:T.font, fontSize:12, color:T.green, letterSpacing:1 }}>{msg}</div>
+    </div>
+  );
+}
 
-function LoadingPanel({ msg }
+function PanelAgua({ form, set, sat }) {
+  const enLact       = form.eReprod === "Lactación con ternero al pie";
+  const evalAgua     = form.aguaTDS ? evaluarAgua(form.aguaTDS, form.aguaTipoSal, form.pvVacaAdulta, sat?.temp || 25, enLact, form.enso) : null;
+  const consumoBase  = calcConsumoAgua(form.pvVacaAdulta, sat?.temp || 25, enLact);
 
-function PanelAgua({ form, set, sat }
+  return (
+    <div>
+      {/* Header agua */}
+      <div style={{ background:`${C.blue}10`, border:`1px solid ${C.blue}30`, borderRadius:12, padding:12, marginBottom:14 }}>
+        <div style={{ fontFamily:C.font, fontSize:10, color:C.blue, letterSpacing:1, marginBottom:4 }}>💧 AGUA DE BEBIDA</div>
+        <div style={{ fontFamily:C.sans, fontSize:12, color:C.textDim, lineHeight:1.6 }}>
+          Agua salobre o con alta concentración de sólidos disueltos reduce el consumo de materia seca y el rendimiento productivo.
+        </div>
+      </div>
 
-function PanelGEI({ form, motor, tray, sat }
+      <Input label="TDS TOTAL — SÓLIDOS DISUELTOS (mg/L)" value={form.aguaTDS} onChange={v => set("aguaTDS", v)}
+        placeholder="Ej: 1500" type="number" sub="Analítica: laboratorio INTA/SENASA o tiras reactivas de campo" />
 
-// ─── COMPONENTES AUXILIARES PASOS ───────────────────────────────
+      {!form.aguaTDS && (
+        <div style={{ background:"rgba(74,159,212,.06)", border:"1px solid rgba(74,159,212,.2)", borderRadius:8, padding:10, marginBottom:12 }}>
+          <div style={{ fontFamily:C.sans, fontSize:11, color:C.blue }}>Sin TDS cargado — se asume calidad aceptable ({"<"}1.000 mg/L).</div>
+        </div>
+      )}
+
+      <SelectF label="TIPO DE SAL DOMINANTE" value={form.aguaTipoSal} onChange={v => set("aguaTipoSal", v)}
+        options={[
+          ["NaCl dominante",    "NaCl (cloruros) — agua costera/subterránea"],
+          ["SO4 dominante",     "SO4 (sulfatos) — Chaco/Santiago del Estero"],
+          ["Mixta/Desconocida", "Mixta / Sin analizar (factor conservador)"],
+        ]}
+      />
+
+      <Input label="FUENTE DE AGUA" value={form.aguaFuente} onChange={v => set("aguaFuente", v)} placeholder="Pozo, laguna, arroyo, represa…" />
+
+      {/* Consumo estimado */}
+      <div style={{ background:C.card2, borderRadius:12, padding:12, border:`1px solid ${C.border}`, marginBottom:12 }}>
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>CONSUMO DE AGUA ESTIMADO</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+          <MetricCard label="HOY (T actual)"     value={consumoBase + "L"} color={C.blue}  sub={`${sat?.temp || "—"}°C · ${enLact ? "Lactando" : "Gestación"}`} />
+          <MetricCard label="EN VERANO (35°C)"   value={calcConsumoAgua(form.pvVacaAdulta, 35, enLact) + "L"} color={C.amber} sub="Pico de demanda anual" />
+        </div>
+        <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:8 }}>
+          Winchester & Morris 1956 / NRC 2000. Mín. 5 cm lineal de bebedero/vaca.
+        </div>
+      </div>
+
+      {/* Resultado evaluación */}
+      {evalAgua && (
+        <div>
+          <div style={{ background:`${evalAgua.cat.color}15`, border:`1px solid ${evalAgua.cat.color}50`, borderRadius:12, padding:12, marginBottom:10 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:evalAgua.cat.color }}>{evalAgua.cat.label}</span>
+              <span style={{ fontFamily:C.font, fontSize:11, color:C.text }}>{evalAgua.tdsN.toLocaleString()} mg/L</span>
+            </div>
+            <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginTop:4, lineHeight:1.5 }}>{evalAgua.cat.desc}</div>
+            {evalAgua.pctReducDMI > 0 && (
+              <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:"wrap" }}>
+                <Pill color={C.red}>DMI −{evalAgua.pctReducDMI.toFixed(0)}%</Pill>
+                <Pill color={C.red}>Pasto consumido −{evalAgua.pctReducPasto.toFixed(0)}%</Pill>
+                <Pill color={C.amber}>Agua ingerida −{evalAgua.pctReducWI.toFixed(0)}%</Pill>
+                {evalAgua.ts.factor > 1.1 && <Pill color={C.red}>SO4: ×{evalAgua.ts.factor}</Pill>}
+              </div>
+            )}
+          </div>
+          {evalAgua.warnings.map((w, i) => (
+            <Alerta key={i} tipo={w.nivel === "rojo" ? "error" : w.nivel === "ambar" ? "warn" : "ok"}>{w.msg}</Alerta>
+          ))}
+        </div>
+      )}
+
+    </div>
+  );
+}
 
 function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
   const mesP    = cadena?.partoTemp ? cadena.partoTemp.getMonth() : 10;
@@ -187,96 +267,6 @@ function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function LoadingPanel({ msg }) {
-  return (
-    <div style={{ textAlign:"center", padding:"40px 20px" }}>
-      <div style={{ display:"flex", justifyContent:"center", gap:6, marginBottom:16 }}>
-        {[0,1,2].map(i => (
-          <div key={i} style={{
-            width:8, height:8, borderRadius:4, background:T.green,
-            animation:`pulse 1.2s ease-in-out ${i*0.2}s infinite`,
-          }} />
-        ))}
-      </div>
-      <div style={{ fontFamily:T.font, fontSize:12, color:T.green, letterSpacing:1 }}>{msg}</div>
-    </div>
-  );
-}
-
-function PanelAgua({ form, set, sat }) {
-  const enLact       = form.eReprod === "Lactación con ternero al pie";
-  const evalAgua     = form.aguaTDS ? evaluarAgua(form.aguaTDS, form.aguaTipoSal, form.pvVacaAdulta, sat?.temp || 25, enLact, form.enso) : null;
-  const consumoBase  = calcConsumoAgua(form.pvVacaAdulta, sat?.temp || 25, enLact);
-
-  return (
-    <div>
-      {/* Header agua */}
-      <div style={{ background:`${C.blue}10`, border:`1px solid ${C.blue}30`, borderRadius:12, padding:12, marginBottom:14 }}>
-        <div style={{ fontFamily:C.font, fontSize:10, color:C.blue, letterSpacing:1, marginBottom:4 }}>💧 AGUA DE BEBIDA</div>
-        <div style={{ fontFamily:C.sans, fontSize:12, color:C.textDim, lineHeight:1.6 }}>
-          Agua salobre o con alta concentración de sólidos disueltos reduce el consumo de materia seca y el rendimiento productivo.
-        </div>
-      </div>
-
-      <Input label="TDS TOTAL — SÓLIDOS DISUELTOS (mg/L)" value={form.aguaTDS} onChange={v => set("aguaTDS", v)}
-        placeholder="Ej: 1500" type="number" sub="Analítica: laboratorio INTA/SENASA o tiras reactivas de campo" />
-
-      {!form.aguaTDS && (
-        <div style={{ background:"rgba(74,159,212,.06)", border:"1px solid rgba(74,159,212,.2)", borderRadius:8, padding:10, marginBottom:12 }}>
-          <div style={{ fontFamily:C.sans, fontSize:11, color:C.blue }}>Sin TDS cargado — se asume calidad aceptable ({"<"}1.000 mg/L).</div>
-        </div>
-      )}
-
-      <SelectF label="TIPO DE SAL DOMINANTE" value={form.aguaTipoSal} onChange={v => set("aguaTipoSal", v)}
-        options={[
-          ["NaCl dominante",    "NaCl (cloruros) — agua costera/subterránea"],
-          ["SO4 dominante",     "SO4 (sulfatos) — Chaco/Santiago del Estero"],
-          ["Mixta/Desconocida", "Mixta / Sin analizar (factor conservador)"],
-        ]}
-      />
-
-      <Input label="FUENTE DE AGUA" value={form.aguaFuente} onChange={v => set("aguaFuente", v)} placeholder="Pozo, laguna, arroyo, represa…" />
-
-      {/* Consumo estimado */}
-      <div style={{ background:C.card2, borderRadius:12, padding:12, border:`1px solid ${C.border}`, marginBottom:12 }}>
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>CONSUMO DE AGUA ESTIMADO</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-          <MetricCard label="HOY (T actual)"     value={consumoBase + "L"} color={C.blue}  sub={`${sat?.temp || "—"}°C · ${enLact ? "Lactando" : "Gestación"}`} />
-          <MetricCard label="EN VERANO (35°C)"   value={calcConsumoAgua(form.pvVacaAdulta, 35, enLact) + "L"} color={C.amber} sub="Pico de demanda anual" />
-        </div>
-        <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:8 }}>
-          Winchester & Morris 1956 / NRC 2000. Mín. 5 cm lineal de bebedero/vaca.
-        </div>
-      </div>
-
-      {/* Resultado evaluación */}
-      {evalAgua && (
-        <div>
-          <div style={{ background:`${evalAgua.cat.color}15`, border:`1px solid ${evalAgua.cat.color}50`, borderRadius:12, padding:12, marginBottom:10 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <span style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:evalAgua.cat.color }}>{evalAgua.cat.label}</span>
-              <span style={{ fontFamily:C.font, fontSize:11, color:C.text }}>{evalAgua.tdsN.toLocaleString()} mg/L</span>
-            </div>
-            <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginTop:4, lineHeight:1.5 }}>{evalAgua.cat.desc}</div>
-            {evalAgua.pctReducDMI > 0 && (
-              <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:"wrap" }}>
-                <Pill color={C.red}>DMI −{evalAgua.pctReducDMI.toFixed(0)}%</Pill>
-                <Pill color={C.red}>Pasto consumido −{evalAgua.pctReducPasto.toFixed(0)}%</Pill>
-                <Pill color={C.amber}>Agua ingerida −{evalAgua.pctReducWI.toFixed(0)}%</Pill>
-                {evalAgua.ts.factor > 1.1 && <Pill color={C.red}>SO4: ×{evalAgua.ts.factor}</Pill>}
-              </div>
-            )}
-          </div>
-          {evalAgua.warnings.map((w, i) => (
-            <Alerta key={i} tipo={w.nivel === "rojo" ? "error" : w.nivel === "ambar" ? "warn" : "ok"}>{w.msg}</Alerta>
-          ))}
-        </div>
-      )}
-
     </div>
   );
 }
