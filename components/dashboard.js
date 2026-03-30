@@ -6,6 +6,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { calcCadena, calcFaseCiclo, mcalSuplemento } from "../lib/motor";
+import { calcCerebro } from "../lib/cerebro";
 import React from "react";
 import { T as C, MESES_NOM } from "../lib/constantes";
 import { Pill, smf, smf2 } from "./ui";
