@@ -4094,7 +4094,7 @@ function CalfAIPro() {
       vistaSupl, setVistaSupl, usaPotreros, setUsaPotreros,
       potreros, setPotreros, runAnalysis,
       pvEntVaq1, pvSalidaVaq1, pvEntradaVaq2,
-      nVacas, nToros, nV2s, nVaq1, nVaq2, cadena, disponMS,
+      nVacas, nToros, nV2s, nVaq1, nVaq2, cadena, disponMS, tcSave,
       PASOS, C, cerebro: calcCerebro(motorEfectivo, form, sat),
     });
 
