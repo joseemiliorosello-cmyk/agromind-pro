@@ -9,7 +9,10 @@
 
 import React from "react";
 import { T as C, MESES_NOM, FORM_DEF, getBiotipo, BIOTIPOS } from "../lib/constantes";
-import { calcCadena, calcFaseCiclo, fmtFecha, FENOLOGIAS } from "../lib/motor";
+import { calcCadena, calcFaseCiclo, fmtFecha, FENOLOGIAS,
+         calcConsumoAgua, evaluarAgua, calcDisponibilidadMS,
+         calcConsumoPasto, calcGEI, calcOfPasto, calcScore,
+         calcV2S, diagnosticarSistema, getClima, mcalSuplemento, reqEM } from "../lib/motor";
 import { DistCC, Input, SelectF, Slider, SuplSelector, Alerta, Pill, MetricCard, Toggle,
          smf, smf2, pbPasto, mcalKgAdj } from "./ui";
 import { DashboardEstablecimiento, GraficoBalance,
