@@ -14,7 +14,7 @@ import { usePersistencia, PanelHistorial } from "../lib/persistencia";
 import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
          MetricCard, SelectF, Slider, Toggle, SuplSelector } from "../components/ui";
 import { DashboardEstablecimiento, ScoreRadar, GraficoBalance, TrayectoriaVaquillona } from "../components/dashboard";
-import { getPasoRenders, GraficoCCEscenarios, PanelAgua, PanelGEI, PanelFaseCiclo, LoadingPanel } from "../components/pasos";
+import { getPasoRenders, GraficoCCEscenarios, PanelAgua, PanelGEI, PanelFaseCiclo } from "../components/pasos";
 
 const MSGS = [
   "Analizando condición forrajera…",
