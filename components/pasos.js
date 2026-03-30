@@ -118,6 +118,7 @@ function PanelAgua({ form, set, sat }) {
 }
 
 function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
+  const T = C;
   const MESES_C    = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   const ESC_NAMES  = (escenarios || []).map(e => e.label || "Escenario");
   const ESC_COLORS = (escenarios || []).map(e => e.color || "#7ec850");
@@ -3791,6 +3792,7 @@ const renderUbicacion = () => (
 }
 
 function PanelFaseCiclo({ faseCiclo }) {
+  const T = C;
   if (!faseCiclo || faseCiclo.fase === "SIN_FECHA") return null;
   return (
     <div style={{ background:faseCiclo.color+"12", border:"1px solid "+faseCiclo.color+"40",
