@@ -5,6 +5,7 @@
 // Dashboard principal + Score + Gráficos de balance y CC
 // ═══════════════════════════════════════════════════════════════════
 
+import { calcCadena, calcFaseCiclo, mcalSuplemento } from "../lib/motor";
 import React from "react";
 import { T as C, MESES_NOM } from "../lib/constantes";
 import { Pill, smf, smf2 } from "./ui";

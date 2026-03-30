@@ -5,6 +5,7 @@
 // Tabs del análisis: Cerebro, GEI, Recomendaciones, Informe, Simulador
 // ═══════════════════════════════════════════════════════════════════
 
+import { calcTrayectoriaCC, diagnosticarSistema } from "../lib/motor";
 import React from "react";
 import { T as C, MESES_NOM } from "../lib/constantes";
 import { Pill, Alerta, smf } from "./ui";
