@@ -3790,4 +3790,24 @@ const renderUbicacion = () => (
   };
 }
 
+function PanelFaseCiclo({ faseCiclo }) {
+  if (!faseCiclo || faseCiclo.fase === "SIN_FECHA") return null;
+  return (
+    <div style={{ background:faseCiclo.color+"12", border:"1px solid "+faseCiclo.color+"40",
+      borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        <span style={{ fontSize:22 }}>{faseCiclo.icono}</span>
+        <div>
+          <div style={{ fontFamily:"monospace", fontSize:9, color:faseCiclo.color, letterSpacing:1, marginBottom:2 }}>
+            {faseCiclo.label?.toUpperCase()}
+            {faseCiclo.siguiente ? " · " + faseCiclo.siguiente.label + " en " + faseCiclo.siguiente.diasFaltan + "d" : ""}
+          </div>
+          <div style={{ fontFamily:"monospace", fontSize:11, color:"#e8e8e8", lineHeight:1.5 }}>
+            {faseCiclo.descripcion?.split(".")[0] + "."}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 export { GraficoCCEscenarios, PanelAgua, PanelGEI, PanelFaseCiclo, LoadingPanel };
