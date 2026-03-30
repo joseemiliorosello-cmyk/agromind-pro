@@ -3790,4 +3790,4 @@ const renderUbicacion = () => (
   };
 }
 
-export { getPasoRenders, GraficoCCEscenarios, PanelAgua, PanelGEI, PanelFaseCiclo, LoadingPanel };
+export { GraficoCCEscenarios, PanelAgua, PanelGEI, PanelFaseCiclo, LoadingPanel };
