@@ -13,7 +13,7 @@ import { calcCerebro, buildPromptFull, SYS_FULL,
 import { usePersistencia, PanelHistorial } from "../lib/persistencia";
 import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
          MetricCard, SelectF, Slider, Toggle, SuplSelector } from "../components/ui";
-import { DashboardEstablecimiento, ScoreRadar } from "../components/dashboard";
+import { DashboardEstablecimiento, ScoreRadar, GraficoBalance, TrayectoriaVaquillona } from "../components/dashboard";
 import { getPasoRenders } from "../components/pasos";
 
 const MSGS = [
