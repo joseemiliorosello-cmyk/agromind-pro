@@ -11,7 +11,7 @@ import { correrMotor, useMotor, calcCadena, calcConsumoAgua, calcDisp,
 import { calcCerebro, buildPromptFull, SYS_FULL,
          interpretarSistemaCompleto } from "../lib/cerebro";
 import { usePersistencia, PanelHistorial } from "../lib/persistencia";
-import { Pill, Alerta, smf2, smf, DistCC, Input, LoadingPanel,
+import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
          MetricCard, SelectF, Slider, Toggle, SuplSelector } from "../components/ui";
 import { DashboardEstablecimiento, ScoreRadar } from "../components/dashboard";
 import { getPasoRenders } from "../components/pasos";
