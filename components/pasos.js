@@ -1,4 +1,5 @@
 "use client"; // v2
+import { BarChart, Bar, LineChart, Line, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell } from "recharts";
 
 // ═══════════════════════════════════════════════════════════════════
 // components/pasos.js

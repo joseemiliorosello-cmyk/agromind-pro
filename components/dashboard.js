@@ -8,7 +8,7 @@
 import { calcCadena, calcFaseCiclo, mcalSuplemento } from "../lib/motor";
 import { calcCerebro } from "../lib/cerebro";
 import React from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, ReferenceLine } from "recharts";
+import { BarChart, Bar, LineChart, Line, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell } from "recharts";
 import { T, MESES_NOM } from "../lib/constantes"
 const C = T;
 import { Pill, smf, smf2 } from "./ui";
