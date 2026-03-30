@@ -9,7 +9,7 @@
 
 import React from "react";
 import { T as C, MESES_NOM, FORM_DEF, getBiotipo, BIOTIPOS } from "../lib/constantes";
-import { calcCadena, calcFaseCiclo, fmtFecha } from "../lib/motor";
+import { calcCadena, calcFaseCiclo, fmtFecha, FENOLOGIAS } from "../lib/motor";
 import { DistCC, Input, SelectF, Slider, SuplSelector, Alerta, Pill, MetricCard, Toggle,
          smf, smf2, pbPasto, mcalKgAdj } from "./ui";
 import { DashboardEstablecimiento, GraficoBalance,
@@ -115,6 +115,9 @@ function PanelAgua({ form, set, sat }) {
 }
 
 function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
+  const MESES_C    = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const ESC_NAMES  = (escenarios || []).map(e => e.label || "Escenario");
+  const ESC_COLORS = (escenarios || []).map(e => e.color || "#7ec850");
   const mesP    = cadena?.partoTemp ? cadena.partoTemp.getMonth() : 10;
   // mesServ = mes real de inicio de servicio (de cadena.ini), no derivado del parto
   const mesServ = cadena?.ini ? cadena.ini.getMonth() : (mesP + 3) % 12;
