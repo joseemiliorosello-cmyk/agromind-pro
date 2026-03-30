@@ -820,7 +820,7 @@ export function getPasoRenders(scope) {
     pvEntVaq1, pvSalidaVaq1, pvEntradaVaq2,
     nVacas, nToros, nV2s, nVaq1, nVaq2,
     cadena, disponMS, evalAgua: ea,
-    PASOS, gpsClick,
+    PASOS, gpsClick, tcSave,
   } = scope;
 
 const renderUbicacion = () => (
