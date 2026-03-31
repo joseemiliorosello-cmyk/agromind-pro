@@ -28,7 +28,8 @@ import { TabCerebro, RenderInforme, SimuladorEscenarios,
 
 // ─── COMPONENTES AUXILIARES ──────────────────────────────────────
 
-function LoadingPanel({ msg }) {
+function LoadingPanel({
+  const T = C; msg }) {
   return (
     <div style={{ textAlign:"center", padding:"40px 20px" }}>
       <div style={{ display:"flex", justifyContent:"center", gap:6, marginBottom:16 }}>
@@ -280,7 +281,8 @@ function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
   );
 }
 
-function PanelGEI({ form, motor, tray, sat }) {
+function PanelGEI({
+  const T = C; form, motor, tray, sat }) {
   const gei = React.useMemo(() => calcGEI(form, motor, tray, sat), [form, motor, tray, sat]);
   const [vista, setVista] = React.useState("resumen"); // resumen | categorias | pastizal | inefi
 
