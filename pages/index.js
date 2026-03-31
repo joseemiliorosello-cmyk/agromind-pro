@@ -273,10 +273,14 @@ function CalfAIPro() {
   // Usa GPS si disponible; si no, usa centroide de la provincia seleccionada
   // → el clima llega siempre que el usuario haya elegido provincia
   useEffect(() => {
+    console.log("[fetchSat] trigger — provincia:", form.provincia, "coords:", coords);
     const refCoords = coords || (form.provincia ? COORDS_PROV[form.provincia] : null);
-    if (!refCoords) return;
+    if (!refCoords) { console.log("[fetchSat] sin coords — abortando"); return; }
     setSat(null);
-    fetchSat(refCoords.lat, refCoords.lon, form.zona || "NEA", form.provincia, form.enso, setSat);
+    fetchSat(refCoords.lat, refCoords.lon, form.zona || "NEA", form.provincia, form.enso, (data) => {
+      console.log("[fetchSat] respuesta:", data);
+      setSat(data);
+    });
   }, [coords, form.enso, form.zona, form.provincia]);
 
   // ── GPS ───────────────────────────────────────────────────────
