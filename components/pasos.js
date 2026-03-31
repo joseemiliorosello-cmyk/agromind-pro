@@ -11,7 +11,7 @@ import { BarChart, Bar, LineChart, Line, ComposedChart, AreaChart, Area, XAxis, 
 import React from "react";
 import { T as C, MESES_NOM, FORM_DEF, getBiotipo, BIOTIPOS, SUPLEMENTOS } from "../lib/constantes"
 const T = C;;
-import { calcCadena, calcFaseCiclo, fmtFecha, FENOLOGIAS,
+import { calcCadena, calcFaseCiclo, fmtFecha, FENOLOGIAS, GWP_CH4, GWP100, AR6,
          calcConsumoAgua, evaluarAgua, calcDisponibilidadMS,
          calcConsumoPasto, calcGEI, calcOfPasto, calcScore,
          calcV2S, diagnosticarSistema, getClima, mcalSuplemento,
