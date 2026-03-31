@@ -840,7 +840,6 @@ const renderUbicacion = () => {
   const locs   = (form.pais && form.zona && form.provincia)
     ? Object.keys(UBICACIONES[form.pais]?.[form.zona]?.[form.provincia] || {})
     : [];
-
   const handlePais = (v) => { set("pais",v); set("zona",""); set("provincia",""); set("localidad",""); };
   const handleZona = (v) => { set("zona",v); set("provincia",""); set("localidad",""); };
   const handleProv = (v) => { set("provincia",v); set("localidad",""); };
@@ -849,7 +848,6 @@ const renderUbicacion = () => {
     const c = UBICACIONES[form.pais]?.[form.zona]?.[form.provincia]?.[v];
     if (c) setCoords({ lat:c[0], lon:c[1] });
   };
-
   return (
     <div>
       {sat && !sat.error && (
