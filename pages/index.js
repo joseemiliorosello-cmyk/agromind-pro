@@ -322,7 +322,7 @@ function CalfAIPro() {
     try {
       // Guardar en historial antes de analizar
       guardarEnHistorial(form, motorEfectivo, null);
-      const const cerebroData = calcCerebro(motorEfectivo, form, sat);
+      const cerebroData = calcCerebro(motorEfectivo, form, sat);
       prompt = buildPromptFull(motorEfectivo, form, sat, cerebroData);
       const res  = await fetch("/api/analyze", {
         method:"POST",
