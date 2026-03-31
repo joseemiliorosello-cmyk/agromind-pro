@@ -267,6 +267,10 @@ function CalfAIPro() {
     "Tarija / Chaco (BO)":      { lat:-22.0, lon:-63.5 },
     "Rio Grande do Sul (BR)":   { lat:-30.0, lon:-53.0 },
     "Pantanal (BR)":            { lat:-17.0, lon:-57.5 },
+    "Misiones":                 { lat:-27.4, lon:-55.9 },
+    "Jujuy":                    { lat:-24.2, lon:-65.3 },
+    "Tucumán":                  { lat:-26.8, lon:-65.2 },
+    "Catamarca":                { lat:-28.5, lon:-65.8 },
   };
 
   // ── EFECTO: fetch satelital ────────────────────────────────────
@@ -281,7 +285,7 @@ function CalfAIPro() {
       console.log("[fetchSat] respuesta:", data);
       setSat(data);
     });
-  }, [coords, form.enso, form.zona, form.provincia]);
+  }, [coords, form.enso, form.zona, form.provincia, form.localidad]);
 
   // ── GPS ───────────────────────────────────────────────────────
   async function gpsClick() {
