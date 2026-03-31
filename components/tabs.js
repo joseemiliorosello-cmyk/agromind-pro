@@ -6,6 +6,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { calcTrayectoriaCC, diagnosticarSistema } from "../lib/motor";
+import { calcCerebro, analizarMargenOptimizacion } from "../lib/cerebro";
 import React from "react";
 import { T as C, MESES_NOM } from "../lib/constantes";
 import { Pill, Alerta, smf } from "./ui";
