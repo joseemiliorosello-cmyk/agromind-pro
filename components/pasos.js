@@ -894,95 +894,9 @@ const renderUbicacion = () => {
         onChange={v=>set("nombreProductor",v)} placeholder="Nombre del productor o establecimiento" />
     </div>
   );
-}=> (
-    <div>
-      {/* GPS opcional ÔÇö provincia es lo que importa */}
-      {!coords && (
-        <div style={{ background:`${C.green}08`, border:`1px solid ${C.green}30`, borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
-          <div style={{ fontFamily:C.sans, fontSize:12, color:C.green, fontWeight:700, marginBottom:4 }}>
-            ­ƒôî Seleccion├í Zona y Provincia abajo ÔÇö es todo lo que necesit├ís
-          </div>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, lineHeight:1.6 }}>
-            El an├ílisis usa datos clim├íticos hist├│ricos por provincia (temperatura, precipitaci├│n, estacionalidad).
-            El GPS es opcional: solo agrega temperatura y NDVI del sat├®lite en tiempo real.
-          </div>
-          <button onClick={gpsClick} style={{
-            marginTop:8, padding:"6px 12px", borderRadius:8,
-            background:"transparent", border:`1px solid ${C.green}40`,
-            fontFamily:C.font, fontSize:9, color:C.green, cursor:"pointer"
-          }}>
-            ­ƒôì Activar GPS igual (para datos satelitales en tiempo real)
-          </button>
-        </div>
-      )}
-      {coords && (
-        <Alerta tipo="ok">
-          ­ƒôì GPS activo: {form.zona} ┬À {form.provincia} {form.localidad ? `┬À ${form.localidad}` : ""}
-          <span style={{ opacity:0.6, fontSize:10 }}> ({coords.lat.toFixed(3)}┬░, {coords.lon.toFixed(3)}┬░)</span>
-        </Alerta>
-      )}
-      {sat && !sat.error && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, margin:"10px 0" }}>
-          <MetricCard label="TEMPERATURA" value={sat.temp+"┬░C"}  color={C.amber} />
-          <MetricCard label="NDVI"        value={sat.ndvi}        color={C.green} sub={sat.condForr} />
-          <MetricCard label="LLUVIA 30D"  value={sat.p30+"mm"}   color={C.blue} />
-          <MetricCard label="BALANCE"     value={(sat.deficit>0?"+":"")+sat.deficit+"mm"} color={sat.deficit>0?C.green:C.red} />
-        </div>
-      )}
-      {sat?.error && <Alerta tipo="warn">{sat.error}</Alerta>}
-      {/* Zona + Provincia vinculadas */}
-      {(() => {
-        const PROVS_POR_ZONA = {
-          "NEA":              ["Corrientes","Chaco","Formosa","Misiones","Entre R├¡os"],
-          "NOA":              ["Salta","Jujuy","Tucum├ín","Santiago del Estero","Catamarca"],
-          "Pampa H├║meda":     ["Buenos Aires","Santa Fe","C├│rdoba","Entre R├¡os","La Pampa"],
-          "Paraguay Oriental":["Paraguay Oriental"],
-          "Chaco Paraguayo":  ["Chaco Paraguayo"],
-          "Brasil (Cerrado)": ["Mato Grosso do Sul (BR)","Mato Grosso / Goi├ís (BR)","Pantanal (BR)"],
-          "Bolivia (Llanos)": ["Santa Cruz / Beni (BO)","Tarija / Chaco (BO)"],
-        };
-        const zonaActual  = form.zona || "";
-        const provsFiltro = zonaActual ? (PROVS_POR_ZONA[zonaActual] || []) : Object.values(PROVS_POR_ZONA).flat();
-        const handleZona  = (v) => {
-          set("zona", v);
-          // Si la provincia actual no corresponde a la nueva zona ÔåÆ resetear a vac├¡o
-          // El usuario elige la provincia ÔÇö no auto-seleccionar
-          const nuevasProvs = PROVS_POR_ZONA[v] || [];
-          if (form.provincia && !nuevasProvs.includes(form.provincia)) {
-            set("provincia", "");
-          }
-        };
-        return (
-          <>
-            <SelectF label="ZONA" value={form.zona} onChange={handleZona}
-              placeholder="Seleccion├í la zona..."
-              options={[
-                ["NEA","NEA ÔÇö Corrientes ┬À Chaco ┬À Formosa ┬À Misiones"],
-                ["NOA","NOA ÔÇö Salta ┬À Jujuy ┬À Tucum├ín ┬À Stgo. del Estero"],
-                ["Pampa H├║meda","Pampa H├║meda ÔÇö Bs.As ┬À Santa Fe ┬À C├│rdoba"],
-                ["Paraguay Oriental","Paraguay Oriental"],
-                ["Chaco Paraguayo","Chaco Paraguayo"],
-                ["Brasil (Cerrado)","Brasil ÔÇö Cerrado / Pantanal"],
-                ["Bolivia (Llanos)","Bolivia ÔÇö Llanos orientales"],
-              ]} />
-            <SelectF label="PROVINCIA / REGI├ôN" value={form.provincia}
-              onChange={v=>set("provincia",v)}
-              placeholder={zonaActual ? "Seleccion├í provincia de " + zonaActual + "..." : "ÔåÉ Primero eleg├¡ la zona"}
-              options={provsFiltro.map(p=>[p,p])} />
-          </>
-        );
-      })()}
-      <SelectF label="ENSO" value={form.enso} onChange={v=>set("enso",v)} options={[
-        ["neutro","Neutro ÔÇö a├▒o promedio"],["nino","El Ni├▒o (+25% oferta forrajera)"],["nina","La Ni├▒a (ÔêÆ25% oferta forrajera)"],
-      ]} />
-      <Input label="PRODUCTOR / ESTABLECIMIENTO" value={form.nombreProductor} onChange={v=>set("nombreProductor",v)} placeholder="Nombre del establecimiento" />
-      <Input id="campo-localidad" label="PARAJE / CAMPO (opcional)" value={form.localidad} onChange={v=>set("localidad",v)} placeholder="Ej: Charata, El Pintado, La FidelidadÔÇª" sub="Solo para el informe ÔÇö no afecta el c├ílculo" />
-
-      {/* Toros: ver diagn├│stico en Sanidad */}
-    </div>
-  );
 
   // ÔöÇÔöÇ PASO 1: RODEO ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+}
   const renderRodeo = () => (
     <div>
       <SelectF label="BIOTIPO" value={form.biotipo} onChange={v=>set("biotipo",v)}
