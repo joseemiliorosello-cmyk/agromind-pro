@@ -8,8 +8,12 @@
 import { calcTrayectoriaCC, diagnosticarSistema } from "../lib/motor";
 import { calcCerebro, analizarMargenOptimizacion } from "../lib/cerebro";
 import React from "react";
-import { T as C, MESES_NOM } from "../lib/constantes";
+import { T as C, MESES_NOM } from "../lib/constantes"
+const T = C;
 import { Pill, Alerta, smf } from "./ui";
+
+const SEC_EMOJIS = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣"];
+const SEC_TITLES = ["Diagnóstico Ambiental","Diagnóstico por Categoría","Destete y Terneros","Suplementación","Sanidad y Reproducción"];
 
 // ─── RENDERINFORME ───────────────────────────────────────────────────
 function RenderInforme({ texto }) {

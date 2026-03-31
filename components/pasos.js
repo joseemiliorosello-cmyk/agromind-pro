@@ -9,7 +9,8 @@ import { BarChart, Bar, LineChart, Line, ComposedChart, AreaChart, Area, XAxis, 
 // ═══════════════════════════════════════════════════════════════════
 
 import React from "react";
-import { T as C, MESES_NOM, FORM_DEF, getBiotipo, BIOTIPOS, SUPLEMENTOS } from "../lib/constantes";
+import { T as C, MESES_NOM, FORM_DEF, getBiotipo, BIOTIPOS, SUPLEMENTOS } from "../lib/constantes"
+const T = C;;
 import { calcCadena, calcFaseCiclo, fmtFecha, FENOLOGIAS,
          calcConsumoAgua, evaluarAgua, calcDisponibilidadMS,
          calcConsumoPasto, calcGEI, calcOfPasto, calcScore,
