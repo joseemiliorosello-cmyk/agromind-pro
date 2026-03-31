@@ -14,7 +14,7 @@ import { calcCadena, calcFaseCiclo, fmtFecha, FENOLOGIAS,
          calcConsumoAgua, evaluarAgua, calcDisponibilidadMS,
          calcConsumoPasto, calcGEI, calcOfPasto, calcScore,
          calcV2S, diagnosticarSistema, getClima, mcalSuplemento,
-         reqEM, smf, calcYm, calcGE_kgMS, calcCH4_kgMS } from "../lib/motor";
+         reqEM, calcYm, calcGE_kgMS, calcCH4_kgMS } from "../lib/motor";
 import { DistCC, Input, SelectF, Slider, SuplSelector, Alerta, Pill, MetricCard, Toggle,
          smf, smf2, pbPasto, mcalKgAdj } from "./ui";
 import { DashboardEstablecimiento, GraficoBalance,
