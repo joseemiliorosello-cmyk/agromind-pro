@@ -10,6 +10,7 @@ import { calcCerebro, analizarMargenOptimizacion } from "../lib/cerebro";
 import React from "react";
 import { T as C, MESES_NOM } from "../lib/constantes"
 const T = C;
+const DISCLAIMER = "Las recomendaciones generadas por AgroMind Pro tienen carácter orientativo y deben ser validadas por un profesional veterinario o ingeniero agrónomo habilitado antes de su implementación. Los resultados dependen de la calidad y completitud de los datos ingresados.";
 import { Pill, Alerta, smf } from "./ui";
 
 const SEC_EMOJIS = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣"];
