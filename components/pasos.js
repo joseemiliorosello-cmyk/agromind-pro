@@ -13,7 +13,8 @@ import { T as C, MESES_NOM, FORM_DEF, getBiotipo, BIOTIPOS, SUPLEMENTOS } from "
 import { calcCadena, calcFaseCiclo, fmtFecha, FENOLOGIAS,
          calcConsumoAgua, evaluarAgua, calcDisponibilidadMS,
          calcConsumoPasto, calcGEI, calcOfPasto, calcScore,
-         calcV2S, diagnosticarSistema, getClima, mcalSuplemento, reqEM } from "../lib/motor";
+         calcV2S, diagnosticarSistema, getClima, mcalSuplemento,
+         reqEM, smf, calcYm, calcGE_kgMS, calcCH4_kgMS } from "../lib/motor";
 import { DistCC, Input, SelectF, Slider, SuplSelector, Alerta, Pill, MetricCard, Toggle,
          smf, smf2, pbPasto, mcalKgAdj } from "./ui";
 import { DashboardEstablecimiento, GraficoBalance,
