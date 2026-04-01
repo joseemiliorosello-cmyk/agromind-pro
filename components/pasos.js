@@ -627,7 +627,7 @@ function PanelGEI({form, motor, tray, sat }) {
           borderRadius:8, fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.6 }}>
           Modelo basado en: McGinn et al. 2014 · Soussana et al. (Agric.Ecosyst.) · Li et al. 2021 (Nature Comms).
           NPP calibrada para NEA/Chaco h├║medo. Respiración heterotrófica = f(T°, humedad).
-          Efecto de carga: sobrecarga >1.2 EV/ha → pérdida de carbono del suelo (Li et al. 2021).
+          Efecto de carga: sobrecarga &gt;1.2 EV/ha → pérdida de carbono del suelo (Li et al. 2021).
           ⚠️ Bosque nativo: mayor secuestro, pero la conversión a pasturas lo convierte en fuente neta permanente.
         </div>
       </div>
@@ -1356,7 +1356,7 @@ const renderUbicacion = () => {
                     {parseFloat(g.ccServ) < 4.0 && (
                       <div style={{ padding:"6px 12px", background:"rgba(224,85,48,.08)", borderTop:"1px solid rgba(224,85,48,.20)" }}>
                         <span style={{ fontFamily:C.sans, fontSize:11, color:C.red }}>
-                          CC serv. {g.ccServ} < 4.0 mínimo — preñez comprometida · {g.recDestete}
+                          CC serv. {g.ccServ} &lt; 4.0 mínimo — preñez comprometida · {g.recDestete}
                         </span>
                       </div>
                     )}
