@@ -1,4 +1,4 @@
-"use client"; // v2
+﻿"use client"; // v2
 import { BarChart, Bar, LineChart, Line, ComposedChart, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from "recharts";
 
 // ═══════════════════════════════════════════════════════════════════
