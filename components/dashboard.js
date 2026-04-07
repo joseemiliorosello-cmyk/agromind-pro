@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 // ═══════════════════════════════════════════════════════════════════
 // components/dashboard.js
@@ -131,543 +131,321 @@ function ScoreRadar({ score }) {
 }
 
 // ─── GRAFICOBALANCE ───────────────────────────────────────────────────
-function GraficoBalance({ form, sat, cadena, tray, motor }) {
-  const [mes, setMes] = React.useState(null);         // mes seleccionado (null = año completo)
-  const [capa, setCapa] = React.useState("rodeo");    // rodeo | categorias | correctores
+// ─── GRÁFICO 1: BALANCE RODEO COMPLETO ─────────────────────────────────────
+// Oferta total vs Demanda total — 12 meses
+// Barras apiladas: pasto + CC movilizada + suplemento + verdeo
+// Línea roja: demanda total
+// Zona sombreada: invierno (jun-ago)
+function GraficoBalanceRodeo({ motor, form }) {
+  const bm = motor?.balanceMensual;
+  if (!bm || bm.length === 0) return null;
+  const MN = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const mesHoy = new Date().getMonth();
 
-  const MESES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-  const MESES_F = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const datos = bm.map((m,i) => ({
+    mes: MN[i],
+    pasto:  Math.max(0, m.ofPastoTotal || 0),
+    cc:     Math.max(0, m.ccAporte || 0),
+    supl:   Math.max(0, m.suplAporte || 0),
+    verdeo: Math.max(0, m.verdeoAporte || 0),
+    demanda: m.demanda || 0,
+    balance: m.balance || 0,
+    deficit: m.balance < 0,
+    inv: [5,6,7].includes(i),
+    esHoy: i === mesHoy,
+    esParto: m.esParto,
+    esServ:  m.esServIni,
+  }));
 
-  // ── Extraer del motor (fuente única de verdad) ────────────────
-  const bm       = motor?.balanceMensual;
-  const nVacas   = motor?.nVacas  || 0;
-  const nToros   = motor?.nToros  || 0;
-  const nV2s     = motor?.nV2s    || 0;
-  const nVaq2    = motor?.nVaq2   || 0;
-  const nVaq1    = motor?.nVaq1   || 0;
-  const pvVaca   = parseFloat(form?.pvVacaAdulta) || 320;
-  const factC    = motor?.factorCarga  || 1;
-  const factA    = motor?.factorAgua   || 1;
-  const verdeoMcal  = motor?.verdeoAporteMcalMes || 0;
-  const verdeoMesI  = motor?.verdeoMesInicio ?? 7;
-  const tieneVerdeo = form?.tieneVerdeo === "si" && verdeoMcal > 0;
+  const defInv = [5,6,7].filter(i => bm[i]?.balance < 0);
 
-  // Verificar qué falta para un diagnóstico útil
-  const faltaSupHa   = !form?.supHa || parseFloat(form.supHa) <= 0;
-  const faltaVacas   = !form?.vacasN || parseInt(form.vacasN) <= 0;
-  const faltaProv    = !form?.provincia;
-
-  // Si no hay balance del motor aún, mostrar panel de datos faltantes
-  const faltantes = [];
-  if (faltaProv)  faltantes.push("provincia");
-  if (faltaVacas) faltantes.push("cantidad de vacas");
-  if (faltaSupHa) faltantes.push("superficie (ha)");
-  const sinSupHa = faltaSupHa;
-  const esDatoEstimado = faltantes.length > 0;
-
-  if (!bm || bm.length === 0) {
-    return (
-      <div style={{ padding:20, background:C.card2, border:"1px solid "+C.amber+"40", borderRadius:12 }}>
-        <div style={{ fontFamily:T.font, fontSize:11, color:T.text, marginBottom:10, fontWeight:700 }}>
-          📊 Balance forrajero
+  return (
+    <div style={{ marginBottom:16 }}>
+      <div style={{ fontFamily:T.font, fontSize:10, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>
+        BALANCE RODEO COMPLETO — Mcal/día
+      </div>
+      {defInv.length > 0 && (
+        <div style={{ background:C.red+"12", border:"1px solid "+C.red+"30", borderRadius:6, padding:"6px 10px", marginBottom:8, fontFamily:T.font, fontSize:10, color:C.red }}>
+          ⚠ Déficit invernal en {defInv.map(i=>MN[i]).join("+")} — {Math.round(Math.abs(Math.min(...defInv.map(i=>bm[i].balance))))} Mcal/día peor mes
         </div>
-        <div style={{ fontFamily:T.font, fontSize:10, color:T.amber, marginBottom:8 }}>
-          Completá estos datos para ver el balance energético:
-        </div>
-        {faltantes.map(f => (
-          <div key={f} style={{ fontFamily:T.font, fontSize:10, color:T.amber, marginBottom:4 }}>
-            ⚠ Falta: {f}
+      )}
+      <ResponsiveContainer width="100%" height={180}>
+        <ComposedChart data={datos} margin={{top:4,right:4,left:-20,bottom:0}}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)" />
+          <XAxis dataKey="mes" tick={{fill:C.textFaint,fontSize:9,fontFamily:T.font}} />
+          <YAxis tick={{fill:C.textFaint,fontSize:9,fontFamily:T.font}} />
+          <Tooltip contentStyle={{background:C.card,border:"1px solid "+C.border,borderRadius:8,fontFamily:T.font,fontSize:10}}
+            formatter={(v,n)=>[Math.round(v)+" Mcal",n]} />
+          <Bar dataKey="pasto"  name="Pasto"      stackId="of" fill="#378ADD" fillOpacity={0.8} />
+          <Bar dataKey="cc"     name="CC mob."    stackId="of" fill={C.green} fillOpacity={0.7} />
+          <Bar dataKey="supl"   name="Suplemento" stackId="of" fill="#97C459" fillOpacity={0.9} />
+          <Bar dataKey="verdeo" name="Verdeo"     stackId="of" fill="#1D9E75" fillOpacity={0.9} />
+          <Line dataKey="demanda" name="Demanda" type="monotone" stroke={C.red} strokeWidth={2} strokeDasharray="5 3" dot={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:4,justifyContent:"center"}}>
+        {[["Pasto","#378ADD"],["CC mob.",C.green],["Supl","#97C459"],["Verdeo","#1D9E75"],["Demanda",C.red]].map(([l,c])=>(
+          <div key={l} style={{display:"flex",alignItems:"center",gap:3,fontFamily:T.font,fontSize:8,color:T.textFaint}}>
+            <div style={{width:8,height:8,borderRadius:2,background:c}} />{l}
           </div>
         ))}
-        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginTop:8, lineHeight:1.6 }}>
-          El balance compara la energía que ofrece el pasto (según NDVI, tipo y superficie)
-          contra la demanda del rodeo (según categorías y estado fisiológico) mes a mes.
-          Con estos datos el sistema puede calcular cuándo hay déficit y cuánto suplemento se necesita.
-        </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  // ── Construir datos por categoría ────────────────────────────
-  // Cada mes: oferta pasto/cabeza vs requerimiento/cabeza, por categoría
-  // Fuente: balanceMensual ya tiene todo calculado con estado fisiológico real
-  const datos = bm.map((m, i) => {
-    const ofBase    = nVacas + nToros + nV2s + nVaq2 + nVaq1 > 0
-      ? m.ofPastoTotal / Math.max(1, nVacas + nToros + nV2s + nVaq2 + nVaq1) : 0;
+// ─── GRÁFICO 2: VACA ADULTA — CC Y DESTETE ──────────────────────────────────
+// Muestra la trayectoria CC mes a mes
+// Líneas: actual / con anticipado / con hiperprecoz
+// Marcadores: parto, destete, servicio
+// Regla: CC parto mínima 5.5, CC servicio mínima 4.5
+function GraficoVacaCC({ motor, form, tray }) {
+  if (!tray || !motor?.balanceMensual) return null;
+  const MN = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const bm = motor.balanceMensual;
 
-    // Oferta real per cápita (Mcal/animal/día) para cada categoría
-    // El pasto se distribuye proporcionalmente al requerimiento (competencia)
-    const totalReq  = m.demanda || 1;
-    const ofVaca  = totalReq > 0 ? (m.ofPastoTotal * (m.dVacas / totalReq)) / Math.max(1, nVacas)  : 0;
-    const ofToro  = totalReq > 0 ? (m.ofPastoTotal * (m.dToros / totalReq)) / Math.max(1, nToros)  : 0;
-    const ofV2s   = totalReq > 0 ? (m.ofPastoTotal * (m.dV2s   / totalReq)) / Math.max(1, nV2s)    : 0;
-    const ofVaq2  = totalReq > 0 ? (m.ofPastoTotal * (m.dVaq2  / totalReq)) / Math.max(1, nVaq2)   : 0;
-    const ofVaq1  = totalReq > 0 ? (m.ofPastoTotal * (m.dVaq1  / totalReq)) / Math.max(1, nVaq1)   : 0;
+  // Reconstruir trayectoria CC mes a mes
+  const mesHoy = new Date().getMonth();
+  const mesParto = bm.findIndex(m => m.esParto) ?? -1;
+  const mesServ  = bm.findIndex(m => m.esServIni) ?? -1;
+  const ccHoy = tray.ccHoy || 0;
+  const ccParto = tray.ccParto || 0;
+  const ccMinLact = tray.ccMinLact || 0;
+  const ccServ = tray.ccServ || 0;
 
-    // Requerimiento por cabeza
-    const rqVaca  = nVacas > 0 ? m.dVacas / nVacas : 0;
-    const rqToro  = nToros > 0 ? m.dToros / nToros : 0;
-    const rqV2s   = nV2s   > 0 ? m.dV2s   / nV2s   : 0;
-    const rqVaq2  = nVaq2  > 0 ? m.dVaq2  / nVaq2  : 0;
-    const rqVaq1  = nVaq1  > 0 ? m.dVaq1  / nVaq1  : 0;
+  // Simplificar: puntos clave de la trayectoria
+  const puntos = bm.map((m,i) => {
+    const mDP = (i - (mesParto >= 0 ? mesParto : 9) + 12) % 12;
+    let ccEst;
+    if (i === mesHoy) ccEst = ccHoy;
+    else if (mesParto >= 0 && i === mesParto) ccEst = ccParto;
+    else if (mesParto >= 0 && mDP === 3) ccEst = ccMinLact;
+    else if (mesServ >= 0 && i === mesServ) ccEst = ccServ;
+    else ccEst = null;
 
-    // Gap por cabeza (negativo = déficit)
-    const gVaca  = nVacas > 0 ? +(ofVaca  - rqVaca).toFixed(1)  : 0;
-    const gToro  = nToros > 0 ? +(ofToro  - rqToro).toFixed(1)  : 0;
-    const gV2s   = nV2s   > 0 ? +(ofV2s   - rqV2s).toFixed(1)   : 0;
-    const gVaq2  = nVaq2  > 0 ? +(ofVaq2  - rqVaq2).toFixed(1)  : 0;
-    const gVaq1  = nVaq1  > 0 ? +(ofVaq1  - rqVaq1).toFixed(1)  : 0;
-
-    // Suplemento por categoría (Mcal/animal/día)
-    // Suplemento solo aplica en los meses activos configurados por el usuario
-    const suplMesesSet = new Set((form?.suplMeses || ["5","6","7"]).map(Number));
-    const enMesSupl    = suplMesesSet.has(i);
-    const sVaca  = 0; // vacas: herramienta = destete
-    const sToro  = enMesSupl && nToros > 0 ? +(mcalSuplemento(form?.supl_toros, parseFloat(form?.dosis_toros)||0)).toFixed(1) : 0;
-    const sV2s   = enMesSupl && nV2s   > 0 ? +(mcalSuplemento(form?.supl_v2s,   parseFloat(form?.dosis_v2s)  ||0)).toFixed(1) : 0;
-    const sVaq2  = enMesSupl && nVaq2  > 0 ? +(mcalSuplemento(form?.supl_vaq2,  parseFloat(form?.dosis_vaq2) ||0)).toFixed(1) : 0;
-    const sVaq1  = enMesSupl && nVaq1  > 0 ? +(mcalSuplemento(form?.supl_vaq1,  parseFloat(form?.dosis_vaq1) ||0)).toFixed(1) : 0;
-
-    // Verdeo: aplica en los meses definidos, a la categoría destino
-    const hayVerdeo = tieneVerdeo && i >= verdeoMesI && i <= verdeoMesI + 2;
-    const vVaq1   = hayVerdeo && form?.verdeoDestinoVaq === "si" && nVaq1 > 0
-      ? +(verdeoMcal / nVaq1).toFixed(1) : 0;
-    // Si verdeo no va a vaq1 exclusivo, distribuye al rodeo
-    const vRodeo  = hayVerdeo && form?.verdeoDestinoVaq !== "si"
-      ? +(verdeoMcal / Math.max(1, nVacas + nToros + nV2s + nVaq2 + nVaq1)).toFixed(1) : 0;
-
-    // Balance NETO por cabeza DESPUÉS de correctores
-    const bnVaca  = nVacas > 0 ? +(gVaca  + sVaca  + (vRodeo || 0)).toFixed(1) : 0;
-    const bnToro  = nToros > 0 ? +(gToro  + sToro  + (vRodeo || 0)).toFixed(1) : 0;
-    const bnV2s   = nV2s   > 0 ? +(gV2s   + sV2s   + (vRodeo || 0)).toFixed(1) : 0;
-    const bnVaq2  = nVaq2  > 0 ? +(gVaq2  + sVaq2  + (hayVerdeo ? (vVaq1 || vRodeo) : 0)).toFixed(1) : 0;
-    const bnVaq1  = nVaq1  > 0 ? +(gVaq1  + sVaq1  + vVaq1 + (vRodeo || 0)).toFixed(1) : 0;
+    // Con destete anticipado
+    const ccAnt = ccServ + 0.4;
+    // Con hiperprecoz
+    const ccHip = ccServ + 0.7;
 
     return {
-      mes: MESES_C[i], i,
-      t: m.t,
-      fenol: m.fenol,
-      pbPas: m.pbPas,
-      // Totales rodeo
-      ofPasto: m.ofPastoTotal,
-      ccAporte: m.ccAporte,
-      suplTotal: m.suplAporte,
-      verdeoTotal: m.verdeoAporte,
-      demanda: m.demanda,
-      balance: m.balance,
-      deficit: m.deficit,
-      // Por categoría — requerimiento
-      rqVaca:  +rqVaca.toFixed(1),  rqToro:  +rqToro.toFixed(1),
-      rqV2s:   +rqV2s.toFixed(1),   rqVaq2:  +rqVaq2.toFixed(1),
-      rqVaq1:  +rqVaq1.toFixed(1),
-      // Por categoría — oferta pasto disponible
-      ofVaca:  +ofVaca.toFixed(1),   ofToro:  +ofToro.toFixed(1),
-      ofV2s:   +ofV2s.toFixed(1),    ofVaq2:  +ofVaq2.toFixed(1),
-      ofVaq1:  +ofVaq1.toFixed(1),
-      // Gap puro (sin correctores)
-      gVaca, gToro, gV2s, gVaq2, gVaq1,
-      // Suplemento por categoría
-      sVaca, sToro, sV2s, sVaq2, sVaq1,
-      // Verdeo
-      vVaq1, vRodeo,
-      // Balance neto (con correctores)
-      bnVaca, bnToro, bnV2s, bnVaq2, bnVaq1,
-      // Fisiología
-      estadoVaca: m.estadoVaca,
-      esParto: m.esParto, esServIni: m.esServIni,
+      mes: MN[i],
+      ccActual: ccEst,
+      // Líneas referenciales de mínimos
+      minParto: 5.5,
+      minServ: 4.5,
+      esParto: m.esParto,
+      esServ:  m.esServIni,
+      esDestete: m.esDestete,
     };
   });
 
-  // ── Mes seleccionado o promedio ───────────────────────────────
-  const dMes = mes !== null ? datos[mes] : null;
+  // Datos simplificados — solo los puntos clave
+  const datosTray = [
+    { punto: "Hoy",       cc: ccHoy,    minRef: null },
+    { punto: "Al parto",  cc: ccParto,  minRef: 5.5, ok: ccParto >= 5.5 },
+    { punto: "Min. lact", cc: ccMinLact,minRef: 3.5, ok: ccMinLact >= 3.5 },
+    { punto: "Al serv.",  cc: ccServ,   minRef: 4.5, ok: ccServ >= 4.5 },
+    { punto: "+Anticip.", cc: Math.min(9,ccServ+0.4), minRef: 4.5, ok: true },
+    { punto: "+Hiper.",   cc: Math.min(9,ccServ+0.7), minRef: 4.5, ok: true },
+  ];
 
-  // ── Paleta de categorías ──────────────────────────────────────
-  const CAT = [
-    { id:"vaca",  label:"Vacas",        color:"#e8a030", n:nVacas, gKey:"gVaca",  bnKey:"bnVaca",  rqKey:"rqVaca",  ofKey:"ofVaca",  sKey:"sVaca",  nota:"Herramienta: destete" },
-    { id:"v2s",   label:"V 2° serv.",   color:"#e05530", n:nV2s,   gKey:"gV2s",   bnKey:"bnV2s",   rqKey:"rqV2s",   ofKey:"ofV2s",   sKey:"sV2s"  },
-    { id:"toro",  label:"Toros",        color:"#9b59b6", n:nToros, gKey:"gToro",  bnKey:"bnToro",  rqKey:"rqToro",  ofKey:"ofToro",  sKey:"sToro" },
-    { id:"vaq2",  label:"Vaq 2° inv.",  color:"#4a9fd4", n:nVaq2,  gKey:"gVaq2",  bnKey:"bnVaq2",  rqKey:"rqVaq2",  ofKey:"ofVaq2",  sKey:"sVaq2" },
-    { id:"vaq1",  label:"Vaq 1° inv.",  color:"#7ec850", n:nVaq1,  gKey:"gVaq1",  bnKey:"bnVaq1",  rqKey:"rqVaq1",  ofKey:"ofVaq1",  sKey:"sVaq1" },
-  ].filter(c => c.n > 0);
+  const maxCC = 7;
 
-  // ── Mes crítico para highlight ────────────────────────────────
-  const peorMes = datos.reduce((a, b) => b.balance < a.balance ? b : a);
-  const mesesDef = datos.filter(d => d.deficit);
-
-  // ══════════════════════════════════════════════════════════════
-  // SUB-COMPONENTES
-  // ══════════════════════════════════════════════════════════════
-
-  // Barra horizontal de gap: muestra oferta vs req
-  const GapBar = ({ of, rq, supl, verdeo, color, label, n }) => {
-    if (!n) return null;
-    const pct   = rq > 0 ? Math.min(1, of / rq) : 1;
-    const pctS  = rq > 0 && supl > 0 ? Math.min(1 - pct, supl / rq) : 0;
-    const pctV  = rq > 0 && verdeo > 0 ? Math.min(1 - pct - pctS, verdeo / rq) : 0;
-    const gap   = of - rq;
-    const cubierto = pct + pctS + pctV;
-    return (
-      <div style={{ marginBottom:10 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
-          <span style={{ fontFamily:T.font, fontSize:9, color }}>{label}</span>
-          <span style={{ fontFamily:T.font, fontSize:9, color: gap >= 0 ? T.green : T.red, fontWeight:700 }}>
-            {gap >= 0 ? "+" : ""}{gap.toFixed(1)} Mcal/cab/d
-          </span>
-        </div>
-        <div style={{ height:10, borderRadius:5, background:`${T.border}`, overflow:"hidden", position:"relative" }}>
-          {/* Pasto */}
-          <div style={{ position:"absolute", left:0, top:0, bottom:0, width:`${pct*100}%`, background:color, borderRadius:"5px 0 0 5px" }} />
-          {/* Suplemento */}
-          {pctS > 0 && (
-            <div style={{ position:"absolute", top:0, bottom:0, left:`${pct*100}%`, width:`${pctS*100}%`, background:"#4a9fd4" }} />
-          )}
-          {/* Verdeo */}
-          {pctV > 0 && (
-            <div style={{ position:"absolute", top:0, bottom:0, left:`${(pct+pctS)*100}%`, width:`${pctV*100}%`, background:"#7ec850", opacity:0.7 }} />
-          )}
-          {/* Línea de requerimiento */}
-          <div style={{ position:"absolute", top:0, bottom:0, left:"100%", transform:"translateX(-1px)", width:2, background:T.red, opacity:0.6 }} />
-        </div>
-        <div style={{ display:"flex", gap:8, marginTop:2 }}>
-          <span style={{ fontFamily:T.font, fontSize:7, color:T.textFaint }}>Pasto {(pct*100).toFixed(0)}%</span>
-          {pctS > 0 && <span style={{ fontFamily:T.font, fontSize:7, color:"#4a9fd4" }}>+ supl {(pctS*100).toFixed(0)}%</span>}
-          {pctV > 0 && <span style={{ fontFamily:T.font, fontSize:7, color:"#7ec850" }}>+ verdeo {(pctV*100).toFixed(0)}%</span>}
-          <span style={{ fontFamily:T.font, fontSize:7, color:T.textFaint, marginLeft:"auto" }}>Req: {rq.toFixed(1)} Mcal</span>
-        </div>
+  return (
+    <div style={{ marginBottom:16 }}>
+      <div style={{ fontFamily:T.font, fontSize:10, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>
+        TRAYECTORIA CC — VACAS ADULTAS
       </div>
-    );
-  };
-
-  // Columna mensual del timeline
-  const ColMes = ({ d, activo, onClick }) => {
-    const isCrit = d.i === peorMes.i;
-    return (
-      <div onClick={onClick} style={{
-        flex:1, cursor:"pointer", minWidth:0,
-        borderRadius:6, padding:"4px 2px",
-        background: activo ? `${T.green}15` : isCrit ? `${T.red}08` : "transparent",
-        border: activo ? `1px solid ${T.green}40` : `1px solid transparent`,
-        transition:"all .15s",
-      }}>
-        {/* Mini barras apiladas por categoría */}
-        <div style={{ height:40, display:"flex", flexDirection:"column-reverse", gap:1 }}>
-          {CAT.map(c => {
-            const gap = d[c.bnKey];
-            if (gap === 0) return null;
-            const h = Math.min(36, Math.max(2, Math.abs(gap) * 2.5));
-            return (
-              <div key={c.id} style={{
-                height:h, borderRadius:2,
-                background: gap >= 0 ? c.color : T.red,
-                opacity: gap >= 0 ? 0.75 : 0.9,
-              }} />
-            );
-          })}
-        </div>
-        <div style={{ textAlign:"center", fontFamily:T.font, fontSize:7, color: d.deficit ? T.red : T.textFaint, marginTop:2 }}>
-          {d.mes}
-        </div>
-        {(d.esParto || d.esServIni) && (
-          <div style={{ textAlign:"center", fontSize:6, marginTop:1 }}>{d.esParto ? "🐄" : "🐂"}</div>
-        )}
-      </div>
-    );
-  };
-
-  // Panel de detalle del mes seleccionado
-  const DetalleMes = ({ d }) => {
-    // Correctores que aplican este mes
-    const haySuplMes = CAT.some(c => d[c.sKey] > 0);
-    const hayVerdeoMes = d.vVaq1 > 0 || d.vRodeo > 0;
-
-    return (
-      <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:12, padding:14, marginTop:10 }}>
-        {/* Header mes */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-          <div>
-            <div style={{ fontFamily:T.font, fontSize:13, color:T.text, fontWeight:700 }}>{MESES_F[d.i]}</div>
-            <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginTop:2 }}>
-              {d.t}°C · PB pasto {d.pbPas}% · {d.estadoVaca}
-            </div>
-          </div>
-          <div style={{ textAlign:"right" }}>
-            <div style={{ fontFamily:T.font, fontSize:18, fontWeight:700,
-              color: d.balance >= 0 ? T.green : T.red }}>
-              {d.balance >= 0 ? "+" : ""}{d.balance.toLocaleString()} Mcal
-            </div>
-            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>balance neto rodeo/día</div>
-          </div>
-        </div>
-
-        {/* Barras por categoría */}
-        <div style={{ marginBottom:10 }}>
-          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:8 }}>
-            OFERTA vs REQUERIMIENTO — Mcal/cabeza/día
-          </div>
-          {CAT.map(c => (
-            <GapBar key={c.id}
-              of={d[c.ofKey]}
-              rq={d[c.rqKey]}
-              supl={d[c.sKey]}
-              verdeo={c.id === "vaq1" ? d.vVaq1 : d.vRodeo}
-              color={c.color}
-              label={c.label + (c.nota ? ` — ${c.nota}` : "")}
-              n={c.n}
-            />
-          ))}
-        </div>
-
-        {/* Leyenda correctores */}
-        {(haySuplMes || hayVerdeoMes) && (
-          <div style={{ display:"flex", gap:10, flexWrap:"wrap", padding:"6px 10px",
-            background:`rgba(255,255,255,.03)`, borderRadius:8, border:`1px solid ${T.border}` }}>
-            <span style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>Correctores activos este mes:</span>
-            {haySuplMes && <span style={{ fontFamily:T.font, fontSize:8, color:"#4a9fd4" }}>● Suplemento</span>}
-            {hayVerdeoMes && <span style={{ fontFamily:T.font, fontSize:8, color:"#7ec850" }}>● Verdeo</span>}
-          </div>
-        )}
-
-        {/* Alerta vaca: recordatorio herramienta */}
-        {d.gVaca < -1 && nVacas > 0 && (
-          <div style={{ marginTop:8, padding:"6px 10px", background:`${T.amber}08`,
-            border:`1px solid ${T.amber}25`, borderRadius:8,
-            fontFamily:T.font, fontSize:9, color:T.amber }}>
-            🔶 Vacas: déficit {Math.abs(d.gVaca).toFixed(1)} Mcal/cab. Herramienta = destete precoz, no suplemento con ternero al pie.
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ── Vista del año completo: gráfico de área apilado ──────────
-  const VistaAnual = () => {
-    // Para el gráfico Recharts: datos con oferta+correctores vs requerimiento por categoría
-    const dataChart = datos.map(d => ({
-      mes: d.mes,
-      // Oferta base del pasto (separada de correctores)
-      pastoPuro:  +(d.ofPasto / Math.max(1, nVacas+nToros+nV2s+nVaq2+nVaq1)).toFixed(1),
-      // Correctores
-      supl:       CAT.reduce((s,c) => s + d[c.sKey], 0),
-      verdeo:     d.verdeoTotal > 0 ? +(d.verdeoTotal / Math.max(1,nVacas+nToros+nV2s+nVaq2+nVaq1)).toFixed(1) : 0,
-      // CC movilizada — APILADA encima de la oferta, SOLO en meses de lactación (hasta servicio)
-      ccAporte:   d.enLact && d.ccAporte > 0 ? +(d.ccAporte / Math.max(1,nVacas)).toFixed(1) : 0,
-      // Requerimiento promedio ponderado
-      reqProm:    +(d.demanda / Math.max(1,nVacas+nToros+nV2s+nVaq2+nVaq1)).toFixed(1),
-    }));
-
-    return (
-      <div style={{ background:T.card2, borderRadius:10, padding:14, border:`1px solid ${T.border}` }}>
-        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:4 }}>
-          MCAL/ANIMAL EQUIVALENTE/DÍA — pasto + correctores vs requerimiento
-        </div>
-        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:10 }}>
-          La franja naranja es CC movilizada — solo aparece durante la lactación (hasta el servicio)
-        </div>
-        <ResponsiveContainer width="100%" height={190}>
-          <ComposedChart data={dataChart} margin={{ top:4, right:8, left:-18, bottom:0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.05)" />
-            <XAxis dataKey="mes" tick={{ fill:T.textFaint, fontSize:8 }} />
-            <YAxis tick={{ fill:T.textFaint, fontSize:7 }} />
-            <Tooltip
-              contentStyle={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, fontFamily:T.font, fontSize:10 }}
-              formatter={(v, n) => [v + " Mcal", n]}
-            />
-            {/* Pasto puro — base verde */}
-            <Area type="monotone" dataKey="pastoPuro" name="Pasto" stackId="oferta"
-              fill="#7ec850" fillOpacity={0.55} stroke="#7ec850" strokeWidth={1} />
-            {/* Suplemento — azul apilado */}
-            <Area type="monotone" dataKey="supl" name="Suplemento" stackId="oferta"
-              fill="#4a9fd4" fillOpacity={0.65} stroke="#4a9fd4" strokeWidth={1} />
-            {/* Verdeo — verde claro apilado */}
-            {tieneVerdeo && (
-              <Area type="monotone" dataKey="verdeo" name="Verdeo" stackId="oferta"
-                fill="#a8e06a" fillOpacity={0.7} stroke="#a8e06a" strokeWidth={1} />
-            )}
-            {/* CC movilizada — naranja APILADA, solo lactación hasta servicio */}
-            <Area type="monotone" dataKey="ccAporte" name="CC movilizada (lactación)" stackId="oferta"
-              fill="#e8a030" fillOpacity={0.6} stroke="#e8a030" strokeWidth={1.5} />
-            {/* Requerimiento — línea roja prominente */}
-            <Line type="monotone" dataKey="reqProm" name="Requerimiento"
-              stroke={T.red} strokeWidth={2.5} dot={false} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  };
-
-  // ── Vista por categoría: líneas de balance neto/cabeza ────────
-  const VistaCategorias = () => {
-    const dataChart = datos.map(d => {
-      const row = { mes: d.mes };
-      CAT.forEach(c => { row[c.id] = d[c.bnKey]; });
-      return row;
-    });
-
-    return (
-      <div style={{ background:T.card2, borderRadius:10, padding:14, border:`1px solid ${T.border}` }}>
-        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:4 }}>
-          BALANCE NETO POR CATEGORÍA — Mcal/cabeza/día (con todos los correctores)
-        </div>
-        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:10 }}>
-          Cero = requerimiento cubierto exacto. Negativo = déficit que la vaca/vaquillona paga con CC o GDP.
-        </div>
-        <ResponsiveContainer width="100%" height={190}>
-          <ComposedChart data={dataChart} margin={{ top:4, right:8, left:-18, bottom:0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.05)" />
-            <XAxis dataKey="mes" tick={{ fill:T.textFaint, fontSize:8 }} />
-            <YAxis tick={{ fill:T.textFaint, fontSize:7 }} />
-            <ReferenceLine y={0} stroke={T.red} strokeWidth={1.5} strokeOpacity={0.5} />
-            <Tooltip
-              contentStyle={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, fontFamily:T.font, fontSize:10 }}
-              formatter={(v, n) => [(v > 0 ? "+" : "") + v + " Mcal/cab", n]}
-            />
-            <Legend wrapperStyle={{ fontFamily:T.font, fontSize:8, color:T.textDim }} />
-            {CAT.map(c => (
-              <Line key={c.id} type="monotone" dataKey={c.id} name={c.label}
-                stroke={c.color} strokeWidth={2} dot={false} />
-            ))}
-          </ComposedChart>
-        </ResponsiveContainer>
-        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:6 }}>
-          ↑ Línea roja punteada = cero. Por encima = superávit. Por debajo = la categoría entra en déficit ese mes.
-        </div>
-      </div>
-    );
-  };
-
-  // ── Vista correctores: qué resuelve cada uno ─────────────────
-  const VistaCorrectores = () => {
-    // Para cada mes con déficit: mostrar gap original vs qué cierra cada corrector
-    const defData = datos.filter(d => d.deficit || (tieneVerdeo && d.i >= verdeoMesI && d.i <= verdeoMesI+2));
-    if (defData.length === 0) return (
-      <div style={{ padding:20, textAlign:"center", fontFamily:T.font, fontSize:11, color:T.green }}>
-        ✅ Sin déficit — todos los meses el rodeo cubre sus requerimientos
-      </div>
-    );
-
-    return (
-      <div>
-        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:10 }}>
-          ACCIÓN DE CORRECTORES EN MESES RELEVANTES
-        </div>
-        {datos.map((d, i) => {
-          const hayCorrector = CAT.some(c => d[c.sKey] > 0) || d.vVaq1 > 0 || d.vRodeo > 0;
-          if (!d.deficit && !hayCorrector) return null;
-
-          // Balance sin correctores
-          const defSinCorrec = d.ofPasto - d.demanda;
-          // Balance con suplemento
-          const conSupl      = defSinCorrec + d.suplTotal;
-          // Balance con suplemento + verdeo
-          const conSuplVerd  = conSupl + d.verdeoTotal;
-          // Balance final (incluye CC movilizada si aplica)
-          const balFinal     = d.balance;
-
-          const barW = (v, max) => `${Math.min(100, Math.max(0, (v + Math.abs(Math.min(0,defSinCorrec))) / (Math.abs(defSinCorrec) + 1) * 100)).toFixed(0)}%`;
-
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:4, marginBottom:8 }}>
+        {datosTray.map((d,i) => {
+          const col = d.minRef && d.cc < d.minRef ? C.red : d.minRef && d.cc >= d.minRef ? C.green : C.amber;
+          const pct = Math.round(d.cc/maxCC*100);
           return (
-            <div key={i} style={{ marginBottom:10, background:T.card2,
-              border:`1px solid ${d.deficit ? T.red+"30" : T.border}`, borderRadius:10, padding:12 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                <span style={{ fontFamily:T.font, fontSize:11, color:T.text, fontWeight:600 }}>{MESES_F[i]}</span>
-                <span style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>{d.t}°C · PB {d.pbPas}%</span>
+            <div key={i} style={{ background:C.card2, borderRadius:6, padding:"6px 4px", textAlign:"center",
+              border:"1px solid "+(d.minRef && d.cc < d.minRef ? C.red+"40" : C.border) }}>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:3 }}>{d.punto}</div>
+              <div style={{ fontFamily:T.font, fontSize:15, fontWeight:700, color:col, lineHeight:1 }}>{d.cc.toFixed(1)}</div>
+              {d.minRef && (
+                <div style={{ fontFamily:T.font, fontSize:7, color:d.ok?C.green:C.red, marginTop:2 }}>
+                  {d.ok ? "✓" : "< "+d.minRef}
+                </div>
+              )}
+              <div style={{ height:3, background:C.card, borderRadius:2, marginTop:4 }}>
+                <div style={{ height:"100%", width:pct+"%", background:col, borderRadius:2 }} />
               </div>
-
-              {/* Cascada de correctores */}
-              {[
-                { label:"Solo pasto",              val:defSinCorrec, color:T.textFaint },
-                { label:"+ Suplemento",            val:conSupl,      color:"#4a9fd4", show: d.suplTotal > 0 },
-                { label:"+ Verdeo",                val:conSuplVerd,  color:"#7ec850", show: d.verdeoTotal > 0 },
-                { label:"+ CC movilizada (vaca)",  val:balFinal,     color:"#e8a030", show: d.ccAporte > 0, nota:"— costo pagado por la vaca" },
-              ].filter(r => r.show !== false).map((r, ri) => {
-                const pct = Math.min(100, Math.max(0,
-                  ((r.val - defSinCorrec) / (Math.abs(defSinCorrec) || 1)) * 100
-                ));
-                return (
-                  <div key={ri} style={{ marginBottom:6 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:2 }}>
-                      <span style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>
-                        {r.label}{r.nota && <span style={{color:T.amber}}>{r.nota}</span>}
-                      </span>
-                      <span style={{ fontFamily:T.font, fontSize:10, fontWeight:700,
-                        color: r.val >= 0 ? T.green : T.red }}>
-                        {r.val >= 0 ? "+" : ""}{r.val.toLocaleString()} Mcal
-                      </span>
-                    </div>
-                    <div style={{ height:6, borderRadius:3, background:T.border, overflow:"hidden" }}>
-                      <div style={{
-                        height:"100%",
-                        width: r.val >= 0 ? "100%" : `${Math.max(2, (1 - Math.abs(r.val)/Math.abs(defSinCorrec||1))*100)}%`,
-                        background: r.val >= 0 ? r.color : T.red,
-                        borderRadius:3, opacity: r.val >= 0 ? 0.8 : 0.5,
-                        transition:"width .3s",
-                      }} />
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           );
         })}
       </div>
-    );
-  };
-
-  // ══════════════════════════════════════════════════════════════
-  // RENDER SIMPLIFICADO — solo lo que le sirve al productor
-  // ══════════════════════════════════════════════════════════════
-  return (
-    <div>
-      {/* ── 3 KPIs clave ──────────────────────────────────────── */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:14 }}>
-        <div style={{ background: mesesDef.length === 0 ? `${T.green}08` : `${T.red}08`,
-          border:`1px solid ${mesesDef.length === 0 ? T.green : T.red}30`,
-          borderRadius:10, padding:"10px 6px", textAlign:"center" }}>
-          <div style={{ fontFamily:T.font, fontSize:26, fontWeight:700,
-            color: mesesDef.length === 0 ? T.green : T.red }}>{mesesDef.length}</div>
-          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:2 }}>meses con déficit</div>
-        </div>
-        <div style={{ background:T.card2, border:`1px solid ${T.border}`,
-          borderRadius:10, padding:"10px 6px", textAlign:"center" }}>
-          <div style={{ fontFamily:T.font, fontSize:26, fontWeight:700,
-            color: peorMes.balance < -500 ? T.red : T.amber }}>
-            {peorMes.balance < 0 ? peorMes.balance.toLocaleString() : "✓"}
-          </div>
-          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:2 }}>Mcal/d peor mes ({peorMes.mes})</div>
-        </div>
-        <div style={{ background: tieneVerdeo ? `${T.green}08` : T.card2,
-          border:`1px solid ${tieneVerdeo ? T.green : T.border}30`,
-          borderRadius:10, padding:"10px 6px", textAlign:"center" }}>
-          <div style={{ fontFamily:T.font, fontSize:26, fontWeight:700,
-            color: tieneVerdeo ? T.green : T.textFaint }}>
-            {tieneVerdeo ? "+" + (verdeoMcal * 3 / 1000).toFixed(0) + "k" : "—"}
-          </div>
-          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:2 }}>
-            {tieneVerdeo ? `Mcal verdeo (${MESES_C[verdeoMesI]}–${MESES_C[Math.min(11,verdeoMesI+2)]})` : "Sin verdeo"}
-          </div>
-        </div>
+      <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:4 }}>
+        Impacto del destete en preñez — Peruchena INTA 2003
       </div>
-
-      {/* ── Gráfico anual pasto+supl vs requerimiento ───────────── */}
-      <VistaAnual />
-
-      {/* ── Timeline: tocá un mes para ver detalle ──────────────── */}
-      <div style={{ background:T.card2, borderRadius:10, padding:"10px 8px",
-        border:`1px solid ${T.border}`, marginTop:12, marginBottom:2 }}>
-        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:6 }}>
-          Tocá un mes para ver el detalle ↓
-        </div>
-        <div style={{ display:"flex", gap:2 }}>
-          {datos.map((d, i) => (
-            <ColMes key={i} d={d} activo={mes === i}
-              onClick={() => setMes(mes === i ? null : i)} />
-          ))}
-        </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+        {[
+          { l:"Sin cambios", cc:ccServ,              pr:tray.pr||0, col:ccServ<4.5?C.red:C.amber },
+          { l:"Anticipado 90d", cc:+(Math.min(9,ccServ+0.4)).toFixed(1), pr:tray.prAntic||0, col:C.amber },
+          { l:"Hiperprecoz 50d",cc:+(Math.min(9,ccServ+0.7)).toFixed(1), pr:tray.prHiper||0, col:C.green },
+        ].map((e,i) => {
+          const nV = parseInt(form?.vacasN)||0;
+          const diff = e.pr - (tray.pr||0);
+          return (
+            <div key={i} style={{ background:C.card2, borderRadius:6, padding:"8px 6px", textAlign:"center",
+              border:"1px solid "+(i===2?C.green+"40":C.border) }}>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:4 }}>{e.l}</div>
+              <div style={{ fontFamily:T.font, fontSize:18, fontWeight:700, color:e.col }}>{e.pr}%</div>
+              <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>CC {e.cc}</div>
+              {diff > 0 && nV > 0 && (
+                <div style={{ fontFamily:T.font, fontSize:8, color:C.green, marginTop:2 }}>
+                  +{diff}pp · +{Math.round(nV*diff/100*0.95)} terneros
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-      {mes !== null && <DetalleMes d={datos[mes]} />}
     </div>
   );
 }
+
+// ─── GRÁFICO 3: VAQUILLONA 1° Y 2° INVIERNO ─────────────────────────────────
+// GDP mensual vs objetivo 400g/día (1°inv) y 300g/día (2°inv)
+// Peso acumulado y proyección al entore
+// Reglas: 400g/d en 1°inv, 300g/d en 2°inv, 75% PV adulto al entore
+function GraficoVaquillona({ motor, form }) {
+  const vaq1 = motor?.vaq1E;
+  const vaq2 = motor?.vaq2E;
+  if (!vaq1 && !vaq2) return null;
+
+  const pvAdulto = parseFloat(form?.pvVacaAdulta) || 380;
+  const bm = motor?.balanceMensual || [];
+  const MN = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  // GDP mensual de vaquillona desde el balance
+  const gdpMensual = bm.map((m,i) => ({
+    mes: MN[i],
+    gdpPasto: m.gdpVaq1Mes || 0,
+    gdpConSupl: m.gdpVaq1Mes || 0, // con suplemento activo
+    obj1: 400,
+    obj2: 300,
+    inv: [5,6,7].includes(i),
+  }));
+
+  const pvEnt1 = motor.pvEntVaq1 || 0;
+  const pvSal1 = motor.pvSalidaVaq1 || 0;
+  const pvObj1 = Math.round(pvAdulto * 0.40);
+  const ok1 = pvSal1 >= pvObj1;
+
+  const pvEnt2 = motor.pvEntradaVaq2 || 0;
+  const pvEntore = vaq2?.pvEntore || 0;
+  const pvObj2 = Math.round(pvAdulto * 0.75);
+  const ok2 = vaq2?.llegas ?? (pvEntore >= pvObj2);
+
+  return (
+    <div style={{ marginBottom:16 }}>
+      <div style={{ fontFamily:T.font, fontSize:10, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>
+        VAQUILLONA — TRAYECTORIA Y OBJETIVOS
+      </div>
+
+      {/* Indicadores clave */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+        <div style={{ background:C.card2, borderRadius:8, padding:"10px 8px",
+          border:"1px solid "+(ok1?C.green+"40":C.red+"40") }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:4 }}>1° INVIERNO</div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>PV entrada</div>
+              <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:T.text }}>{pvEnt1} kg</div>
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:14, color:T.textFaint }}>→</div>
+            <div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>PV salida</div>
+              <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:ok1?C.green:C.red }}>{pvSal1} kg</div>
+            </div>
+            <div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>Objetivo</div>
+              <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:T.textFaint }}>{pvObj1} kg</div>
+            </div>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:8, color:ok1?C.green:C.red, marginTop:4 }}>
+            GDP: {vaq1?.gdpPasto||0}g/d pasto · {vaq1?.gdpReal||0}g/d con supl
+            {!ok1 && " · ⚠ DÉFICIT "+Math.abs(pvObj1-pvSal1)+"kg — irreversible"}
+          </div>
+        </div>
+        <div style={{ background:C.card2, borderRadius:8, padding:"10px 8px",
+          border:"1px solid "+(ok2?C.green+"40":C.red+"40") }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:4 }}>2° INVIERNO → ENTORE</div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>PV entrada</div>
+              <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:T.text }}>{pvEnt2} kg</div>
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:14, color:T.textFaint }}>→</div>
+            <div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>PV entore</div>
+              <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:ok2?C.green:C.red }}>{pvEntore} kg</div>
+            </div>
+            <div>
+              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint }}>Mínimo</div>
+              <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:T.textFaint }}>{pvObj2} kg</div>
+            </div>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:8, color:ok2?C.green:C.red, marginTop:4 }}>
+            {ok2 ? "✓ Llega al entore en condición" : "⚠ No llega — revisar peso en abril-mayo"}
+            {" · Flushing: siempre 25d pre-serv."}
+          </div>
+        </div>
+      </div>
+
+      {/* Gráfico GDP mensual */}
+      <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:4 }}>
+        GDP mensual (g/día) — línea roja = mínimo 400g/d
+      </div>
+      <ResponsiveContainer width="100%" height={130}>
+        <ComposedChart data={gdpMensual} margin={{top:4,right:4,left:-20,bottom:0}}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)" />
+          <XAxis dataKey="mes" tick={{fill:C.textFaint,fontSize:9,fontFamily:T.font}} />
+          <YAxis tick={{fill:C.textFaint,fontSize:9,fontFamily:T.font}} domain={[0,700]} />
+          <Tooltip contentStyle={{background:C.card,border:"1px solid "+C.border,borderRadius:8,fontFamily:T.font,fontSize:10}}
+            formatter={(v,n)=>[Math.round(v)+"g/d",n]} />
+          <Bar dataKey="gdpPasto" name="GDP pasto" fill="#378ADD" fillOpacity={0.7}
+            label={false} />
+          <Line dataKey="obj1" name="Mínimo 400g/d" stroke={C.red} strokeWidth={1.5}
+            strokeDasharray="4 3" dot={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+
+      {(!ok1) && (
+        <div style={{ marginTop:6, padding:"6px 10px", background:C.red+"12",
+          border:"1px solid "+C.red+"30", borderRadius:6, fontFamily:T.font, fontSize:9, color:C.red }}>
+          ⚠ Sin los {Math.abs(pvObj1-pvSal1)}kg este invierno, la vaquillona llega al 2° invierno retrasada y no alcanza el 75% PV al entore de 2 años. El déficit del 1° invierno es IRREVERSIBLE — Balbuena INTA 2003.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── COMPONENTE PRINCIPAL: los 3 gráficos ───────────────────────────────────
+function GraficoBalance({ form, sat, cadena, tray, motor }) {
+  const bm = motor?.balanceMensual;
+  if (!bm || bm.length === 0) {
+    return (
+      <div style={{ padding:16, background:C.card2, border:"1px solid "+C.amber+"40", borderRadius:8 }}>
+        <div style={{ fontFamily:T.font, fontSize:10, color:C.amber }}>
+          Completá los datos del rodeo para ver el balance energético
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <GraficoBalanceRodeo motor={motor} form={form} />
+      <GraficoVacaCC motor={motor} form={form} tray={tray} />
+      <GraficoVaquillona motor={motor} form={form} />
+    </div>
+  );
+}
+
 
 // ─── TRAYECTORIAVAQUILLONA ───────────────────────────────────────────────────
 function TrayectoriaVaquillona({ motor, form }) {
