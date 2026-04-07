@@ -104,9 +104,9 @@ function PanelAgua({ form, set, sat }) {
             <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginTop:4, lineHeight:1.5 }}>{evalAgua.cat.desc}</div>
             {evalAgua.pctReducDMI > 0 && (
               <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:"wrap" }}>
-                <Pill color={C.red}>DMI ÔêÆ{evalAgua.pctReducDMI.toFixed(0)}%</Pill>
-                <Pill color={C.red}>Pasto consumido ÔêÆ{evalAgua.pctReducPasto.toFixed(0)}%</Pill>
-                <Pill color={C.amber}>Agua ingerida ÔêÆ{evalAgua.pctReducWI.toFixed(0)}%</Pill>
+                <Pill color={C.red}>DMI →{evalAgua.pctReducDMI.toFixed(0)}%</Pill>
+                <Pill color={C.red}>Pasto consumido →{evalAgua.pctReducPasto.toFixed(0)}%</Pill>
+                <Pill color={C.amber}>Agua ingerida →{evalAgua.pctReducWI.toFixed(0)}%</Pill>
                 {evalAgua.ts.factor > 1.1 && <Pill color={C.red}>SO4: ×{evalAgua.ts.factor}</Pill>}
               </div>
             )}
@@ -205,7 +205,7 @@ function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
     const ofTotal = calcOfPasto(form?.vegetacion || "Pastizal natural", ndviI, h.t, h.p, enso, fenolMs) * sup * Math.max(0, 100-pctM-pctN) / 100;
     const ofVaca  = nTotal > 0 ? ofTotal / nTotal : calcOfPasto(form?.vegetacion || "Pastizal natural", ndviI, h.t, h.p, enso, fenolMs) * 0.024 * pvVaca;
     const enLact  = i >= mesP && i < mesP + Math.ceil(mesesLactGraf);
-    const eRep    = enLact ? "Lactación con ternero al pie" : i === ((mesP-1+12)%12) ? "Preparto (├║ltimo mes)" : "Gestación media (5–7 meses)";
+    const eRep    = enLact ? "Lactación con ternero al pie" : i === ((mesP-1+12)%12) ? "Preparto (último mes)" : "Gestación media (5–7 meses)";
     const demVaca = reqEM(pvVaca, eRep, form?.biotipo) || 13;
     const ccMcal  = enLact && tray ? Math.min(5, parseFloat(tray.caidaLact||0) * 5.6 / mesesLactGraf) : 0;
     const suplMcal = enLact ? mcalSuplDia : 0;
@@ -226,7 +226,7 @@ function GraficoCCEscenarios({ escenarios, cadena, mesesLact, form, sat }) {
     <div>
       {/* ── Trayectoria CC ── */}
       <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:4, letterSpacing:1 }}>
-        TRAYECTORIA CC ANUAL — ÔùÅ = inicio servicio
+        TRAYECTORIA CC ANUAL — ★ = inicio servicio
       </div>
       <ResponsiveContainer width="100%" height={170}>
         <LineChart data={dataMeses} margin={{ top:4, right:4, left:-28, bottom:0 }}>
@@ -358,7 +358,7 @@ function PanelGEI({form, motor, tray, sat }) {
               <div style={{ marginTop:8, padding:"4px 10px", background:`${G.mejor}15`,
                 borderRadius:6, fontFamily:T.font, fontSize:9, color:G.mejor }}>
                 Con suplementación: {gei.intensSupl} kg CO₂eq/kg PV
-                · mejora ÔêÆ{((1 - gei.intensSupl/gei.intensBase)*100).toFixed(1)}%
+                · mejora →{((1 - gei.intensSupl/gei.intensBase)*100).toFixed(1)}%
               </div>
             )}
             <div style={{ marginTop:6, fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.5 }}>
@@ -427,7 +427,7 @@ function PanelGEI({form, motor, tray, sat }) {
       {/* Balance neto */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
         <div style={{ background:T.card2, border:`1px solid ${G.ch4}25`, borderRadius:12, padding:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>CH₄ RODEO/A├æO</div>
+          <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>CH₄ RODEO/AÑO</div>
           <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700, color:G.ch4 }}>
             {gei.totalCH4Base.toLocaleString()} kg
           </div>
@@ -440,13 +440,13 @@ function PanelGEI({form, motor, tray, sat }) {
           </div>
           {gei.totalCH4Supl < gei.totalCH4Base && (
             <div style={{ fontFamily:T.font, fontSize:9, color:G.mejor, marginTop:4 }}>
-              Con supl: {gei.totalCH4Supl.toLocaleString()} kg (ÔêÆ{(gei.totalCH4Base - gei.totalCH4Supl).toLocaleString()} kg)
+              Con supl: {gei.totalCH4Supl.toLocaleString()} kg (→{(gei.totalCH4Base - gei.totalCH4Supl).toLocaleString()} kg)
             </div>
           )}
         </div>
         <div style={{ background:T.card2, border:`1px solid ${gei.co2Pastizal.esFuente ? G.inefi : G.co2}25`, borderRadius:12, padding:12 }}>
           <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>
-            CO₂ PASTIZAL/A├æO
+            CO₂ PASTIZAL/AÑO
           </div>
           <div style={{ fontFamily:T.font, fontSize:20, fontWeight:700,
             color: gei.co2Pastizal.esFuente ? G.inefi : G.co2 }}>
@@ -469,7 +469,7 @@ function PanelGEI({form, motor, tray, sat }) {
         borderRadius:12, padding:14, marginBottom:12,
       }}>
         <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:8 }}>
-          BALANCE NETO SISTEMA (CH₄ rodeo ÔêÆ secuestro pastizal)
+          BALANCE NETO SISTEMA (CH₄ rodeo → secuestro pastizal)
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end" }}>
           <div>
@@ -493,7 +493,7 @@ function PanelGEI({form, motor, tray, sat }) {
         {gei.pctReduccion > 0 && (
           <div style={{ marginTop:8, padding:"4px 8px", background:`${G.mejor}12`, borderRadius:6,
             fontFamily:T.font, fontSize:9, color:G.mejor }}>
-            Con suplementación: ÔêÆ{gei.pctReduccion}% emisiones · {(gei.reduccionCO2eq/1000).toFixed(1)} t CO₂eq/año
+            Con suplementación: →{gei.pctReduccion}% emisiones · {(gei.reduccionCO2eq/1000).toFixed(1)} t CO₂eq/año
             {gei.intensSupl && ` · Intensidad: ${gei.intensSupl} kg CO₂eq/kg PV`}
           </div>
         )}
@@ -504,7 +504,7 @@ function PanelGEI({form, motor, tray, sat }) {
         fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.6 }}>
         <strong style={{ color:T.textDim }}>GWP100 vs GWP*:</strong> GWP100=28 es el estándar del inventario
         nacional (Kioto/París). GWP* (Allen 2018) es más adecuado para rodeos estables: un rodeo que
-        no crece tiene calentamiento efectivo cercano a cero. Si tu rodeo es constante en n├║mero,
+        no crece tiene calentamiento efectivo cercano a cero. Si tu rodeo es constante en número,
         el impacto real es 5-6× menor que el que muestra el GWP100. ·
         Wang et al. 2023 (Nature Comms): el secuestro por suelos no puede compensar emisiones a escala global;
         el offset mostrado es potencial y sujeto a saturación en 20-50 años.
@@ -626,7 +626,7 @@ function PanelGEI({form, motor, tray, sat }) {
         <div style={{ padding:"8px 12px", background:`${G.co2}06`, border:`1px solid ${G.co2}20`,
           borderRadius:8, fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.6 }}>
           Modelo basado en: McGinn et al. 2014 · Soussana et al. (Agric.Ecosyst.) · Li et al. 2021 (Nature Comms).
-          NPP calibrada para NEA/Chaco h├║medo. Respiración heterotrófica = f(T°, humedad).
+          NPP calibrada para NEA/Chaco húmedo. Respiración heterotrófica = f(T°, humedad).
           Efecto de carga: sobrecarga &gt;1.2 EV/ha → pérdida de carbono del suelo (Li et al. 2021).
           ⚠️ Bosque nativo: mayor secuestro, pero la conversión a pasturas lo convierte en fuente neta permanente.
         </div>
@@ -673,7 +673,7 @@ function PanelGEI({form, motor, tray, sat }) {
           </div>
           <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, lineHeight:1.5 }}>
             Una vaca vacía emite ~55 kg CH₄/año (IPCC Tier 2, extensivo) = 1.540 kg CO₂eq sin producir ternero.
-            Mejorar preñez de {inf.prenezPct}% a 70%: ÔêÆ{Math.round(inf.vacasVacias * 0.3 * inf.ch4VacaVaciaAnual * GWP_CH4 / 1000)} t CO₂eq/año.
+            Mejorar preñez de {inf.prenezPct}% a 70%: →{Math.round(inf.vacasVacias * 0.3 * inf.ch4VacaVaciaAnual * GWP_CH4 / 1000)} t CO₂eq/año.
             Wang et al. 2023: la ineficiencia reproductiva es la mayor fuente de emisiones "no productivas" en sistemas extensivos.
           </div>
         </div>
@@ -732,8 +732,8 @@ function PanelGEI({form, motor, tray, sat }) {
             <div style={{ height:"100%", width:`${inf.pctInefi}%`, background:G.inefi, display:"inline-block" }} />
           </div>
           <div style={{ display:"flex", gap:12, marginBottom:6 }}>
-            <span style={{ fontFamily:T.font, fontSize:8, color:G.mejor }}>ÔùÅ {(100 - inf.pctInefi).toFixed(1)}% productivo</span>
-            <span style={{ fontFamily:T.font, fontSize:8, color:G.inefi }}>ÔùÅ {inf.pctInefi}% sin retorno económico</span>
+            <span style={{ fontFamily:T.font, fontSize:8, color:G.mejor }}>★ {(100 - inf.pctInefi).toFixed(1)}% productivo</span>
+            <span style={{ fontFamily:T.font, fontSize:8, color:G.inefi }}>★ {inf.pctInefi}% sin retorno económico</span>
           </div>
           <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.6 }}>
             ⚠️ Estos {(inf.totalCO2eqInefi/1000).toFixed(1)} t CO₂eq son una <em>partición</em> del total de {(gei.totalCO2eqBase/1000).toFixed(0)} t —
@@ -766,7 +766,7 @@ function PanelGEI({form, motor, tray, sat }) {
           unit="kg/año"
           color={G.ch4}
           sub={`${(gei.totalCO2eqBase/1000).toFixed(0)} t CO₂eq (GWP28)`}
-          nota={gei.pctReduccion > 0 ? `Con supl: ÔêÆ${gei.pctReduccion}%` : null}
+          nota={gei.pctReduccion > 0 ? `Con supl: →${gei.pctReduccion}%` : null}
         />
         <KpiGEI
           label="CO₂ PASTIZAL"
@@ -806,7 +806,7 @@ function PanelGEI({form, motor, tray, sat }) {
         border:`1px solid ${T.border}`, borderRadius:8,
         fontFamily:T.font, fontSize:7, color:T.textFaint, lineHeight:1.7 }}>
         McGinn et al. 2014 (J.Env.Quality) · Wang et al. 2023 (Nature Comms) · Li et al. 2021 (Nature Comms) · 
-        IPCC (2019) Tier 2, Ec.10.21 · Gere et al. (2019) NZ J. Agric. Res. · McSherry & Ritchie (2013) Global Change Biology · IPCC AR6 GWP₀ÔéÇÔéÇ=28 · 
+        IPCC (2019) Tier 2, Ec.10.21 · Gere et al. (2019) NZ J. Agric. Res. · McSherry & Ritchie (2013) Global Change Biology · IPCC AR6 GWP₀══=28 · 
         GWP100 CH₄ = 28 (IPCC AR6, fossil methane equivalent)
       </div>
     </div>
@@ -942,13 +942,13 @@ const renderUbicacion = () => {
         <Input label="PV TOROS (kg)"       value={form.pvToros}      onChange={v=>set("pvToros",v)}      placeholder="" type="number" />
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:0 }}>
-        <Input label="PRE├æEZ HISTÔRICA (%)" value={form.prenez} onChange={v=>set("prenez",v)} placeholder="" type="number" />
+        <Input label="PREÑEZ HISTÓRICA (%)" value={form.prenez} onChange={v=>set("prenez",v)} placeholder="" type="number" />
         <Input label="% DESTETE HISTÔRICO"  value={form.pctDestete} onChange={v=>set("pctDestete",v)} placeholder="" type="number" />
       </div>
       <SelectF label="ESTADO REPRODUCTIVO ACTUAL" value={form.eReprod} onChange={v=>set("eReprod",v)}
         placeholder="Seleccioná el estado..."
         options={[
-        "Gestación temprana (1–4 meses)","Gestación media (5–7 meses)","Preparto (├║ltimo mes)",
+        "Gestación temprana (1–4 meses)","Gestación media (5–7 meses)","Preparto (último mes)",
         "Lactación con ternero al pie","Vaca seca sin ternero",
       ].map(e=>[e,e])} />
 
@@ -1091,7 +1091,8 @@ const renderUbicacion = () => {
         <div style={{ background:C.card2, borderRadius:10, padding:12, border:`1px solid ${C.border}`, marginBottom:12 }}>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
             {[["Parto temprano",fmtFecha(cadena.partoTemp)],["Parto tardío",fmtFecha(cadena.partoTard)],
-              ["Destete temp.",fmtFecha(cadena.desteTemp)],["Destete tard.",fmtFecha(cadena.desteTard)]].map(([l,v])=>(
+              ["Destete temp.",fmtFecha((cadena.tipos?.[form.destTipo || (form.destHiper>0?"hiper":form.destAntic>0?"antic":"trad")]?.desteTemp) || cadena.desteTemp)],
+              ["Destete tard.",fmtFecha((cadena.tipos?.[form.destTipo || (form.destHiper>0?"hiper":form.destAntic>0?"antic":"trad")]?.desteTard) || cadena.desteTard)]].map(([l,v])=>(
               <div key={l}>
                 <div style={{ fontFamily:C.font, fontSize:8, color:C.textDim }}>{l}</div>
                 <div style={{ fontFamily:C.sans, fontSize:12, color:C.text, fontWeight:600 }}>{v}</div>
@@ -1127,7 +1128,7 @@ const renderUbicacion = () => {
             ESCALA DE CC QUE USÁS
           </div>
           <div style={{ display:"flex", gap:6 }}>
-            {[["9","1 a 9 — INTA / Wagner-Selk (Brangus, Braford, Ceb├║)"],["5","1 a 5 — Lowman (Hereford, Angus, razas británicas)"]].map(([val,lbl]) => {
+            {[["9","1 a 9 — INTA / Wagner-Selk (Brangus, Braford, Cebú)"],["5","1 a 5 — Lowman (Hereford, Angus, razas británicas)"]].map(([val,lbl]) => {
               const sel = (form.escalaCC||"9") === val;
               return (
                 <button key={val} onClick={() => set("escalaCC", val)}
@@ -1277,8 +1278,8 @@ const renderUbicacion = () => {
             </div>
             <div style={{ marginTop:10, paddingTop:8, borderTop:`1px solid ${C.border}`, display:"flex", gap:6, flexWrap:"wrap" }}>
               <Pill color={smf(tray.pr,35,55)}>🐄 Preñez {tray.pr}%</Pill>
-              <Pill color={tray.anestro?.riesgo ? C.red : C.green}>ÔÅ▒ Anestro {tray.anestro?.dias}d</Pill>
-              <Pill color={C.textDim}>­ƒôë Caída lact. ÔêÆ{tray.caidaLact} CC</Pill>
+              <Pill color={tray.anestro?.riesgo ? C.red : C.green}>► Anestro {tray.anestro?.dias}d</Pill>
+              <Pill color={C.textDim}>­ƒôë Caída lact. →{tray.caidaLact} CC</Pill>
               <Pill color={C.blue}>­ƒì╝ {tray.mesesLact}m lactación</Pill>
             </div>
           </div>
@@ -1292,12 +1293,12 @@ const renderUbicacion = () => {
             <MetricCard label="CC MÍN. EN LACTACIÔN"
               value={tray.ccMinLact}
               color={smf(parseFloat(tray.ccMinLact),3.5,4.0)}
-              sub={`Piso al que cae en lactación (ÔêÆ${tray.caidaLact} CC)`} />
+              sub={`Piso al que cae en lactación (→${tray.caidaLact} CC)`} />
             <MetricCard label="CC AL SERVICIO"
               value={tray.ccServ}
               color={smf(parseFloat(tray.ccServ),4.5,5.0)}
               sub={parseFloat(tray.ccServ)>=5.0?"→ Preñez ≥88%":parseFloat(tray.ccServ)>=4.5?"→ Preñez 80–87%":parseFloat(tray.ccServ)>=4.0?"→ Preñez ~70%":parseFloat(tray.ccServ)>=3.5?"→ Preñez ~50% ⚠️":""+"→ Preñez <30% 🔴"} />
-            <MetricCard label="PRE├æEZ RODEO (CC PROM.)"
+            <MetricCard label="PREÑEZ RODEO (CC PROM.)"
               value={tray.pr+"%"}
               color={smf(tray.pr,35,55)}
               sub={dist?.grupos?.length > 1 ? "CC promedio — preñez real por grupo ↓" : `Anestro posparto: ${tray.anestro?.dias}d`} />
@@ -1652,7 +1653,7 @@ const renderUbicacion = () => {
           <div style={{ background:"rgba(232,160,48,.06)", border:"1px solid rgba(232,160,48,.25)", borderRadius:10, padding:"10px 12px", marginBottom:14 }}>
             <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, letterSpacing:1, marginBottom:4 }}>⚠️ CATEGORÍA DE MAYOR RIESGO DEL RODEO</div>
             <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, lineHeight:1.5 }}>
-              Las V2S tienen el triple estrés fisiológico más exigente: <strong style={{color:C.text}}>están creciendo</strong> (2°–3° año, a├║n no llegaron al PV adulto), 
+              Las V2S tienen el triple estrés fisiológico más exigente: <strong style={{color:C.text}}>están creciendo</strong> (2°–3° año, aún no llegaron al PV adulto), 
               <strong style={{color:C.text}}> amamantando</strong> (bloqueo LH activo si tienen ternero) 
               y deben <strong style={{color:C.text}}>quedar preñadas</strong> nuevamente. 
               Sus requerimientos energéticos superan a las vacas adultas en un 10–15% (NRC 2000).
@@ -1723,7 +1724,7 @@ const renderUbicacion = () => {
                       <MetricCard label="CC SERVICIO"
                         value={r.ccServ}
                         color={r.ccServ >= 5.0 ? C.green : r.ccServ >= 4.5 ? C.amber : C.red} />
-                      <MetricCard label="PRE├æEZ"
+                      <MetricCard label="PREÑEZ"
                         value={r.prenez + "%"}
                         color={r.prenez >= 55 ? C.green : r.prenez >= 35 ? C.amber : C.red} />
                       <MetricCard label="ANESTRO"
@@ -1736,7 +1737,7 @@ const renderUbicacion = () => {
                         color={C.amber}
                         sub="NRC 2000 — triple estrés" />
                       <MetricCard label={deficit > 0 ? "DÉFICIT PASTO HOY" : "PASTO HOY"}
-                        value={deficit > 0 ? "ÔêÆ"+deficit.toFixed(1)+" Mcal" : "Cubre req."}
+                        value={deficit > 0 ? "→"+deficit.toFixed(1)+" Mcal" : "Cubre req."}
                         color={deficit > 0 ? C.red : r.prenez < 55 ? C.amber : C.green}
                         sub={deficit > 0 ? `Oferta: ${oferta.toFixed(1)} Mcal · req: ${(r.reqMcal||0).toFixed(1)}` : r.prenez < 55 ? "Pasto OK · CC baja el riesgo" : "Sin déficit energético"} />
                     </div>
@@ -1755,7 +1756,7 @@ const renderUbicacion = () => {
                       </div>
                     )}
                     {!r.critico && (
-                      <Alerta tipo="ok">CC y anestro en rango aceptable para este grupo. Monitorear suplementación y destete seg├║n momento del servicio.</Alerta>
+                      <Alerta tipo="ok">CC y anestro en rango aceptable para este grupo. Monitorear suplementación y destete según momento del servicio.</Alerta>
                     )}
                   </div>
                 );
@@ -1772,7 +1773,7 @@ const renderUbicacion = () => {
                 const color = prenezPond >= 55 ? C.green : prenezPond >= 35 ? C.amber : C.red;
                 return (
                   <div style={{ background:`${color}10`, border:`1px solid ${color}30`, borderRadius:10, padding:"10px 14px" }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginBottom:4 }}>PRE├æEZ PONDERADA V2S</div>
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginBottom:4 }}>PREÑEZ PONDERADA V2S</div>
                     <div style={{ fontFamily:C.font, fontSize:24, fontWeight:700, color }}>
                       {Math.round(prenezPond)}%
                       <span style={{ fontSize:11, color:C.textDim, marginLeft:8, fontWeight:400 }}>
@@ -1842,7 +1843,7 @@ const renderUbicacion = () => {
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                 <span style={{ fontFamily:C.font, fontSize:12, color:C.green, fontWeight:600 }}>Potrero {i+1}</span>
                 {potreros.length > 1 && (
-                  <button onClick={()=>setPotreros(ps=>ps.filter((_,j)=>j!==i))} style={{ background:"none", border:"none", color:C.red, cursor:"pointer", fontFamily:C.font, fontSize:12 }}>Ô£ò</button>
+                  <button onClick={()=>setPotreros(ps=>ps.filter((_,j)=>j!==i))} style={{ background:"none", border:"none", color:C.red, cursor:"pointer", fontFamily:C.font, fontSize:12 }}>✕</button>
                 )}
               </div>
 
@@ -2028,7 +2029,7 @@ const renderUbicacion = () => {
     // Categorías que SÍ llevan suplemento — solo las que lo necesitan por biología
     // VACAS DE CRÍA: NO van aquí — su herramienta es el manejo del ternero (destete)
     // Suplementar vaca con ternero al pie es costoso e ineficiente: el ternero
-    // consume 6–8 Mcal/día que ning├║n suplemento puede compensar (Wiltbank 1990)
+    // consume 6–8 Mcal/día que ningún suplemento puede compensar (Wiltbank 1990)
     // Selector duración suplementación invernal
     const CATS = [
       { key:"v2s",     label:"Vaca 2° servicio",      icon:"⚡", pv:pvV2sS,   color:C.red,    supl1k:"supl_v2s",     dos1k:"dosis_v2s",     supl2k:"supl2_v2s",    dos2k:"dosis2_v2s",
@@ -2139,7 +2140,7 @@ const renderUbicacion = () => {
                       razon:"CC borderline — con ternero al pie no va a llegar al servicio ciclando. Destete anticipado + recuperación en pasto otoñal.",
                       ccRecup: +(recupCCSinTernero * 0.7 * (diasServicio/30)).toFixed(1) }
                   : cc < 5.0
-                  ? { tipo:"anticipado_opcional", label:"🔶 Anticipado seg├║n marcha (90d)", color:C.amber,
+                  ? { tipo:"anticipado_opcional", label:"🔶 Anticipado según marcha (90d)", color:C.amber,
                       razon:"CC aceptable — si el pasto falla o el invierno avanza, destete anticipado como seguro.",
                       ccRecup: +(recupCCSinTernero * 0.5 * (diasServicio/30)).toFixed(1) }
                   : { tipo:"tradicional", label:"🐄 Tradicional (180 días)", color:C.green,
@@ -2184,7 +2185,7 @@ const renderUbicacion = () => {
                       </div>
                       <div style={{ background:`${prenezProy>=80?C.green:prenezProy>=50?C.amber:C.red}10`, borderRadius:7, padding:"6px 8px", textAlign:"center" }}>
                         <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:prenezProy>=80?C.green:prenezProy>=50?C.amber:C.red }}>{prenezProy}%</div>
-                        <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>PRE├æEZ EST.</div>
+                        <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>PREÑEZ EST.</div>
                       </div>
                     </div>
                   </div>
@@ -2206,7 +2207,7 @@ const renderUbicacion = () => {
               La lactación le cuesta a la vaca <strong style={{color:C.red}}>6–8 Mcal/día</strong> extras. Para compensar ese gasto con suplemento necesitarías darle <strong style={{color:C.red}}>{(6.5/2.6).toFixed(1)} kg/día de expeller</strong> — más caro e ineficiente. Además, mientras el ternero esté al pie, la vaca no cicla por el estímulo del amamantamiento (bloqueo LH).
             </div>
             <div style={{ fontFamily:C.sans, fontSize:11, color:C.green, lineHeight:1.5 }}>
-              ✅ <strong>La herramienta correcta es el destete:</strong> al retirar el ternero, la vaca elimina ese gasto de 6–8 Mcal/día y retoma el cicio en <strong>7–14 días</strong>. Ning├║n suplemento logra eso.
+              ✅ <strong>La herramienta correcta es el destete:</strong> al retirar el ternero, la vaca elimina ese gasto de 6–8 Mcal/día y retoma el cicio en <strong>7–14 días</strong>. Ningún suplemento logra eso.
             </div>
           </div>
         </div>
@@ -2425,7 +2426,7 @@ const renderUbicacion = () => {
           </div>
         )}
 
-        {/* ── NECESIDADES DE CAMPA├æA ── */}
+        {/* ── NECESIDADES DE CAMPAÑA ── */}
         {(() => {
           const mesesSupl = (form.suplMeses || ["5","6","7"]).map(Number);
           const diasSupl  = mesesSupl.length * 30;
@@ -2461,7 +2462,7 @@ const renderUbicacion = () => {
               borderRadius:12, padding:"12px 14px", marginTop:8 }}>
               <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint,
                 letterSpacing:1, marginBottom:10 }}>
-                📦 NECESIDADES DE CAMPA├æA — {diasSupl} días ·{" "}
+                📦 NECESIDADES DE CAMPAÑA — {diasSupl} días ·{" "}
                 {mesesSupl.map(m=>["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][m]).join("·")}
               </div>
               {alims.map(alim => {
@@ -2550,7 +2551,7 @@ const renderUbicacion = () => {
       {form.sanBrucelosis === "no" && <Alerta tipo="error">Brucelosis sin vacunar — obligatoria en terneras 3–8 meses (SENASA RES.114/21). Zoonosis. Riesgo de aborto masivo al 7° mes.</Alerta>}
 
       <Toggle label="💉 ┬┐Vacunación IBR/DVB al día?"       value={form.sanVacunas  === "si"} onChange={v => set("sanVacunas",   v ? "si" : "no")} />
-      {form.sanVacunas === "no" && <Alerta tipo="error">IBR/DVB sin vacunar: riesgo de reducción de preñez hasta ÔêÆ15 pp.</Alerta>}
+      {form.sanVacunas === "no" && <Alerta tipo="error">IBR/DVB sin vacunar: riesgo de reducción de preñez hasta →15 pp.</Alerta>}
 
       {/* Parásitos */}
       <SelectF label="PARÁSITOS EXTERNOS (garrapatas)" value={form.sanParasitoExt||""} onChange={v=>set("sanParasitoExt",v)} options={[
@@ -2699,7 +2700,7 @@ const renderUbicacion = () => {
                 if (sat?.ndvi && parseFloat(sat.ndvi) < 0.35) criticos.push({ ico:"🔴", txt:"NDVI " + sat.ndvi + " — pasto escaso ahora (" + (sat.condForr||"crítico") + ")" });
                 else if (sat?.ndvi && parseFloat(sat.ndvi) < 0.45) oport.push({ ico:"⚠", txt:"NDVI " + sat.ndvi + " — condición forrajera regular" });
 
-                // Si no hay ning├║n dato cargado a├║n
+                // Si no hay ningún dato cargado aún
                 const sinDatos = !form.vacasN && !form.biotipo && !form.iniServ;
 
                 if (sinDatos) return (
@@ -2860,7 +2861,7 @@ const renderUbicacion = () => {
                     filas: [
                       ["Aftosa",          form.sanAftosa    === "si" ? "Al día ✓" : "Sin vacunar", form.sanAftosa    === "si" ? C.green : C.red, form.sanAftosa !== "si" ? "Obligatorio legal" : ""],
                       ["Brucelosis",      form.sanBrucelosis=== "si" ? "Al día ✓" : "Sin vacunar", form.sanBrucelosis=== "si" ? C.green : C.red, form.sanBrucelosis !== "si" ? "Obligatorio legal + riesgo zoonótico" : ""],
-                      ["IBR/DVB",         form.sanVacunas   === "si" ? "Al día ✓" : "Sin vacunar", form.sanVacunas   === "si" ? C.green : C.amber, form.sanVacunas !== "si" ? "ÔêÆ15pp preñez si sin vacunar (Gnemmi 2001)" : ""],
+                      ["IBR/DVB",         form.sanVacunas   === "si" ? "Al día ✓" : "Sin vacunar", form.sanVacunas   === "si" ? C.green : C.amber, form.sanVacunas !== "si" ? "→15pp preñez si sin vacunar (Gnemmi 2001)" : ""],
                       ["Rev. toros",      form.sanToros === "con_control" ? "Con revisión ✓" : "Sin revisión", form.sanToros === "con_control" ? C.green : C.red, form.sanToros !== "con_control" ? "Toro con lesión no detectada = 15-20 vacas vacías" : ""],
                       ["Historia abortos",form.sanAbortos   === "si" ? "Sí — investigar" : "No", form.sanAbortos === "si" ? C.amber : C.green, form.sanAbortos === "si" ? "Requiere diagnóstico etiológico" : ""],
                       ["Programa sanit.", form.sanPrograma  === "si" ? "Sí ✓" : "No", form.sanPrograma  === "si" ? C.green : C.amber, form.sanPrograma !== "si" ? "Sin programa estructurado — sanidad es el techo del sistema" : ""],
@@ -3233,7 +3234,7 @@ const renderUbicacion = () => {
                   );
                 })()}
 
-                {/* ── GRÁFICO: CC + PRE├æEZ COMPARADO (sin corrección vs con corrección) ── */}
+                {/* ── GRÁFICO: CC + PREÑEZ COMPARADO (sin corrección vs con corrección) ── */}
                 {tray && (() => {
                   const fases = ["Tacto/Parto","Mín. Lact.","Destete","Servicio"];
                   const sinCorr = [tray.ccParto||0, tray.ccMinLact||0, tray.ccDestete||0, tray.ccServ||0];
@@ -3694,7 +3695,7 @@ const renderUbicacion = () => {
   };
 
 
-  // ── PASOS REDISE├æADOS ─────────────────────────────────────────
+  // ── PASOS REDISEÑADOS ─────────────────────────────────────────
   // Flujo del técnico en campo:
   // Paso 0: Lo que ves al llegar — ubicación + el rodeo + CC (los 3 datos que cambian todo)
   // Paso 1: El campo — forraje, suplementación, agua (lo que tiene disponible)
