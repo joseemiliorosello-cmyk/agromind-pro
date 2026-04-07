@@ -477,6 +477,75 @@ function CalfAIPro() {
         salto(16);
       }
 
+      // ── NDVI Y CAMPO ─────────────────────────────────────────────────────
+      if (sat?.ndvi || sat?.temp || sat?.p30) {
+        chk(20);
+        doc.setFillColor(30,80,50);
+        doc.roundedRect(ML, y, AU, 7, 2, 2, "F");
+        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+        doc.text("CAMPO HOY — NDVI Y CLIMA", ML+4, y+5);
+        salto(10);
+        const ndviCol = (sat.ndvi||0) < 0.35 ? [200,60,40] : (sat.ndvi||0) < 0.50 ? [200,140,20] : [45,140,60];
+        doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(...ndviCol);
+        doc.text("NDVI: "+(sat.ndvi||"—")+" ("+(sat.condForr||"—")+")  |  Temp: "+(sat.temp||"—")+"°C  |  Lluvia 30d: "+(sat.p30||"—")+"mm", ML, y); salto(5);
+        doc.setTextColor(60,60,60);
+        const fenNom = {menor_10:"Rebrote",["10_25"]:"Crecimiento","25_50":"Maduración",mayor_50:"Encañado"}[form.fenologia]||form.fenologia||"—";
+        doc.text("Vegetación: "+(form.vegetacion||"—")+"  |  Fenología: "+fenNom, ML, y); salto(8);
+      }
+
+      // ── ESCENARIOS ────────────────────────────────────────────────────────
+      if (tray) {
+        chk(35);
+        doc.setFillColor(30,80,50);
+        doc.roundedRect(ML, y, AU, 7, 2, 2, "F");
+        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+        doc.text("ESCENARIOS — IMPACTO DEL DESTETE EN PREÑEZ", ML+4, y+5);
+        salto(10);
+        const ccS2 = tray?.ccServ || 0;
+        const prB2 = tray?.pr || 0;
+        const nV2p = parseInt(form.vacasN)||0;
+        const iP2 = (cc) => { const CPR2=[{cc:5.5,pr:93},{cc:5,pr:88},{cc:4.5,pr:80},{cc:4,pr:70},{cc:3.5,pr:50},{cc:3,pr:28}]; const c=Math.min(9,Math.max(1,cc)); if(c>=CPR2[0].cc)return CPR2[0].pr; if(c<=CPR2[CPR2.length-1].cc)return CPR2[CPR2.length-1].pr; for(let i=0;i<CPR2.length-1;i++){if(c<=CPR2[i].cc&&c>=CPR2[i+1].cc){const r=(c-CPR2[i+1].cc)/(CPR2[i].cc-CPR2[i+1].cc);return Math.round(CPR2[i+1].pr+r*(CPR2[i].pr-CPR2[i+1].pr));}} return 20; };
+        const escs2 = [
+          { l:"Sin cambios", cc:+ccS2.toFixed(1), pr:prB2, col:[180,60,40] },
+          { l:"Anticipado 90d", cc:+Math.min(9,ccS2+0.4).toFixed(1), pr:iP2(ccS2+0.4), col:[200,140,20] },
+          { l:"Hiperprecoz 50d", cc:+Math.min(9,ccS2+0.7).toFixed(1), pr:iP2(ccS2+0.7), col:[45,140,60] },
+        ];
+        const eW2 = AU/3-2;
+        escs2.forEach((e,i) => {
+          const ex2=ML+i*(eW2+3); const diff2=e.pr-prB2;
+          doc.setFillColor(245,245,240); doc.roundedRect(ex2,y,eW2,24,2,2,"F");
+          doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
+          doc.text(e.l, ex2+eW2/2, y+5, {align:"center",maxWidth:eW2-2});
+          doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...e.col);
+          doc.text(e.pr+"%", ex2+eW2/2, y+14, {align:"center"});
+          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(80,80,80);
+          doc.text("CC serv. "+e.cc, ex2+eW2/2, y+19.5, {align:"center"});
+          if(diff2>0&&nV2p>0){doc.setTextColor(...e.col); doc.text("+"+diff2+"pp = +"+Math.round(nV2p*diff2/100*.95)+" tern.", ex2+eW2/2, y+24, {align:"center"});}
+        });
+        salto(30);
+      }
+
+      // ── VAQUILLONA ────────────────────────────────────────────────────────
+      if (motorEfectivo?.vaq1E && !motorEfectivo.vaq1E.mensaje) {
+        chk(20);
+        doc.setFillColor(30,80,50);
+        doc.roundedRect(ML, y, AU, 7, 2, 2, "F");
+        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+        doc.text("VAQUILLONA", ML+4, y+5);
+        salto(10);
+        const v1x=motorEfectivo.vaq1E; const pvAd=parseFloat(form.pvVacaAdulta)||380;
+        const obj1x=Math.round(pvAd*0.40); const ok1x=(v1x.pvSal||0)>=obj1x;
+        doc.setFontSize(7.5); doc.setFont("helvetica","normal");
+        doc.setTextColor(ok1x?45:180,ok1x?140:60,ok1x?60:40);
+        doc.text("1°inv: PV entrada "+(motorEfectivo.pvEntVaq1||"ND")+"kg → GDP "+(v1x.gdpPasto||0)+"g/d → PV salida "+(v1x.pvSal||0)+"kg (obj "+obj1x+"kg) "+(ok1x?"✓":"⚠ no llega"), ML, y, {maxWidth:AU}); salto(5);
+        if(motorEfectivo?.vaq2E){
+          const v2x=motorEfectivo.vaq2E; const ok2x=v2x.llegas;
+          doc.setTextColor(ok2x?45:180,ok2x?140:60,ok2x?60:40);
+          doc.text("2°inv: PV entore "+(v2x.pvEntore||0)+"kg (mín "+(v2x.pvMinEntore||0)+"kg) "+(ok2x?"✓":"⚠ no llega")+" · Flushing 25d pre-serv.: siempre", ML, y, {maxWidth:AU}); salto(5);
+        }
+        salto(4);
+      }
+
       // ── INFORME IA (si existe) ───────────────────────────────────────
       // Secciones
       const partes    = result ? result.split(/(?=\d️⃣)/) : [];
