@@ -3193,9 +3193,8 @@ function CalfAIPro() {
                     </div>
                   )}
                 </div>
-
               </div>
-            </div>
+            )
           )})()}
           {/* ── 3 GRÁFICOS LIMPIOS ── */}
           {motor && <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />}
