@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 // ═══════════════════════════════════════════════════════════════════
 // components/ui.js
@@ -195,6 +195,29 @@ function DistCC({ dist, onChange, label, escala, nVacas }) {
             : total+"%"}{(modo==="pct"&&total!==100)||( modo==="cab"&&totalVacas>0&&Math.abs(totalCab-totalVacas)>2) ? " ⚠" : ""}
         </span>
       </div>
+      {/* Aviso cuando no hay datos cargados */}
+      {total === 0 && (
+        <div style={{ background:T.amber+"15", border:"1px solid "+T.amber+"40",
+          borderRadius:6, padding:"8px 10px", marginBottom:8,
+          fontFamily:T.font, fontSize:10, color:T.amber }}>
+          ⚠ Ingresá el % de vacas en cada grupo de CC — la suma debe ser 100%.
+          Sin este dato el sistema no puede calcular la trayectoria ni la preñez.
+        </div>
+      )}
+      {total > 0 && total !== 100 && (
+        <div style={{ background:T.amber+"10", border:"1px solid "+T.amber+"30",
+          borderRadius:6, padding:"6px 10px", marginBottom:6,
+          fontFamily:T.font, fontSize:10, color:T.amber }}>
+          Suma actual: {total}% — completá hasta 100%
+        </div>
+      )}
+      {total === 100 && (
+        <div style={{ fontFamily:T.font, fontSize:10, color:T.green, marginBottom:6 }}>
+          ✓ CC ponderada del rodeo: <strong>{
+            ((dist||[]).reduce((s,d)=>s+(parseFloat(d.pct)||0)*(parseFloat(d.cc)||0),0)/100).toFixed(1)
+          }</strong> (escala 1-9)
+        </div>
+      )}
       {/* Referencia rápida escala 1-9 INTA */}
       <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 10px", marginTop:8 }}>
         <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:5 }}>

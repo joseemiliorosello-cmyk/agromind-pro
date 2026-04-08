@@ -384,7 +384,7 @@ function CalfAIPro() {
 
       // KPIs
       const kpis = [
-        ["CC hoy",      ccPondVal?.toFixed(1) || "—"],
+        ["CC hoy",      ccPondVal > 0 ? ccPondVal.toFixed(1) : "sin dato"],
         ["CC serv.",    tray?.ccServ  || "—"],
         ["Preñez est.", (tray?.pr     || "—") + "%"],
         ["Anestro",     (tray?.anestro?.dias || "—") + "d"],
