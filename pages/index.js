@@ -3194,12 +3194,11 @@ function CalfAIPro() {
                   )}
                 </div>
 
-                {/* ── 3 GRÁFICOS LIMPIOS ── */}
-                <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />
-
               </div>
             </div>
           )})()}
+          {/* ── 3 GRÁFICOS LIMPIOS ── */}
+          {motor && <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />}
 
           {tab === "gei" && (
             <PanelGEI form={form} motor={motor} tray={tray} sat={sat} />
