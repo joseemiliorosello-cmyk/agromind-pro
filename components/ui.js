@@ -177,7 +177,7 @@ function DistCC({ dist, onChange, label, nVacas }) {
       )}
       {total === 100 && (
         <div style={{ fontFamily:T.font, fontSize:10, color:T.green, marginBottom:6 }}>
-          ? CC ponderada del rodeo: <strong>{
+          \u2713 CC ponderada del rodeo: <strong>{
             ((dist||[]).reduce((s,d)=>s+(parseFloat(d.pct)||0)*(parseFloat(d.cc)||0),0)/100).toFixed(1)
           }</strong> (escala 1-9)
         </div>
@@ -188,13 +188,13 @@ function DistCC({ dist, onChange, label, nVacas }) {
         </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:3 }}>
           {[
-            ["≤" + "3.0","Critica","Costillas y vertebras visibles",T.red],
+            ["\u2264 3.0","Critica","Costillas y vertebras visibles",T.red],
             ["4.0","Baja","Costillas palpables con presion leve",T.amber],
             ["4.5","Aceptable","Costillas palpables con presion firme",T.amber],
-            ["5.0","Buena ✓","Costillas no visibles - optima al servicio",T.green],
+            ["5.0","Buena \u2713","Costillas no visibles \u2014 optima al servicio",T.green],
             ["5.5","Muy buena","Algo de grasa en costillas",T.green],
             ["6.0","Llena","Grasa visible en cadera",T.textDim],
-            ["≥" + "7.0","Exceso","Grasa acumulada - improductiva",T.textDim],
+            ["\u2265 7.0","Exceso","Grasa acumulada \u2014 improductiva",T.textDim],
             ["-","-","-",T.textFaint],
           ].map(([cc,est,desc,color]) => (
             <div key={cc+est} style={{ padding:"3px 4px", borderRadius:4, background:color+"10" }}>
