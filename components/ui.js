@@ -186,16 +186,16 @@ function DistCC({ dist, onChange, label, nVacas }) {
         <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:5 }}>
           REFERENCIA ESCALA 19 INTA EEA Colonia Bentez  Stahringer 2003
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:3 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:3 }}>
           {[
-            ["=3.0","Crtica","Costillas y vrtebras visibles",T.red],
-            ["4.0","Baja","Costillas palpables con presin leve",T.amber],
-            ["4.5","Aceptable","Costillas palpables con presin firme",T.amber],
-            ["5.0","Buena ?","Costillas no visibles  ptima al servicio",T.green],
+            ["≤" + "3.0","Critica","Costillas y vertebras visibles",T.red],
+            ["4.0","Baja","Costillas palpables con presion leve",T.amber],
+            ["4.5","Aceptable","Costillas palpables con presion firme",T.amber],
+            ["5.0","Buena ✓","Costillas no visibles - optima al servicio",T.green],
             ["5.5","Muy buena","Algo de grasa en costillas",T.green],
             ["6.0","Llena","Grasa visible en cadera",T.textDim],
-            ["=7.0","Exceso","Grasa acumulada  improductiva",T.textDim],
-            ["","","",T.textFaint],
+            ["≥" + "7.0","Exceso","Grasa acumulada - improductiva",T.textDim],
+            ["-","-","-",T.textFaint],
           ].map(([cc,est,desc,color]) => (
             <div key={cc+est} style={{ padding:"3px 4px", borderRadius:4, background:color+"10" }}>
               <div style={{ fontFamily:T.font, fontSize:9, color:color, fontWeight:700 }}>{cc}</div>
