@@ -125,7 +125,7 @@ function DistCC({ dist, onChange, label, nVacas }) {
               style={{ width:"100%", background:T.card, border:`1px solid ${T.border}`, borderRadius:8, color:T.text, padding:"9px 10px", fontFamily:T.font, fontSize:13 }}>
               {opcionesCC.map(v => {
                 const n = parseFloat(v);
-                const ref = n >= 5.5 ? "Muy buena" : n >= 5.0 ? "Buena ?" : n >= 4.5 ? "Aceptable" : n >= 4.0 ? "Baja ?" : "Crtica ??";
+                const ref = n >= 5.5 ? "Muy buena" : n >= 5.0 ? "Buena ✓" : n >= 4.5 ? "Aceptable" : n >= 4.0 ? "Baja ⚠" : "Critica";
                 return <option key={v} value={v}>CC {v}  {ref}</option>;
               })}
             </select>
@@ -177,7 +177,7 @@ function DistCC({ dist, onChange, label, nVacas }) {
       )}
       {total === 100 && (
         <div style={{ fontFamily:T.font, fontSize:10, color:T.green, marginBottom:6 }}>
-          \u2713 CC ponderada del rodeo: <strong>{
+          ✓ CC ponderada del rodeo: <strong>{
             ((dist||[]).reduce((s,d)=>s+(parseFloat(d.pct)||0)*(parseFloat(d.cc)||0),0)/100).toFixed(1)
           }</strong> (escala 1-9)
         </div>
