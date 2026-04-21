@@ -149,7 +149,7 @@ function DistCC({ dist, onChange, label, nVacas }) {
                 : (totalVacas > 0 && parseFloat(d.pct) > 0 ? Math.round(parseFloat(d.pct)*totalVacas/100)+"v" : "")}
             </div>
           </div>
-          <button onClick={() => delRow(i)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:16, padding:"0 4px", marginTop:14 }}>?</button>
+          <button onClick={() => delRow(i)} style={{ background:"none", border:"none", color:T.red, cursor:"pointer", fontSize:16, padding:"0 4px", marginTop:14 }}>✕</button>
         </div>
       ))}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:4 }}>
