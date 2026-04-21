@@ -125,7 +125,7 @@ function DistCC({ dist, onChange, label, nVacas }) {
               style={{ width:"100%", background:T.card, border:`1px solid ${T.border}`, borderRadius:8, color:T.text, padding:"9px 10px", fontFamily:T.font, fontSize:13 }}>
               {opcionesCC.map(v => {
                 const n = parseFloat(v);
-                const ref = n >= 5.5 ? "Muy buena" : n >= 5.0 ? "Buena ✓" : n >= 4.5 ? "Aceptable" : n >= 4.0 ? "Baja ⚠" : "Critica";
+                const ref = n >= 7.0 ? "Exceso" : n >= 6.0 ? "Llena" : n >= 5.5 ? "Muy buena" : n >= 5.0 ? "Buena ✓" : n >= 4.5 ? "Aceptable" : n >= 4.0 ? "Baja ⚠" : "Critica";
                 return <option key={v} value={v}>CC {v}  {ref}</option>;
               })}
             </select>
