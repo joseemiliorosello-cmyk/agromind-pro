@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signOut, signIn, SessionProvider } from "next-auth/react";
@@ -13,8 +13,9 @@ import { calcCerebro, buildPromptFull, SYS_FULL,
 import { usePersistencia, PanelHistorial } from "../lib/persistencia";
 import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
          MetricCard, SelectF, Slider, Toggle, SuplSelector } from "../components/ui";
-import { DashboardEstablecimiento, ScoreRadar, GraficoBalance, TrayectoriaVaquillona } from "../components/dashboard";
+import { DashboardEstablecimiento } from "../components/dashboard";
 import { getPasoRenders, GraficoCCEscenarios, PanelAgua, PanelGEI, PanelFaseCiclo } from "../components/pasos"
+import GraficosBalance from "../components/GraficosBalance";
 import { TabCerebro, PanelRecomendaciones, RenderInforme } from "../components/tabs";
 
 const MSGS = [
@@ -3197,7 +3198,7 @@ function CalfAIPro() {
             )
           })()}
           {/* ── 3 GRÁFICOS LIMPIOS ── */}
-          {motor && <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />}
+          {motor && <GraficosBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />}
 
           {tab === "gei" && (
             <PanelGEI form={form} motor={motor} tray={tray} sat={sat} />
