@@ -34,10 +34,12 @@ const SEC_TITLES = ["Diagnóstico Ambiental","Diagnóstico por Categoría","Dest
 const DISCLAIMER = "Las recomendaciones generadas por AgroMind Pro tienen carácter orientativo. No reemplazan el criterio profesional del ingeniero agrónomo o médico veterinario que asiste al establecimiento, quien deberá validar, ajustar e implementar cualquier decisión de manejo según las condiciones particulares de cada sistema productivo.";
 
 const PASOS = [
-  { id:"campo",    icon:"🐄", label:"Rodeo y CC"  },  // Ubicación + Rodeo + CC
-  { id:"rodeo",    icon:"🌾", label:"El campo"    },  // Forraje + Suplementación + Categorías
-  { id:"manejo",   icon:"🩺", label:"Sanidad"     },  // Sanidad
-  { id:"analisis", icon:"⚡", label:"Análisis"    },  // Dashboard + Balance + Cerebro
+  { id:"zona",            label:"Datos de la zona" },
+  { id:"rodeo",           label:"Rodeo y CC"       },
+  { id:"potreros",        label:"Potreros"         },
+  { id:"sanidad",         label:"Agua y sanidad"   },
+  { id:"diagnostico",     label:"Diagnóstico"      },
+  { id:"recomendaciones", label:"Recomendaciones"  },
 ];
 
 
@@ -317,7 +319,7 @@ function CalfAIPro() {
 
   // ── RUN ANALYSIS ──────────────────────────────────────────────
   async function runAnalysis() {
-    setLoading(true); setResult(""); setTab("cerebro");
+    setLoading(true); setResult(""); setStep(5);
     let mi = 0;
     const iv = setInterval(() => { setLoadMsg(MSGS[mi % MSGS.length]); mi++; }, 2200);
     try {
@@ -2033,7 +2035,7 @@ function CalfAIPro() {
   const _panelAgua = () => <PanelAgua form={form} set={set} sat={sat} />;
 
   // ── PASO 6: SUPLEMENTACIÓN ────────────────────────────────────
-  const renderSuplAgua = () => {
+  const renderSuplAgua = ({ showAgua = true } = {}) => {
     // ── Agua de bebida (movida desde paso independiente) ──
     const _aguaSection = _panelAgua();
 
@@ -2116,8 +2118,8 @@ function CalfAIPro() {
     return (
       <div>
         {/* ── Agua de bebida ── */}
-        {_aguaSection}
-        <div style={{ height:1, background:"rgba(255,255,255,.06)", margin:"16px 0" }} />
+        {showAgua && _aguaSection}
+        {showAgua && <div style={{ height:1, background:C.border, margin:"16px 0" }} />}
         {/* ── Meses de suplementación — selector exacto ── */}
         <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
           <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
@@ -3479,24 +3481,125 @@ function CalfAIPro() {
   };
 
   // ── Conectar renders de pasos ──────────────────────────────────
-  const { renderCampo, renderRodeoCompleto, renderManejo } =
-    getPasoRenders({
-      form, set, setDist: (k,v) => setForm(f=>({...f,[k]:v})),
-      gpsClick,
-      step, setStep, motor, motorEfectivo, tray, balanceMensual, sat,
-      coords, setCoords, ccPondVal, evalAgua, sanidad, nVaqRepos, score,
-      result, setResult, loading, setLoading, loadMsg, setLoadMsg,
-      setTab, tab, confianza, scoreRiesgo, nivelRiesgo, colorRiesgo,
-      cargaEV_ha, impactoCola, vaq1E, vaq2E, ccDesvio, dist,
-      stockStatus, toroDxn, alertasMotor, modoForraje, setModoForraje,
-      vistaSupl, setVistaSupl, usaPotreros, setUsaPotreros,
-      potreros, setPotreros, runAnalysis,
-      pvEntVaq1, pvSalidaVaq1, pvEntradaVaq2,
-      nVacas, nToros, nV2s, nVaq1, nVaq2, cadena, disponMS, tcSave,
-      PASOS, C, cerebro: calcCerebro(motorEfectivo, form, sat),
-    });
+  const {
+    renderCampo, renderRodeoCompleto, renderManejo,
+  } = getPasoRenders({
+    form, set, setDist: (k,v) => setForm(f=>({...f,[k]:v})),
+    gpsClick,
+    step, setStep, motor, motorEfectivo, tray, balanceMensual, sat,
+    coords, setCoords, ccPondVal, evalAgua, sanidad, nVaqRepos, score,
+    result, setResult, loading, setLoading, loadMsg, setLoadMsg,
+    setTab, tab, confianza, scoreRiesgo, nivelRiesgo, colorRiesgo,
+    cargaEV_ha, impactoCola, vaq1E, vaq2E, ccDesvio, dist,
+    stockStatus, toroDxn, alertasMotor, modoForraje, setModoForraje,
+    vistaSupl, setVistaSupl, usaPotreros, setUsaPotreros,
+    potreros, setPotreros, runAnalysis,
+    pvEntVaq1, pvSalidaVaq1, pvEntradaVaq2,
+    nVacas, nToros, nV2s, nVaq1, nVaq2, cadena, disponMS, tcSave,
+    PASOS, C, cerebro: calcCerebro(motorEfectivo, form, sat),
+  });
 
-  const RENDERS = [renderCampo, renderRodeoCompleto, renderManejo, renderAnalisis];
+  // ── 6 pasos de planilla de carga ───────────────────────────────
+  const renderZona         = renderUbicacion;
+  const renderRodeoCC      = () => (
+    <div>
+      {renderRodeo()}
+      <div style={{ height:1, background:C.border, margin:"20px 0" }} />
+      {renderCC()}
+      <div style={{ height:1, background:C.border, margin:"20px 0" }} />
+      {renderCategorias()}
+    </div>
+  );
+  const renderPotreros     = () => (
+    <div>
+      {renderForraje()}
+      <div style={{ height:1, background:C.border, margin:"20px 0" }} />
+      {renderSuplAgua({ showAgua: false })}
+    </div>
+  );
+  const renderAguaSanidad  = () => (
+    <div>
+      <PanelAgua form={form} set={set} sat={sat} />
+      <div style={{ height:1, background:C.border, margin:"20px 0" }} />
+      {renderSanidad()}
+    </div>
+  );
+  const renderDiagnostico  = () => {
+    const scoreD = motor ? calcScore(motor, form, calcFaseCiclo(motor?.cadena ?? calcCadena(form.iniServ, form.finServ), form)) : null;
+    if (!form.vacasN && !motor) return (
+      <div style={{ padding:40, textAlign:"center", fontFamily:C.font, fontSize:11, color:C.textDim }}>
+        Completá los pasos anteriores para ver el diagnóstico.
+      </div>
+    );
+    return (
+      <div>
+        <DashboardEstablecimiento
+          motor={motorEfectivo} form={form} sat={sat} score={scoreD}
+          confianza={confianza} onTab={(t) => t === "cerebro" && setStep(5)}
+        />
+        <div style={{ height:1, background:C.border, margin:"20px 0" }} />
+        {motor && <GraficosBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />}
+        <div style={{ height:1, background:C.border, margin:"20px 0" }} />
+        <PanelGEI form={form} motor={motor} tray={tray} sat={sat} />
+      </div>
+    );
+  };
+  const renderRecomendaciones = () => (
+    <div>
+      {/* Cerebro estructurado (cálculo local) */}
+      <TabCerebro motor={motorEfectivo} form={form} sat={sat} />
+
+      <div style={{ height:1, background:C.border, margin:"24px 0" }} />
+
+      {/* Análisis IA */}
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 18px" }}>
+        <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:12 }}>
+          INFORME IA — diagnóstico completo del sistema con recomendaciones personalizadas
+        </div>
+        {!result && !loading && (
+          <button onClick={runAnalysis} style={{
+            width:"100%", padding:"14px", borderRadius:10, cursor:"pointer",
+            background:C.green, border:"none",
+            fontFamily:C.font, fontSize:13, fontWeight:700, color:"#fff",
+          }}>
+            Generar informe con IA
+          </button>
+        )}
+        {loading && <LoadingPanel msg={loadMsg} />}
+        {result && (
+          <>
+            <RenderInforme texto={result} />
+            <details style={{ marginTop:12 }}>
+              <summary style={{ fontFamily:C.font, fontSize:10, color:C.textDim,
+                cursor:"pointer", padding:"10px 14px", background:C.card2,
+                borderRadius:10, border:`1px solid ${C.border}`,
+                listStyle:"none", display:"flex", alignItems:"center",
+                justifyContent:"space-between" }}>
+                <span>Planes de acción con dosis y fundamento</span>
+                <span>&#9660;</span>
+              </summary>
+              <div style={{ marginTop:6 }}>
+                <PanelRecomendaciones motor={motor} form={form} />
+              </div>
+            </details>
+            <button onClick={runAnalysis} style={{
+              marginTop:10, width:"100%", padding:10, borderRadius:10,
+              cursor:"pointer", background:"transparent",
+              border:`1px solid ${C.border}`,
+              fontFamily:C.font, fontSize:11, color:C.textDim,
+            }}>
+              Regenerar informe
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  const RENDERS = [
+    renderZona, renderRodeoCC, renderPotreros,
+    renderAguaSanidad, renderDiagnostico, renderRecomendaciones,
+  ];
 
   // ══════════════════════════════════════════════════════════════
   // RENDER PRINCIPAL
@@ -3512,7 +3615,7 @@ function CalfAIPro() {
   );
 
   return (
-    <div style={{ minHeight:"100vh", background:C.bg, paddingBottom:80 }}>
+    <div style={{ minHeight:"100vh", background:C.bg }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap');
         * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -3520,27 +3623,68 @@ function CalfAIPro() {
         input[type=range]::-webkit-slider-thumb { width:18px; height:18px; }
         details > summary::-webkit-details-marker { display:none; }
         @keyframes pulse { 0%,100%{opacity:.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.2)} }
+        .calfai-tabs::-webkit-scrollbar { display:none; }
+        .calfai-tabs { -ms-overflow-style:none; scrollbar-width:none; }
       `}</style>
 
       {/* Header sticky */}
-      <div style={{ background:C.card, borderBottom:`1px solid ${C.border}`, padding:"12px 16px", position:"sticky", top:0, zIndex:50, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <div style={{ fontFamily:C.font, fontSize:14, color:C.green, letterSpacing:2, fontWeight:700 }}>
-          🌾 CALF AI<span style={{ color:C.textDim, fontSize:10, marginLeft:6 }}>v1</span>
+      <div style={{ background:C.card, borderBottom:`1px solid ${C.border}`, position:"sticky", top:0, zIndex:50 }}>
+        <div style={{ maxWidth:1100, margin:"0 auto", padding:"10px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontFamily:C.font, fontSize:14, color:C.green, letterSpacing:2, fontWeight:700 }}>
+            CALF AI<span style={{ color:C.textDim, fontSize:10, marginLeft:6 }}>v1</span>
+          </div>
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            {ccPondVal > 0 && <Pill color={smf(ccPondVal,4.5,5.5)}>CC {ccPondVal.toFixed(1)}</Pill>}
+            {evalAgua && evalAgua.cat.riesgo >= 2 && <Pill color={C.red}>Agua: {evalAgua.cat.label}</Pill>}
+            {sanidad?.alerts?.length > 0 && <Pill color={C.red}>Sanidad: {sanidad.alerts.length} alertas</Pill>}
+            {form.nombreProductor && <span style={{ fontFamily:C.font, fontSize:10, color:C.textDim }}>{form.nombreProductor}</span>}
+            <button onClick={()=>signOut()} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.textDim, padding:"5px 10px", fontFamily:C.font, fontSize:10, cursor:"pointer" }}>
+              Salir
+            </button>
+            <button
+              onClick={() => setShowHistorial(true)}
+              style={{ background:C.green+"15", border:"1px solid "+C.green+"30", borderRadius:8,
+                padding:"6px 12px", fontFamily:C.font, fontSize:10, cursor:"pointer",
+                color:C.green }}>
+              Establecimientos
+            </button>
+          </div>
         </div>
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          {ccPondVal > 0 && <Pill color={smf(ccPondVal,4.5,5.5)}>CC {ccPondVal.toFixed(1)}</Pill>}
-          {evalAgua && evalAgua.cat.riesgo >= 2 && <Pill color={C.red}>💧{evalAgua.cat.label}</Pill>}
-          {sanidad?.alerts?.length > 0 && <Pill color={C.red}>🩺{sanidad.alerts.length}</Pill>}
-          <button onClick={()=>signOut()} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.textDim, padding:"5px 10px", fontFamily:C.font, fontSize:10, cursor:"pointer" }}>
-            salir
-          </button>
-          <button
-            onClick={() => setShowHistorial(true)}
-            style={{ background:"none", border:"1px solid "+C.border, borderRadius:8,
-              padding:"6px 12px", fontFamily:C.font, fontSize:9, cursor:"pointer",
-              color:C.textDim, display:"flex", alignItems:"center", gap:5 }}>
-            📁 Establecimientos
-          </button>
+
+        {/* Tab nav horizontal */}
+        <div className="calfai-tabs" style={{ maxWidth:1100, margin:"0 auto", display:"flex", overflowX:"auto", borderTop:`1px solid ${C.border}` }}>
+          {PASOS.map((p, i) => {
+            const dotColor = (() => {
+              const step_alerts = alertasMotor.filter(a => {
+                if (i === 1) return ["cc_serv_bajo","cc_desvio_campo"].includes(a.id);
+                if (i === 3) return a.id?.startsWith("agua") || a.id?.startsWith("carga");
+                if (i === 4) return a.id?.startsWith("balance_inv") || a.id?.startsWith("cc_");
+                return false;
+              });
+              if (step_alerts.some(a=>a.tipo==="P1")) return C.red;
+              if (step_alerts.some(a=>a.tipo==="P2")) return C.amber;
+              return null;
+            })();
+            const active = step === i;
+            return (
+              <button key={i} onClick={()=>setStep(i)} style={{
+                flex:"0 0 auto", padding:"10px 20px",
+                background:"none", border:"none",
+                borderBottom: active ? `2px solid ${C.green}` : "2px solid transparent",
+                color: active ? C.green : C.textDim,
+                fontFamily:C.font, fontSize:11,
+                fontWeight: active ? 700 : 400,
+                cursor:"pointer", whiteSpace:"nowrap",
+                position:"relative",
+              }}>
+                {p.label}
+                {dotColor && !active && (
+                  <span style={{ position:"absolute", top:6, right:8,
+                    width:6, height:6, borderRadius:3, background:dotColor }} />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -3593,47 +3737,9 @@ function CalfAIPro() {
         </div>
       )}
 
-      {/* Título paso */}
-      <div style={{ padding:"14px 16px 6px" }}>
-        <div style={{ fontFamily:C.font, fontSize:11, color:C.green, letterSpacing:2, marginBottom:2 }}>
-          {PASOS[step].icon} {PASOS[step].label.toUpperCase()}
-        </div>
-        {form.nombreProductor && <div style={{ fontFamily:C.sans, fontSize:12, color:C.textDim }}>{form.nombreProductor}</div>}
-      </div>
-
       {/* Contenido del paso */}
-      <div style={{ padding:"0 16px" }}>
+      <div style={{ maxWidth:1100, margin:"0 auto", padding:"24px 20px 48px" }}>
         {RENDERS[step]?.()}
-      </div>
-
-      {/* Navbar inferior */}
-      <div style={{ position:"fixed", bottom:0, left:0, right:0, background:C.card, borderTop:`1px solid ${C.border}`, display:"flex", zIndex:100, padding:"6px 0 env(safe-area-inset-bottom)" }}>
-        {PASOS.map((p, i) => {
-          // Alertas del motor por paso
-          const dotColor = (() => {
-            const step_alerts = alertasMotor.filter(a => {
-              if (i === 2) return ["cc_serv_bajo","cc_desvio_campo"].includes(a.id);
-              if (i === 4) return a.id?.startsWith("agua") || a.id?.startsWith("carga");
-              if (i === 6) return a.id?.startsWith("stock") || a.id?.startsWith("nostock") || a.id?.startsWith("vaq");
-              if (i === 7) return a.id?.startsWith("balance_inv") || a.id?.startsWith("cc_");
-              return false;
-            });
-            if (step_alerts.some(a=>a.tipo==="P1")) return C.red;
-            if (step_alerts.some(a=>a.tipo==="P2")) return C.amber;
-            return null;
-          })();
-          return (
-            <button key={i} onClick={()=>setStep(i)} style={{ flex:1, background:"none", border:"none", cursor:"pointer", padding:"6px 0", display:"flex", flexDirection:"column", alignItems:"center", gap:2, opacity: step===i ? 1 : 0.45, position:"relative" }}>
-              <span style={{ fontSize:17 }}>{p.icon}</span>
-              <span style={{ fontFamily:C.font, fontSize:7, color:step===i?C.green:C.textDim, letterSpacing:.5 }}>{p.label}</span>
-              {step === i && <div style={{ width:16, height:2, borderRadius:1, background:C.green }} />}
-              {dotColor && step !== i && (
-                <span style={{ position:"absolute", top:2, right:"50%", marginRight:-12,
-                  width:7, height:7, borderRadius:3.5, background:dotColor, border:`1.5px solid ${C.card}` }} />
-              )}
-            </button>
-          );
-        })}
       </div>
     </div>
   );

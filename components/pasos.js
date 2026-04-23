@@ -1988,7 +1988,7 @@ const renderUbicacion = () => {
   const _panelAgua = () => <PanelAgua form={form} set={set} sat={sat} />;
 
   // ── PASO 6: SUPLEMENTACIÔN ────────────────────────────────────
-  const renderSuplAgua = () => {
+  const renderSuplAgua = ({ showAgua = true } = {}) => {
     // ── Agua de bebida (movida desde paso independiente) ──
     const _aguaSection = _panelAgua();
 
@@ -2071,7 +2071,7 @@ const renderUbicacion = () => {
     return (
       <div>
         {/* ── Agua de bebida ── */}
-        {_aguaSection}
+        {showAgua && _aguaSection}
         <div style={{ height:1, background:"rgba(255,255,255,.06)", margin:"16px 0" }} />
         {/* ── Meses de suplementación — selector exacto ── */}
         <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
@@ -3746,8 +3746,9 @@ const renderUbicacion = () => {
 
 
   return {
-    renderCampo, renderRodeoCompleto,
-    renderManejo, renderAnalisis,
+    renderCampo, renderRodeoCompleto, renderManejo, renderAnalisis,
+    renderUbicacion, renderRodeo, renderCC,
+    renderForraje, renderSuplAgua, renderCategorias, renderSanidad,
   };
 }
 

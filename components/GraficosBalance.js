@@ -14,19 +14,19 @@ import { balancePorCategoria } from "../lib/motor";
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
 const C = {
-  bg: "#0a1a0e",
-  card: "#0f2414",
-  card2: "#12291a",
-  border: "#1f4020",
-  text: "#d6e5d6",
-  textDim: "#8fa895",
-  textFaint: "#5e7863",
-  green: "#7ec850",
-  greenDark: "#4a8030",
-  blue: "#4a90d9",
-  orange: "#e8a030",
-  red: "#d46820",
-  amber: "#e8a030",
+  bg: "#f0f5ee",
+  card: "#ffffff",
+  card2: "#f5faf3",
+  border: "#cce0c4",
+  text: "#182c12",
+  textDim: "#486840",
+  textFaint: "#7aa070",
+  green: "#2e7818",
+  greenDark: "#1e5810",
+  blue: "#1e68a8",
+  orange: "#a06810",
+  red: "#b82810",
+  amber: "#a06810",
   font: "'IBM Plex Mono', monospace",
 };
 
@@ -266,17 +266,16 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
 
   const datos = useMemo(() => {
     if (!motor) return null;
-    try {
-      return {
-        general:   balancePorCategoria(motor, formActivo, sat, "general"),
-        vacas_v2s: balancePorCategoria(motor, formActivo, sat, "vacas_v2s"),
-        vaq1:      balancePorCategoria(motor, formActivo, sat, "vaq1"),
-        vaq2:      balancePorCategoria(motor, formActivo, sat, "vaq2"),
-      };
-    } catch (e) {
-      console.error("Error en balancePorCategoria:", e);
-      return null;
-    }
+    const safe = (cat) => {
+      try { return balancePorCategoria(motor, formActivo, sat, cat); }
+      catch(e) { console.error(`GraficosBalance error [${cat}]:`, e); return null; }
+    };
+    return {
+      general:   safe("general"),
+      vacas_v2s: safe("vacas_v2s"),
+      vaq1:      safe("vaq1"),
+      vaq2:      safe("vaq2"),
+    };
   }, [motor, formActivo, sat]);
 
   if (!datos) {
@@ -326,54 +325,72 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
         </div>
       )}
 
-      <GraficoMcal
-        datos={datos.general.meses}
-        titulo={`General · ${datos.general.nAnimales} cabezas`}
-        subTitulo={`${datos.general.label}`}
-        mostrarMovCC={true}
-      />
+      {datos.general && (
+        <GraficoMcal
+          datos={datos.general.meses}
+          titulo={`General · ${datos.general.nAnimales} cabezas`}
+          subTitulo={`${datos.general.label}`}
+          mostrarMovCC={true}
+        />
+      )}
 
-      <GraficoMcal
-        datos={datos.vacas_v2s.meses}
-        titulo={`Vacas + V2S · ${datos.vacas_v2s.nAnimales} cabezas`}
-        subTitulo={`${datos.vacas_v2s.pv} kg PV · con movilizacion CC`}
-        mostrarMovCC={true}
-      />
+      {datos.vacas_v2s && (
+        <GraficoMcal
+          datos={datos.vacas_v2s.meses}
+          titulo={`Vacas + V2S · ${datos.vacas_v2s.nAnimales} cabezas`}
+          subTitulo={`${datos.vacas_v2s.pv} kg PV · con movilizacion CC`}
+          mostrarMovCC={true}
+        />
+      )}
 
-      <GraficoGDP
-        datos={datos.vaq1.meses}
-        titulo={`Vaquillona 1° invierno · ${datos.vaq1.nAnimales} cabezas`}
-        subTitulo={`${datos.vaq1.pv} kg PV · objetivo llegar al entore`}
-        objetivoVerano={500}
-        objetivoInvierno={200}
-      />
+      {datos.vaq1 ? (
+        datos.vaq1.nAnimales > 0 ? (
+          <GraficoGDP
+            datos={datos.vaq1.meses}
+            titulo={`Vaquillona 1° invierno · ${datos.vaq1.nAnimales} cabezas`}
+            subTitulo={`${datos.vaq1.pv} kg PV · objetivo llegar al entore`}
+            objetivoVerano={500}
+            objetivoInvierno={200}
+          />
+        ) : (
+          <div style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.textDim }}>
+            Vaquillona 1° invierno — sin animales registrados. Configurá el % de reposición en el paso Rodeo.
+          </div>
+        )
+      ) : null}
 
-      {(() => {
-        const vaq2E = motor?.vaq2E;
-        const llegaEntore = vaq2E?.llegas;
-        const gdpMinNecesario = vaq2E
-          ? Math.ceil((vaq2E.pvMinEntore - vaq2E.pvMayo2Inv) * 1000 / (12 * 30))
-          : 400;
-        return (
-          <>
-            {llegaEntore ? (
-              <div style={{ background: C.green + "18", border: `1px solid ${C.green}50`, borderRadius: 8, padding: "6px 10px", marginBottom: 6, fontFamily: C.font, fontSize: 9, color: C.green }}>
-                ✓ Llega al entore con peso actual ({vaq2E.pvEntore} kg / {vaq2E.pvMinEntore} kg mín)
-              </div>
-            ) : vaq2E ? (
-              <div style={{ background: C.amber + "15", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 6, fontFamily: C.font, fontSize: 9, color: C.amber }}>
-                ⚠ No llega al entore — falta {vaq2E.pvMinEntore - vaq2E.pvEntore} kg · necesita ≥ {gdpMinNecesario} g/d promedio
-              </div>
-            ) : null}
-            <GraficoGDP
-              datos={datos.vaq2.meses}
-              titulo={`Vaquillona 2° invierno · ${datos.vaq2.nAnimales} cabezas`}
-              subTitulo={`${datos.vaq2.pv} kg PV · mín entore ${vaq2E?.pvMinEntore ?? "—"} kg`}
-              objetivoGDP={llegaEntore ? 400 : gdpMinNecesario}
-            />
-          </>
-        );
-      })()}
+      {datos.vaq2 ? (
+        datos.vaq2.nAnimales > 0 ? (() => {
+          const vaq2E = motor?.vaq2E;
+          const llegaEntore = vaq2E?.llegas;
+          const gdpMinNecesario = vaq2E
+            ? Math.ceil((vaq2E.pvMinEntore - vaq2E.pvMayo2Inv) * 1000 / (12 * 30))
+            : 400;
+          return (
+            <>
+              {llegaEntore ? (
+                <div style={{ background: C.green + "18", border: `1px solid ${C.green}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 6, fontFamily: C.font, fontSize: 9, color: C.green }}>
+                  Llega al entore con peso proyectado ({vaq2E.pvEntore} kg / min {vaq2E.pvMinEntore} kg)
+                </div>
+              ) : vaq2E ? (
+                <div style={{ background: C.amber + "18", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 6, fontFamily: C.font, fontSize: 9, color: C.amber }}>
+                  No llega al entore — falta {vaq2E.pvMinEntore - vaq2E.pvEntore} kg · necesita &ge; {gdpMinNecesario} g/d promedio
+                </div>
+              ) : null}
+              <GraficoGDP
+                datos={datos.vaq2.meses}
+                titulo={`Vaquillona 2° invierno · ${datos.vaq2.nAnimales} cabezas`}
+                subTitulo={`${datos.vaq2.pv} kg PV · min entore ${vaq2E?.pvMinEntore ?? "—"} kg`}
+                objetivoGDP={llegaEntore ? 400 : gdpMinNecesario}
+              />
+            </>
+          );
+        })() : (
+          <div style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.textDim }}>
+            Vaquillona 2° invierno — sin animales registrados. Cargá la cantidad en el paso Rodeo.
+          </div>
+        )
+      ) : null}
 
       <div style={{ fontFamily: C.font, fontSize: 8, color: C.textFaint, marginTop: 8, textAlign: "center" }}>
         Metodo: balance por categoria con consumo real (Rosello et al. 2025, Detmann 2010, NRC 2000).
