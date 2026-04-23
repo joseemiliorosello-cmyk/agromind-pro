@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signOut, signIn, SessionProvider } from "next-auth/react";
-import { T as C, FORM_DEF, MESES_NOM, CALIDAD_C4_CALIBRADA } from "../lib/constantes";
+import { T as C, FORM_DEF, MESES_NOM, CALIDAD_C4_CALIBRADA, cc5 } from "../lib/constantes";
 import { correrMotor, useMotor, calcCadena, calcConsumoAgua, calcDisp,
          calcScore, calcGEI, calcTrayectoriaCC, calcDisponibilidadMS,
          calcSupervivencia, calcV2S, mcalSuplemento, fetchSat,
          fmtFecha, dZona, dProv, smf, diagnosticarSistema,
          calcImpactoCola, calcFaseCiclo, calcConsumoPasto,
-         getBiotipo } from "../lib/motor";
+         getBiotipo, FENOLOGIAS } from "../lib/motor";
 import { calcCerebro, buildPromptFull, SYS_FULL,
          interpretarSistemaCompleto } from "../lib/cerebro";
 import { usePersistencia, PanelHistorial } from "../lib/persistencia";
@@ -18,6 +18,7 @@ import { DashboardEstablecimiento } from "../components/dashboard";
 import { getPasoRenders, GraficoCCEscenarios, PanelAgua, PanelGEI, PanelFaseCiclo } from "../components/pasos"
 import GraficosBalance from "../components/GraficosBalance";
 import { TabCerebro, PanelRecomendaciones, RenderInforme } from "../components/tabs";
+import * as XLSX from "xlsx";
 
 const MSGS = [
   "Analizando condición forrajera…",
@@ -327,7 +328,7 @@ function CalfAIPro() {
       // Guardar en historial antes de analizar
       guardarEnHistorial(form, motorEfectivo, null);
       const cerebroData = calcCerebro(motorEfectivo, form, sat);
-      prompt = buildPromptFull(motorEfectivo, form, sat, cerebroData);
+      prompt = buildPromptFull(motorEfectivo, form, sat, cerebroData, potreros);
       const res  = await fetch("/api/analyze", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -649,206 +650,211 @@ function CalfAIPro() {
     }
   }
 
-  // ── DESCARGAR CSV ─────────────────────────────────────────────
-  function descargarCSV() {
+  // ── DESCARGAR EXCEL ───────────────────────────────────────────
+  function descargarCSV() { descargarExcel(); } // alias para botones existentes
+
+  function descargarExcel() {
     const fecha   = new Date().toLocaleDateString("es-AR");
     const isoDate = new Date().toISOString().slice(0,10);
     const dispMS  = calcDisponibilidadMS(form.altPasto, form.tipoPasto);
+    const cb      = calcCerebro(motor, form, sat);
+    const sc      = calcScore(motor, form, null);
 
-    // ── FORMATO HORIZONTAL: fila 1 = headers, fila 2 = valores ──
-    // Pegar cada análisis como nueva fila → base de datos acumulable en Excel
-    const campos = [
-      // ─ Identificación ─
-      ["Fecha_analisis",            fecha],
-      ["Productor",                 form.nombreProductor || ""],
-      ["Localidad",                 form.localidad || ""],
-      ["Provincia",                 form.provincia || ""],
-      ["Zona",                      form.zona || ""],
-      ["Lat",                       coords?.lat?.toFixed(4) || ""],
-      ["Lon",                       coords?.lon?.toFixed(4) || ""],
-      // ─ Rodeo ─
-      ["Biotipo",                   form.biotipo || ""],
-      ["Vacas_cab",                 form.vacasN || ""],
-      ["Toros_cab",                 form.torosN || ""],
-      ["PV_vaca_adulta_kg",         form.pvVacaAdulta || ""],
-      ["Prenez_historica_pct",      form.prenez || ""],
-      ["Destete_historico_pct",     form.pctDestete || ""],
-      ["Estado_reproductivo",       form.eReprod || ""],
-      ["Incluye_1er_parto",         form.primerParto ? "Si" : "No"],
-      ["Ini_servicio",              form.iniServ || ""],
-      ["Fin_servicio",              form.finServ || ""],
-      ["Edad_primer_entore_meses",  form.edadPrimerEntore || ""],
-      ["ENSO",                      form.enso || "neutro"],
-      // ─ CC ─
-      ["CC_ponderada_hoy",          ccPondVal?.toFixed(2) || ""],
-      ["CC_parto_proyectada",       tray?.ccParto || ""],
-      ["CC_min_lactacion",          tray?.ccMinLact || ""],
-      ["CC_servicio",               tray?.ccServ || ""],
-      ["Prenez_estimada_pct",       tray?.pr || ""],
-      ["Dias_anestro",              tray?.anestro?.dias || ""],
-      ["Meses_lactacion",           tray?.mesesLact || ""],
-      // ─ Destete ─
-      ["Pct_dest_tradicional_180d", form.destTrad  || "0"],
-      ["Pct_dest_anticipado_90d",   form.destAntic || "0"],
-      ["Pct_dest_hiperprecoz_50d",  form.destHiper || "0"],
-      // ─ Forraje ─
-      ["Sup_ganadera_ha",           form.supHa || ""],
-      ["Pct_monte",                 form.pctMonte || "0"],
-      ["Pct_no_ganadero",           form.pctNGan  || "0"],
-      ["Vegetacion",                form.vegetacion || ""],
-      ["Fenologia",                 form.fenologia || ""],
-      ["Carga_EV_ha",               form.vacasN && form.supHa ? (parseFloat(form.vacasN)/parseFloat(form.supHa)).toFixed(2) : ""],
-      ["Alt_pasto_cm",              form.altPasto || ""],
-      ["Tipo_pasto",                form.tipoPasto || ""],
-      ["Disp_MS_kgha",              dispMS?.msHa || ""],
-      ["Nivel_disp_pasto",          dispMS?.nivel || ""],
-      // ─ Clima satelital ─
-      ["Temp_actual_C",             sat?.temp || ""],
-      ["Temp_max_C",                sat?.tMax || ""],
-      ["Temp_min_C",                sat?.tMin || ""],
-      ["Lluvia_7d_mm",              sat?.p7   || ""],
-      ["Lluvia_30d_mm",             sat?.p30  || ""],
-      ["Balance_hidrico_mm",        sat?.deficit || ""],
-      ["NDVI",                      sat?.ndvi || ""],
-      ["Cond_forrajera",            sat?.condForr || ""],
-      ["Lluvia_prox7d_mm",           sat?.lluviaProx7 ?? ""],
-      ["Temp_media_prox7d_C",        sat?.tempMediaProx7 ?? ""],
-      ["Helada_prox7d",              sat?.helada7 ? "Si" : sat ? "No" : ""],
-      ["Pronostico_7d",              sat?.pronostico ? sat.pronostico.map(d=>d.dia+":"+d.tMax+"/"+d.tMin+"°C"+( d.lluvia>2?"+"+d.lluvia+"mm":"")).join(" | ") : ""],
-      // ─ Suplementación ─
-      ["Supl_gestacion",            form.supl1 || ""],
-      ["Dosis_gestacion_kgd",       form.dosis1 || "0"],
-      ["Supl_lactancia",            form.supl2 || ""],
-      ["Dosis_lactancia_kgd",       form.dosis2 || "0"],
-      ["Supl_preparto",             form.supl3 || ""],
-      ["Dosis_preparto_kgd",        form.dosis3 || "0"],
-      // ─ Agua ─
-      ["TDS_mgL",                   form.aguaTDS || ""],
-      ["Tipo_sal_agua",             form.aguaTipoSal || ""],
-      ["Fuente_agua",               form.aguaFuente || ""],
-      ["Reduccion_DMI_pct",         evalAgua?.pctReducDMI?.toFixed(1) || "0"],
-      // ─ Suplementación por categoría ─
-      ["Supl_v2s",                form.supl_v2s     || ""],
-      ["Dosis_v2s_kgd",           form.dosis_v2s    || "0"],
-      ["Supl2_v2s",               form.supl2_v2s    || ""],
-      ["Dosis2_v2s_kgd",          form.dosis2_v2s   || "0"],
-      ["Supl_toros",              form.supl_toros   || ""],
-      ["Dosis_toros_kgd",         form.dosis_toros  || "0"],
-      ["Supl2_toros",             form.supl2_toros  || ""],
-      ["Dosis2_toros_kgd",        form.dosis2_toros || "0"],
-      ["Supl_vaq2",               form.supl_vaq2    || ""],
-      ["Dosis_vaq2_kgd",          form.dosis_vaq2   || "0"],
-      ["Supl2_vaq2",              form.supl2_vaq2   || ""],
-      ["Dosis2_vaq2_kgd",         form.dosis2_vaq2  || "0"],
-      ["Supl_vaq1",               form.supl_vaq1    || ""],
-      ["Dosis_vaq1_kgd",          form.dosis_vaq1   || "0"],
-      ["Supl2_vaq1",              form.supl2_vaq1   || ""],
-      ["Dosis2_vaq1_kgd",         form.dosis2_vaq1  || "0"],
-      ["Supl_ternero",            form.supl_ternero || ""],
-      ["Dosis_ternero_kgd",       form.dosis_ternero|| "0"],
-      // ─ Sanidad ─
-      ["San_aftosa",                form.sanAftosa    === "si" ? "Al_dia" : "Sin_vacunar"],
-      ["San_brucelosis",            form.sanBrucelosis=== "si" ? "Al_dia" : "Sin_vacunar"],
-      ["San_IBR_DVB",               form.sanVacunas   === "si" ? "Al_dia" : "Sin_vacunar"],
-      ["Toros_revision",            form.sanToros     === "con_control" ? "Con_revision" : "Sin_revision"],
-      ["Historia_abortos",          form.sanAbortos   === "si" ? "Si" : "No"],
-      ["Programa_sanitario",        form.sanPrograma  === "si" ? "Si" : "No"],
-      ["San_parasito_externo",      form.sanParasitoExt || ""],
-      ["San_parasito_interno",      form.sanParasitoInt || ""],
-      // ─ Vaquillona 1° ─
-      ["Vaq1_cab",                  Math.round((parseInt(form.vacasN)||0)*(parseFloat(form.pctReposicion)||20)/100)],
-      ["Pct_reposicion",            form.pctReposicion || "20"],
-      ["Edad_vaq_mayo_meses",       form.edadVaqMayo || ""],
-      ["Tipo_destete_vaq",          form.tipoDesteteVaq || ""],
-      ["PV_entrada_vaq1_kg",        form.vaq1PV || tcSave?.pvMayoPond || ""],
-      ["PV_salida_vaq1_kg",         vaq1E?.pvSal || ""],
-      ["GDP_vaq1_gd",               vaq1E?.gdpReal || ""],
-      ["Esc_supl_vaq1",             vaq1E?.esc || ""],
-      ["Prot_vaq1_kgd",             vaq1E?.protKg || ""],
-      ["Energ_vaq1_kgd",            vaq1E?.energKg || "0"],
-      ["Freq_supl_vaq1",            vaq1E?.freq || ""],
-      // ─ Vaquillona 2° ─
-      ["Vaq2_cab",                  form.vaq2N || ""],
-      ["PV_entrada_vaq2_kg",        pvEntradaVaq2 || ""],
-      ["PV_entore_vaq2_kg",         vaq2E?.pvEntore || ""],
-      ["Llega_objetivo_entore",     vaq2E?.llegas ? "Si" : vaq2E ? "No" : ""],
-      // ─ V2S ─
-      ["V2S_cab",                   form.v2sN || ""],
-      ["V2S_PV_kg",                 form.v2sPV || ""],
-      ["V2S_ternero_al_pie",        form.v2sTernero === "si" ? "Si" : "No"],
-      // ─ Terneros ─
-      ["Terneros_cab",              tcSave?.terneros || ""],
-      ["PV_ternero_mayo_kg",        tcSave?.pvMayoPond || ""],
-      // ─ Informe ─
-      ["Consulta_especifica",       form.consultaEspecifica || ""],
-      ["Tiene_informe_IA",          result ? "Si" : "No"],
-      // ─ GEI ─
-      ...(() => {
-        const g = calcGEI(form, motor, tray, sat);
-        if (!g) return [];
-        return [
-          ["GEI_CH4_total_kg_anio",   g.totalCH4Base || ""],
-          ["GEI_intensidad_base",      g.intensBase || ""],
-          ["GEI_intensidad_con_supl",  g.intensSupl || ""],
-          ["GEI_GWP100_tCO2eq",        g.totalCO2eqBase ? (g.totalCO2eqBase/1000).toFixed(0) : ""],
-          ["GEI_GWP_star_tCO2eq",      g.totalCO2eqBaseSTAR ? (g.totalCO2eqBaseSTAR/1000).toFixed(0) : ""],
-          ["GEI_captura_CO2_t",        g.co2Pastizal?.CO2_total ? (g.co2Pastizal.CO2_total/1000).toFixed(1) : ""],
-          ["GEI_dig_pct",              g.dig || ""],
-        ];
-      })(),
-      // ─ Diagnóstico motor ─
-      ...(() => {
-        const cb = calcCerebro(motor, form, sat);
-        if (!cb) return [];
-        const p1 = cb.tarjetas?.filter(c=>c.prioridad==="URGENTE"||c.prioridad==="P1").map(c=>c.titulo).join(" | ") || "";
-        const p2 = cb.tarjetas?.filter(c=>c.prioridad==="P2").map(c=>c.titulo).join(" | ") || "";
-        return [
-          ["Score_riesgo",             cb.resumen?.scoreRiesgo || ""],
-          ["Nivel_riesgo",             cb.resumen?.nivelRiesgo || ""],
-          ["Prenez_potencial_pct",     cb.resumen?.prenezPot || ""],
-          ["Terneros_adicionales",     cb.resumen?.ternerosDif || ""],
-          ["Valor_adicional_ARS",      cb.resumen?.valorDif || ""],
-          ["Cuellos_P1",               p1],
-          ["Cuellos_P2",               p2],
-          ["Score_total",              (() => { const sc = calcScore(motor, form, null); return sc?.total ?? ""; })()],
-          ["Score_CC",                 (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="cc")?.score ?? ""; })()],
-          ["Score_Balance",            (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="balance")?.score ?? ""; })()],
-          ["Score_Reproduccion",       (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="repro")?.score ?? ""; })()],
-          ["Score_Vaquillona",         (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="vaq")?.score ?? ""; })()],
-          ["Score_Sanidad",            (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="sanidad")?.score ?? ""; })()],
-          ["Score_GEI",                (() => { const sc = calcScore(motor, form, null); return sc?.dim?.find(d=>d.id==="gei")?.score ?? ""; })()],
-          ["Anos_recup_vaq1",          cb.anosRecupVaq1 || ""],
-          ["Anos_recup_vaq2",          cb.anosRecupVaq2 || ""],
-        ];
-      })(),
-      // ─ Balance invernal ─
-      ["Balance_jun_mcal",           motor?.balanceMensual?.[5]?.balance || ""],
-      ["Balance_jul_mcal",           motor?.balanceMensual?.[6]?.balance || ""],
-      ["Balance_ago_mcal",           motor?.balanceMensual?.[7]?.balance || ""],
-      ["Deficit_meses_invierno",     motor?.balanceMensual ? motor.balanceMensual.filter(m=>[5,6,7].includes(m.i)&&m.deficit).length : ""],
+    // Hoja 1: Datos del establecimiento
+    const hoja1 = [
+      ["CONSULTA TECNICA - CALFAI", "", "", ""],
+      ["Fecha de consulta", fecha, "", ""],
+      ["", "", "", ""],
+      ["IDENTIFICACION", "", "", ""],
+      ["Productor",          form.nombreProductor || ""],
+      ["Localidad",          form.localidad || ""],
+      ["Provincia",          form.provincia || ""],
+      ["Zona",               form.zona || ""],
+      ["Latitud",            coords?.lat?.toFixed(4) || ""],
+      ["Longitud",           coords?.lon?.toFixed(4) || ""],
+      ["", "", "", ""],
+      ["RODEO GENERAL", "", "", ""],
+      ["Biotipo",            form.biotipo || ""],
+      ["Vacas (cab)",        form.vacasN || ""],
+      ["Toros (cab)",        form.torosN || ""],
+      ["PV vaca adulta (kg)", form.pvVacaAdulta || ""],
+      ["Prenez historica (%)", form.prenez || ""],
+      ["Destete historico (%)", form.pctDestete || ""],
+      ["Estado reproductivo", form.eReprod || ""],
+      ["Incluye 1er parto",  form.primerParto ? "Si" : "No"],
+      ["Inicio servicio",    form.iniServ || ""],
+      ["Fin servicio",       form.finServ || ""],
+      ["Edad primer entore (meses)", form.edadPrimerEntore || ""],
+      ["ENSO",               form.enso || "neutro"],
+      ["", "", "", ""],
+      ["CONDICION CORPORAL", "", "", ""],
+      ["CC ponderada hoy",   ccPondVal?.toFixed(2) || ""],
+      ["CC al parto (proyectada)", tray?.ccParto || ""],
+      ["CC minima lactacion", tray?.ccMinLact || ""],
+      ["CC al servicio",     tray?.ccServ || ""],
+      ["Prenez estimada (%)", tray?.pr || ""],
+      ["Dias de anestro",    tray?.anestro?.dias || ""],
+      ["Meses de lactacion", tray?.mesesLact || ""],
+      ["", "", "", ""],
+      ["DESTETE", "", "", ""],
+      ["% Destete tradicional 180d", form.destTrad  || "0"],
+      ["% Destete anticipado 90d",   form.destAntic || "0"],
+      ["% Destete hiperprecoz 50d",  form.destHiper || "0"],
+      ["", "", "", ""],
+      ["FORRAJE Y CAMPO", "", "", ""],
+      ["Superficie ganadera (ha)", form.supHa || ""],
+      ["% Monte",            form.pctMonte || "0"],
+      ["% No ganadero",      form.pctNGan  || "0"],
+      ["Vegetacion",         form.vegetacion || ""],
+      ["Fenologia",          form.fenologia || ""],
+      ["Carga (EV/ha)",      form.vacasN && form.supHa ? (parseFloat(form.vacasN)/parseFloat(form.supHa)).toFixed(2) : ""],
+      ["Altura pasto (cm)",  form.altPasto || ""],
+      ["Tipo pasto",         form.tipoPasto || ""],
+      ["Disponibilidad MS (kg/ha)", dispMS?.msHa || ""],
+      ["Nivel disponibilidad", dispMS?.nivel || ""],
+      ["", "", "", ""],
+      ["CLIMA SATELITAL", "", "", ""],
+      ["Temperatura actual (C)", sat?.temp || ""],
+      ["Temp max (C)",       sat?.tMax || ""],
+      ["Temp min (C)",       sat?.tMin || ""],
+      ["Lluvia 7d (mm)",     sat?.p7   || ""],
+      ["Lluvia 30d (mm)",    sat?.p30  || ""],
+      ["Balance hidrico (mm)", sat?.deficit || ""],
+      ["NDVI",               sat?.ndvi || ""],
+      ["Condicion forrajera", sat?.condForr || ""],
+      ["Lluvia prox 7d (mm)", sat?.lluviaProx7 ?? ""],
+      ["Temp media prox 7d (C)", sat?.tempMediaProx7 ?? ""],
+      ["Helada prox 7d",     sat?.helada7 ? "Si" : sat ? "No" : ""],
+      ["", "", "", ""],
+      ["SUPLEMENTACION POR CATEGORIA", "", "", ""],
+      ["Suplemento V2S",        form.supl_v2s     || ""],
+      ["Dosis V2S (kg/d)",      form.dosis_v2s    || "0"],
+      ["Suplemento 2 V2S",      form.supl2_v2s    || ""],
+      ["Dosis 2 V2S (kg/d)",    form.dosis2_v2s   || ""],
+      ["Suplemento Toros",      form.supl_toros   || ""],
+      ["Dosis Toros (kg/d)",    form.dosis_toros  || "0"],
+      ["Suplemento 2 Toros",    form.supl2_toros  || ""],
+      ["Dosis 2 Toros (kg/d)",  form.dosis2_toros || ""],
+      ["Suplemento Vaq2",       form.supl_vaq2    || ""],
+      ["Dosis Vaq2 (kg/d)",     form.dosis_vaq2   || "0"],
+      ["Suplemento 2 Vaq2",     form.supl2_vaq2   || ""],
+      ["Dosis 2 Vaq2 (kg/d)",   form.dosis2_vaq2  || ""],
+      ["Suplemento Vaq1",       form.supl_vaq1    || ""],
+      ["Dosis Vaq1 (kg/d)",     form.dosis_vaq1   || "0"],
+      ["Suplemento 2 Vaq1",     form.supl2_vaq1   || ""],
+      ["Dosis 2 Vaq1 (kg/d)",   form.dosis2_vaq1  || ""],
+      ["Suplemento Ternero",    form.supl_ternero || ""],
+      ["Dosis Ternero (kg/d)",  form.dosis_ternero|| "0"],
+      ["", "", "", ""],
+      ["AGUA Y SANIDAD", "", "", ""],
+      ["TDS agua (mg/L)",    form.aguaTDS || ""],
+      ["Tipo sal agua",      form.aguaTipoSal || ""],
+      ["Fuente agua",        form.aguaFuente || ""],
+      ["Reduccion DMI (%)",  evalAgua?.pctReducDMI?.toFixed(1) || "0"],
+      ["Aftosa",             form.sanAftosa    === "si" ? "Al dia" : "Sin vacunar"],
+      ["Brucelosis",         form.sanBrucelosis=== "si" ? "Al dia" : "Sin vacunar"],
+      ["IBR/DVB",            form.sanVacunas   === "si" ? "Al dia" : "Sin vacunar"],
+      ["Revision toros",     form.sanToros     === "con_control" ? "Con revision" : "Sin revision"],
+      ["Historia abortos",   form.sanAbortos   === "si" ? "Si" : "No"],
+      ["Programa sanitario", form.sanPrograma  === "si" ? "Si" : "No"],
+      ["Parasito externo",   form.sanParasitoExt || ""],
+      ["Parasito interno",   form.sanParasitoInt || ""],
+      ["", "", "", ""],
+      ["VAQUILLONA 1 INVIERNO", "", "", ""],
+      ["Vaq1 (cab)",         Math.round((parseInt(form.vacasN)||0)*(parseFloat(form.pctReposicion)||20)/100)],
+      ["% Reposicion",       form.pctReposicion || "20"],
+      ["Edad en mayo (meses)", form.edadVaqMayo || ""],
+      ["Tipo destete vaq",   form.tipoDesteteVaq || ""],
+      ["PV entrada vaq1 (kg)", form.vaq1PV || tcSave?.pvMayoPond || ""],
+      ["PV salida vaq1 (kg)", vaq1E?.pvSal || ""],
+      ["GDP vaq1 (g/d)",     vaq1E?.gdpReal || ""],
+      ["", "", "", ""],
+      ["VAQUILLONA 2 INVIERNO", "", "", ""],
+      ["Vaq2 (cab)",         form.vaq2N || ""],
+      ["PV entrada vaq2 (kg)", pvEntradaVaq2 || ""],
+      ["PV al entore (kg)",  vaq2E?.pvEntore || ""],
+      ["Llega objetivo entore", vaq2E?.llegas ? "Si" : vaq2E ? "No" : ""],
+      ["", "", "", ""],
+      ["V2S", "", "", ""],
+      ["V2S (cab)",          form.v2sN || ""],
+      ["V2S PV (kg)",        form.v2sPV || ""],
+      ["V2S ternero al pie", form.v2sTernero === "si" ? "Si" : "No"],
+      ["", "", "", ""],
+      ["TERNEROS", "", "", ""],
+      ["Terneros (cab)",     tcSave?.terneros || ""],
+      ["PV ternero mayo (kg)", tcSave?.pvMayoPond || ""],
+      ["", "", "", ""],
+      ["Consulta especifica", form.consultaEspecifica || ""],
     ];
 
-    const headers = campos.map(([h]) => h);
-    const valores = campos.map(([, v]) => v);
+    // Hoja 2: Balance mensual
+    const MESES_XL = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    const hoja2 = [
+      ["BALANCE ENERGETICO MENSUAL", form.nombreProductor || "Establecimiento", "", "", "", "", ""],
+      ["Fecha consulta:", fecha, "", "", "", "", ""],
+      ["", "", "", "", "", "", ""],
+      ["Mes","Oferta (Mcal/d)","Demanda (Mcal/d)","Balance (Mcal/d)","Deficit","% Cobertura","Carga ajustada"],
+    ];
+    if (motor?.balanceMensual) {
+      motor.balanceMensual.forEach(m => {
+        hoja2.push([
+          MESES_XL[m.i] || m.i,
+          m.oferta  != null ? +m.oferta.toFixed(1)  : "",
+          m.demanda != null ? +m.demanda.toFixed(1) : "",
+          m.balance != null ? +m.balance.toFixed(1) : "",
+          m.deficit ? "SI" : "No",
+          m.cobertura != null ? +(m.cobertura * 100).toFixed(0) : "",
+          m.cargaAjustada != null ? +m.cargaAjustada.toFixed(2) : "",
+        ]);
+      });
+    }
 
-    const escapeCSV = cel => {
-      const s = String(cel ?? "").replace(/"/g, '""');
-      return s.includes(";") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
-    };
+    // Hoja 3: Diagnostico
+    const hoja3 = [
+      ["DIAGNOSTICO TECNICO - CALFAI", "", ""],
+      ["Fecha consulta:", fecha, ""],
+      ["", "", ""],
+      ["SCORES", "", ""],
+      ["Score total",        sc?.total ?? ""],
+      ["Score CC",           sc?.dim?.find(d=>d.id==="cc")?.score ?? ""],
+      ["Score Balance",      sc?.dim?.find(d=>d.id==="balance")?.score ?? ""],
+      ["Score Reproduccion", sc?.dim?.find(d=>d.id==="repro")?.score ?? ""],
+      ["Score Vaquillona",   sc?.dim?.find(d=>d.id==="vaq")?.score ?? ""],
+      ["Score Sanidad",      sc?.dim?.find(d=>d.id==="sanidad")?.score ?? ""],
+      ["", "", ""],
+      ["ANALISIS CEREBRO", "", ""],
+      ["Score riesgo",       cb?.resumen?.scoreRiesgo || ""],
+      ["Nivel riesgo",       cb?.resumen?.nivelRiesgo || ""],
+      ["Prenez potencial (%)", cb?.resumen?.prenezPot || ""],
+      ["Terneros adicionales", cb?.resumen?.ternerosDif || ""],
+      ["Valor adicional",    cb?.resumen?.valorDif || ""],
+      ["Anos recupero Vaq1", cb?.anosRecupVaq1 || ""],
+      ["Anos recupero Vaq2", cb?.anosRecupVaq2 || ""],
+      ["", "", ""],
+      ["PUNTOS CRITICOS", "", ""],
+    ];
+    if (cb?.tarjetas) {
+      cb.tarjetas.forEach(t => {
+        hoja3.push([t.prioridad || "", t.titulo || "", t.descripcion || ""]);
+      });
+    }
+    hoja3.push(["", "", ""]);
+    hoja3.push(["BALANCE INVERNAL", "", ""]);
+    hoja3.push(["Balance junio (Mcal/d)",  motor?.balanceMensual?.[5]?.balance != null ? +motor.balanceMensual[5].balance.toFixed(1) : ""]);
+    hoja3.push(["Balance julio (Mcal/d)",  motor?.balanceMensual?.[6]?.balance != null ? +motor.balanceMensual[6].balance.toFixed(1) : ""]);
+    hoja3.push(["Balance agosto (Mcal/d)", motor?.balanceMensual?.[7]?.balance != null ? +motor.balanceMensual[7].balance.toFixed(1) : ""]);
+    hoja3.push(["Meses en deficit (jun-ago)", motor?.balanceMensual ? motor.balanceMensual.filter(m=>[5,6,7].includes(m.i)&&m.deficit).length : ""]);
+    if (result) {
+      hoja3.push(["", "", ""]);
+      hoja3.push(["INFORME IA", "", ""]);
+      hoja3.push([result.replace(/\n/g, " | "), "", ""]);
+    }
 
-    // Punto y coma como separador — estándar Excel en Argentina/España/Latinoamérica
-    const SEP = ";";
-    // "sep=;" le dice a Excel en cualquier idioma que el separador es punto y coma
-    const csvContent = ["sep=;", headers.map(escapeCSV).join(SEP), valores.map(escapeCSV).join(SEP)]
-      .join("\n");
-
-    const blob = new Blob(["\uFEFF" + csvContent], { type:"text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `calfai_${(form.nombreProductor||"datos").replace(/\s/g,"_")}_${isoDate}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja1), "Establecimiento");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja2), "Balance mensual");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja3), "Diagnostico");
+    XLSX.writeFile(wb, `calfai_${(form.nombreProductor||"datos").replace(/\s/g,"_")}_${isoDate}.xlsx`);
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -3540,8 +3546,6 @@ function CalfAIPro() {
         />
         <div style={{ height:1, background:C.border, margin:"20px 0" }} />
         {motor && <GraficosBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />}
-        <div style={{ height:1, background:C.border, margin:"20px 0" }} />
-        <PanelGEI form={form} motor={motor} tray={tray} sat={sat} />
       </div>
     );
   };

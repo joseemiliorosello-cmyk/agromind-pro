@@ -13,8 +13,8 @@ const T = C;
 const DISCLAIMER = "Las recomendaciones generadas por AgroMind Pro tienen carácter orientativo y deben ser validadas por un profesional veterinario o ingeniero agrónomo habilitado antes de su implementación. Los resultados dependen de la calidad y completitud de los datos ingresados.";
 import { Pill, Alerta, smf } from "./ui";
 
-const SEC_EMOJIS = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣"];
-const SEC_TITLES = ["Diagnóstico Ambiental","Diagnóstico por Categoría","Destete y Terneros","Suplementación","Sanidad y Reproducción"];
+const SEC_EMOJIS = ["1️⃣","2️⃣","3️⃣","4️⃣"];
+const SEC_TITLES = ["Diagnóstico integrado","Puntos críticos","Escenarios de mejora","Plan de acción"];
 
 // ─── RENDERINFORME ───────────────────────────────────────────────────
 function RenderInforme({ texto }) {
@@ -46,14 +46,14 @@ function RenderInforme({ texto }) {
         const st = getStatus(sec);
         const s  = cfg[st];
         return (
-          <details key={i} open={i === 0 || i === 4} style={{ marginBottom:8 }}>
+          <details key={i} open={i === 0} style={{ marginBottom:8 }}>
             <summary style={{ background:s.bg, border:`1px solid ${s.border}`, borderRadius:12, padding:"12px 14px", cursor:"pointer", display:"flex", alignItems:"center", gap:10, userSelect:"none", listStyle:"none" }}>
               <span style={{ fontSize:18 }}>{SEC_EMOJIS[i]}</span>
               <span style={{ fontFamily:T.fontSans, fontSize:13, color:T.text, fontWeight:600, flex:1 }}>{SEC_TITLES[i]}</span>
               <div style={{ width:8, height:8, borderRadius:"50%", background:s.dot }} />
             </summary>
             <div
-              style={{ background:"rgba(0,0,0,.25)", border:`1px solid ${T.border}`, borderTop:"none", borderRadius:"0 0 12px 12px", padding:14, fontFamily:T.fontSans, fontSize:13, color:T.text, lineHeight:1.75 }}
+              style={{ background:T.card2, border:`1px solid ${T.border}`, borderTop:"none", borderRadius:"0 0 12px 12px", padding:14, fontFamily:T.fontSans, fontSize:13, color:T.text, lineHeight:1.75 }}
               dangerouslySetInnerHTML={{ __html: rr(sec) }}
             />
           </details>
