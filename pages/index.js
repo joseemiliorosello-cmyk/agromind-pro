@@ -7,7 +7,8 @@ import { correrMotor, useMotor, calcCadena, calcConsumoAgua, calcDisp,
          calcScore, calcGEI, calcTrayectoriaCC, calcDisponibilidadMS,
          calcSupervivencia, calcV2S, mcalSuplemento, fetchSat,
          fmtFecha, dZona, dProv, smf, diagnosticarSistema,
-         calcImpactoCola, calcFaseCiclo, calcConsumoPasto } from "../lib/motor";
+         calcImpactoCola, calcFaseCiclo, calcConsumoPasto,
+         getBiotipo } from "../lib/motor";
 import { calcCerebro, buildPromptFull, SYS_FULL,
          interpretarSistemaCompleto } from "../lib/cerebro";
 import { usePersistencia, PanelHistorial } from "../lib/persistencia";
