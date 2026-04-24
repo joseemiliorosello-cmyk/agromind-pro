@@ -884,14 +884,14 @@ function CalfAIPro() {
           <div style={{ fontFamily:C.sans, fontSize:12, color:C.green, fontWeight:700, marginBottom:4 }}>
             📌 Seleccioná Zona y Provincia abajo — es todo lo que necesitás
           </div>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, lineHeight:1.6 }}>
+          <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, lineHeight:1.6 }}>
             El análisis usa datos climáticos históricos por provincia (temperatura, precipitación, estacionalidad).
             El GPS es opcional: solo agrega temperatura y NDVI del satélite en tiempo real.
           </div>
           <button onClick={gpsClick} style={{
             marginTop:8, padding:"6px 12px", borderRadius:8,
             background:"transparent", border:`1px solid ${C.green}40`,
-            fontFamily:C.font, fontSize:9, color:C.green, cursor:"pointer"
+            fontFamily:C.font, fontSize:11, color:C.green, cursor:"pointer"
           }}>
             📍 Activar GPS igual (para datos satelitales en tiempo real)
           </button>
@@ -1070,13 +1070,13 @@ function CalfAIPro() {
 
         return (
           <div style={{ marginBottom:14 }}>
-            <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
+            <div style={{ fontFamily:C.font, fontSize:12, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
               📅 FECHAS DE SERVICIO
             </div>
             {finAnioCorr !== finAnio && finMes && iniMes && (
               <div style={{ background:C.blue+"10", border:"1px solid "+C.blue+"30", borderRadius:8,
                 padding:"6px 10px", marginBottom:8 }}>
-                <span style={{ fontFamily:C.font, fontSize:9, color:C.blue }}>
+                <span style={{ fontFamily:C.font, fontSize:11, color:C.blue }}>
                   ℹ El fin del servicio cruza el año — ajustado a {finAnioCorr} automáticamente
                 </span>
               </div>
@@ -1084,7 +1084,7 @@ function CalfAIPro() {
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:6 }}>
               {/* Inicio */}
               <div>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:4 }}>INICIO</div>
+                <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, marginBottom:4 }}>INICIO</div>
                 <div style={{ display:"flex", gap:4 }}>
                   <select value={iniMes} onChange={e => setFecha("iniServ", e.target.value, iniAnio||String(anioAct))}
                     style={{ flex:2, background:C.card2, border:"1px solid "+C.border, borderRadius:8, color:C.text, padding:"10px 8px", fontFamily:C.font, fontSize:12 }}>
@@ -1100,7 +1100,7 @@ function CalfAIPro() {
               </div>
               {/* Fin */}
               <div>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:4 }}>FIN</div>
+                <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, marginBottom:4 }}>FIN</div>
                 <div style={{ display:"flex", gap:4 }}>
                   <select value={finMes} onChange={e => setFecha("finServ", e.target.value, autoCorregirAnioFin(iniMes, iniAnio||String(anioAct), e.target.value, finAnio||String(anioAct)))}
                     style={{ flex:2, background:C.card2, border:"1px solid "+C.border, borderRadius:8, color:C.text, padding:"10px 8px", fontFamily:C.font, fontSize:12 }}>
@@ -1121,7 +1121,7 @@ function CalfAIPro() {
               </div>
             )}
             {!form.iniServ && (
-              <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:4 }}>
+              <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, marginTop:4 }}>
                 Típico NEA: inicio octubre, fin enero (90 días)
               </div>
             )}
@@ -1186,13 +1186,13 @@ function CalfAIPro() {
     <div>
       {/* Contexto de la medición — tacto pre-parto */}
       <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:12, marginBottom:12 }}>
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>
+        <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>
           ¿CUÁNDO SE HIZO EL TACTO?
         </div>
 
         {/* ── Selector de escala CC — crítico para la conversión correcta ── */}
         <div style={{ marginBottom:10 }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:5 }}>
+          <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, letterSpacing:1, marginBottom:5 }}>
             ESCALA DE CC QUE USÁS
           </div>
           <div style={{ display:"flex", gap:6 }}>
@@ -1214,14 +1214,14 @@ function CalfAIPro() {
             })}
           </div>
           {form.escalaCC === "5" && (
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginTop:6 }}>
+            <div style={{ fontFamily:C.font, fontSize:11, color:C.blue, marginTop:6 }}>
               ℹ Los valores que ingresás se convierten automáticamente a escala 1-9 para los cálculos.
               Ej: CC 3.0 (1-5) = CC 5.4 (1-9)
             </div>
           )}
         </div>
 
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, lineHeight:1.6, marginBottom:8 }}>
+        <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, lineHeight:1.6, marginBottom:8 }}>
           La CC se mide al tacto, 60–90 días antes del parto. Como la vaca preñada sin ternero al pie no moviliza reservas,
           esta CC <strong style={{color:C.text}}>es prácticamente la CC al parto</strong>.
           Ingresala en escala {form.escalaCC === "5" ? "1–5 (Lowman)" : "1–9 (INTA/Wagner-Selk)"}.
@@ -1252,7 +1252,7 @@ function CalfAIPro() {
           const bt = getBiotipo(form.biotipo);
           if (diasDesde <= 90) {
             return (
-              <div style={{ fontFamily:C.font, fontSize:9, color:C.green, marginTop:6 }}>
+              <div style={{ fontFamily:C.font, fontSize:11, color:C.green, marginTop:6 }}>
                 ✓ Tacto en {mes === "otro" ? "otro mes" : mes.charAt(0).toUpperCase()+mes.slice(1)} — CC pre-parto válida como referencia
               </div>
             );
@@ -1266,10 +1266,10 @@ function CalfAIPro() {
           );
         })()}
       </div>
-      <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:6 }}>CC AL TACTO (pre-parto) — distribución por grupo (escala 1–9 INTA)</div>
+      <div style={{ fontFamily:C.font, fontSize:12, color:C.textDim, letterSpacing:1, marginBottom:6 }}>CC AL TACTO (pre-parto) — distribución por grupo (escala 1–9 INTA)</div>
       <div style={{ background:C.amber+"10", border:"1px solid "+C.amber+"30", borderRadius:8,
         padding:"8px 12px", marginBottom:10 }}>
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.amber }}>
+        <div style={{ fontFamily:C.font, fontSize:11, color:C.amber }}>
           ⚠ Los valores son un ejemplo típico NEA — editá con los datos reales del tacto
         </div>
         <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:3 }}>
@@ -1300,8 +1300,8 @@ function CalfAIPro() {
 
       {/* ── DESTETE — el productor ya lo tiene definido ── */}
       <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginTop:14 }}>
-        <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:4 }}>MODALIDAD DE DESTETE</div>
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:10, lineHeight:1.6 }}>
+        <div style={{ fontFamily:C.font, fontSize:12, color:C.textDim, letterSpacing:1, marginBottom:4 }}>MODALIDAD DE DESTETE</div>
+        <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, marginBottom:10, lineHeight:1.6 }}>
           El tipo de destete define la <strong style={{color:C.text}}>caída de CC</strong> post-parto y el intervalo parto-celo.
           La suma debe ser 100%.
         </div>
@@ -1321,7 +1321,7 @@ function CalfAIPro() {
       {tray && (
         <div style={{ marginTop:14 }}>
           {/* Trayectoria completa CC */}
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
+          <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
             TRAYECTORIA CC PROYECTADA
           </div>
 
@@ -1383,7 +1383,7 @@ function CalfAIPro() {
           {dist?.grupos?.length >= 1 && (
             <div style={{ marginTop:10 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1 }}>POR GRUPO DE CC</div>
+                <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1 }}>POR GRUPO DE CC</div>
                 
               </div>
               {dist.grupos.map((g, i) => {
@@ -1417,7 +1417,7 @@ function CalfAIPro() {
                           </div>
                         </React.Fragment>
                       ))}
-                      <div style={{ flex:1, fontFamily:C.font, fontSize:9, color:C.textFaint, textAlign:"right" }}>
+                      <div style={{ flex:1, fontFamily:C.font, fontSize:10, color:C.textFaint, textAlign:"right" }}>
                         {g.recDestete}
                       </div>
                     </div>
@@ -1458,7 +1458,7 @@ function CalfAIPro() {
           {tcSave.alertaHiper && <Alerta tipo="warn" style={{ marginTop:10 }}>Hiperprecoz {">"} 30% — suplementación proteica inmediata post-destete.</Alerta>}
           {/* Info GDP */}
           <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}18` }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:2 }}>BASE DE CÁLCULO · NRC 2000 + INTA Colonia Benítez</div>
+            <div style={{ fontFamily:C.font, fontSize:11, color:C.blue, marginBottom:2 }}>BASE DE CÁLCULO · NRC 2000 + INTA Colonia Benítez</div>
             <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim }}>
               Nacimiento: 35 kg · Al pie: 700 g/d · Post-destete campo: 400 g/d hasta mayo
             </div>
@@ -1563,7 +1563,7 @@ function CalfAIPro() {
             const llegaPct65 = pvAgosto >= pct65;
             return (
               <div style={{ marginTop:8, padding:"10px 12px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}20` }}>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:4 }}>OBJETIVO AGOSTO</div>
+                <div style={{ fontFamily:C.font, fontSize:11, color:C.blue, marginBottom:4 }}>OBJETIVO AGOSTO</div>
                 <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginBottom:6 }}>
                   PV objetivo: <strong style={{color:C.text}}>&ge; {obj220} kg</strong>
                   {llegaObj
@@ -1572,7 +1572,7 @@ function CalfAIPro() {
                 </div>
                 {llegaPct65 && (
                   <div style={{ padding:"6px 10px", borderRadius:6, background:`${C.green}12`, border:`1px solid ${C.green}30` }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.green, fontWeight:700, marginBottom:2 }}>✅ APTA ENTORE ANTICIPADO</div>
+                    <div style={{ fontFamily:C.font, fontSize:11, color:C.green, fontWeight:700, marginBottom:2 }}>✅ APTA ENTORE ANTICIPADO</div>
                     <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim }}>
                       {pvAgosto} kg en agosto = {Math.round(pvAgosto/(parseFloat(form.pvVacaAdulta)||320)*100)}% PV adulto. Evaluá entore anticipado en agosto–septiembre.
                     </div>
@@ -1608,7 +1608,7 @@ function CalfAIPro() {
               <div>
                 {/* Trayectoria sin suplemento vs con suplemento */}
                 <div style={{ background:`${C.card}`, border:`1px solid ${C.border}`, borderRadius:10, padding:12, marginBottom:10 }}>
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:10 }}>TRAYECTORIA PV — INVIERNO 2°</div>
+                  <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:10 }}>TRAYECTORIA PV — INVIERNO 2°</div>
                   {/* Sin suplemento */}
                   <div style={{ marginBottom:10 }}>
                     <div style={{ fontFamily:C.font, fontSize:8, color:C.red, marginBottom:4 }}>SIN SUPLEMENTO</div>
@@ -1666,7 +1666,7 @@ function CalfAIPro() {
                   <Alerta tipo="error">No llega a {vaq2E.pvMinEntore} kg — ajustá la dosis de suplemento</Alerta>
                 )}
                 {vaq2E.llegas && (
-                  <div style={{ padding:"6px 10px", background:`${C.green}10`, borderRadius:8, fontFamily:C.font, fontSize:9, color:C.green }}>
+                  <div style={{ padding:"6px 10px", background:`${C.green}10`, borderRadius:8, fontFamily:C.font, fontSize:11, color:C.green }}>
                     ✅ Con esta suplementación llega al entore a los {form.edadPrimerEntore||24} meses
                   </div>
                 )}
@@ -1674,7 +1674,7 @@ function CalfAIPro() {
                 {vaq2E.aptaEntoreAntic && (
                   <div style={{ marginTop:8, padding:"10px 12px", background:"rgba(126,200,80,.08)",
                     border:"1px solid rgba(126,200,80,.30)", borderRadius:10 }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.green, fontWeight:700, marginBottom:4 }}>
+                    <div style={{ fontFamily:C.font, fontSize:11, color:C.green, fontWeight:700, marginBottom:4 }}>
                       🚀 OPORTUNIDAD: ENTORE ANTICIPADO POSIBLE
                     </div>
                     <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim, lineHeight:1.5, marginBottom:6 }}>
@@ -1719,7 +1719,7 @@ function CalfAIPro() {
 
           {/* Banner categoría crítica */}
           <div style={{ background:"rgba(232,160,48,.06)", border:"1px solid rgba(232,160,48,.25)", borderRadius:10, padding:"10px 12px", marginBottom:14 }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, letterSpacing:1, marginBottom:4 }}>⚠ CATEGORÍA DE MAYOR RIESGO DEL RODEO</div>
+            <div style={{ fontFamily:C.font, fontSize:11, color:C.amber, letterSpacing:1, marginBottom:4 }}>⚠ CATEGORÍA DE MAYOR RIESGO DEL RODEO</div>
             <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, lineHeight:1.5 }}>
               Las V2S tienen el triple estrés fisiológico más exigente: <strong style={{color:C.text}}>están creciendo</strong> (2°–3° año, aún no llegaron al PV adulto), 
               <strong style={{color:C.text}}> amamantando</strong> (bloqueo LH activo si tienen ternero) 
@@ -1735,7 +1735,7 @@ function CalfAIPro() {
           </div>
 
           {/* Distribución CC de las V2S — 2 grupos */}
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
+          <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
             DISTRIBUCIÓN CC VACAS 2° SERVICIO (por grupo)
           </div>
           {(form.cc2sDist || [{ cc:"5.0", pct:"50" }, { cc:"4.5", pct:"50" }]).map((g, i) => (
@@ -1841,7 +1841,7 @@ function CalfAIPro() {
                 const color = prenezPond >= 55 ? C.green : prenezPond >= 35 ? C.amber : C.red;
                 return (
                   <div style={{ background:`${color}10`, border:`1px solid ${color}30`, borderRadius:10, padding:"10px 14px" }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginBottom:4 }}>PREÑEZ PONDERADA V2S</div>
+                    <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, marginBottom:4 }}>PREÑEZ PONDERADA V2S</div>
                     <div style={{ fontFamily:C.font, fontSize:24, fontWeight:700, color }}>
                       {Math.round(prenezPond)}%
                       <span style={{ fontSize:11, color:C.textDim, marginLeft:8, fontWeight:400 }}>
@@ -1896,7 +1896,7 @@ function CalfAIPro() {
         </div>
 
         {/* ── Potreros ── */}
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:10 }}>
+        <div style={{ fontFamily:C.font, fontSize:11, color:C.green, letterSpacing:1, marginBottom:10 }}>
           🗺️ POTREROS — cargá cada potrero o lote
         </div>
 
@@ -1920,7 +1920,7 @@ function CalfAIPro() {
 
               {/* Tipo de recurso */}
               <div style={{ marginBottom:10 }}>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:6 }}>TIPO DE RECURSO FORRAJERO</div>
+                <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:6 }}>TIPO DE RECURSO FORRAJERO</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                   {Object.entries(RECURSOS).map(([key, r]) => (
                     <button key={key} onClick={()=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],veg:key};return n;})}
@@ -1943,7 +1943,7 @@ function CalfAIPro() {
               {/* Fenología — solo C4 y pastizal */}
               {esC4oPatizal && (
                 <div style={{ marginBottom:10 }}>
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:6 }}>FENOLOGÍA ACTUAL</div>
+                  <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:6 }}>FENOLOGÍA ACTUAL</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                     {FENOLOGIAS.map(f => (
                       <button key={f.val} onClick={()=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],fenol:f.val};return n;})}
@@ -1964,11 +1964,11 @@ function CalfAIPro() {
               {/* Altura y tipo de pasto — solo pastizal */}
               {esPastizal && (
                 <div style={{ marginBottom:8 }}>
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:6 }}>📏 DISPONIBILIDAD (método INTA — altura × tipo)</div>
+                  <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:6 }}>📏 DISPONIBILIDAD (método INTA — altura × tipo)</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
                     <Input label="ALTURA PASTO (cm)" value={p.altPasto||""} onChange={v=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],altPasto:v};return n;})} placeholder="20" type="number" sub="Promedio caminando el potrero" />
                     <div>
-                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:5 }}>TIPO DE PASTO</div>
+                      <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:5 }}>TIPO DE PASTO</div>
                       <select value={p.tipoPasto||"corto_denso"} onChange={e=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],tipoPasto:e.target.value};return n;})}
                         style={{ width:"100%", background:C.card, border:`1px solid ${C.border}`, borderRadius:8, color:C.text, padding:"10px", fontFamily:C.sans, fontSize:12 }}>
                         <option value="corto_denso">Cortos densos (pasto horqueta, grama)</option>
@@ -2005,7 +2005,7 @@ function CalfAIPro() {
               <MetricCard label="CARGA EV/HA" value={cargaEV} color={colorCarga} />
             </div>
             {potreros.map((p,i) => p.ha ? (
-              <div key={i} style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginTop:4 }}>
+              <div key={i} style={{ fontFamily:C.font, fontSize:11, color:C.textDim, marginTop:4 }}>
                 Potrero {i+1}: {p.ha} ha · {(RECURSOS[p.veg]||{}).label||p.veg}
                 {p.altPasto && ` · ${p.altPasto}cm altura`}
               </div>
@@ -2016,7 +2016,7 @@ function CalfAIPro() {
         {/* ── Verdeos de invierno ── */}
         <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1 }}>🌾 VERDEOS DE INVIERNO</div>
+            <div style={{ fontFamily:C.font, fontSize:11, color:C.green, letterSpacing:1 }}>🌾 VERDEOS DE INVIERNO</div>
             <div style={{ display:"flex", gap:6 }}>
               {[["no","No tengo"],["si","Tengo"]].map(([v,l]) => (
                 <button key={v} onClick={()=>set("tieneVerdeo",v)} style={{
@@ -2143,7 +2143,7 @@ function CalfAIPro() {
         {showAgua && <div style={{ height:1, background:C.border, margin:"16px 0" }} />}
         {/* ── Meses de suplementación — selector exacto ── */}
         <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
+          <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
             MESES DE SUPLEMENTACIÓN — seleccioná los meses que aplicás
           </div>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
@@ -2171,7 +2171,7 @@ function CalfAIPro() {
               ? meses.map(m=>nombM[Number(m)]||m).join(" · ")
               : "ninguno seleccionado";
             return (
-              <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginTop:8 }}>
+              <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, marginTop:8 }}>
                 {meses.length === 0
                   ? "⚠ Sin meses seleccionados — el suplemento no aplica en el balance"
                   : `${meses.length} mes${meses.length>1?"es":""}: ${rango} · ${meses.length * 30}d aprox`}
@@ -2233,7 +2233,7 @@ function CalfAIPro() {
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
                       <div>
                         <span style={{ fontFamily:C.font, fontSize:11, color:C.text, fontWeight:700 }}>CC {cc} · {pct}% del rodeo</span>
-                        <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginLeft:8 }}>({nVac} vacas)</span>
+                        <span style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, marginLeft:8 }}>({nVac} vacas)</span>
                       </div>
                       <span style={{ fontFamily:C.font, fontSize:9, color:herramienta.color,
                         background:`${herramienta.color}15`, border:`1px solid ${herramienta.color}30`,
@@ -2281,7 +2281,7 @@ function CalfAIPro() {
         </div>
 
         {/* ══ PANEL 2: SUPLEMENTACIÓN — solo categorías que lo necesitan ══ */}
-        <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:10 }}>
+        <div style={{ fontFamily:C.font, fontSize:12, color:C.textDim, letterSpacing:1, marginBottom:10 }}>
           💊 SUPLEMENTACIÓN — V2S · TOROS · VAQUILLONA 1° y 2°
         </div>
         <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginBottom:12, lineHeight:1.5 }}>
@@ -2343,13 +2343,13 @@ function CalfAIPro() {
                   <span style={{ fontSize:16 }}>{cat.icon}</span>
                   <div>
                     <div style={{ fontFamily:C.font, fontSize:12, color:C.text, fontWeight:700 }}>{cat.label}</div>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>PV prom. mayo-agosto: {cat.pv} kg</div>
+                    <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint }}>PV prom. mayo-agosto: {cat.pv} kg</div>
                   </div>
                 </div>
                 {tieneSupl && (
                   <div style={{ textAlign:"right" }}>
                     <div style={{ fontFamily:C.font, fontSize:11, color:cat.color, fontWeight:700 }}>{mcalTot.toFixed(1)} Mcal/d</div>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{Math.round(pbTot)} g PB/d</div>
+                    <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint }}>{Math.round(pbTot)} g PB/d</div>
                   </div>
                 )}
               </div>
@@ -2406,7 +2406,7 @@ function CalfAIPro() {
                         placeholder="0.0 kg/d"
                       />
                       {alim && dosVal > 0 && (
-                        <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, textAlign:"right", lineHeight:1.4, minWidth:52 }}>
+                        <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, textAlign:"right", lineHeight:1.4, minWidth:52 }}>
                           <div style={{ color:cat.color, fontWeight:700 }}>{pctPV}% PV</div>
                           <div>{(alim.em * dosVal).toFixed(1)} Mcal</div>
                           <div style={{ color:alim.tipo==="Proteico"?"#7ec850":alim.tipo==="Energetico"?C.amber:C.blue, fontSize:8 }}>{alim.tipo}</div>
@@ -2460,7 +2460,7 @@ function CalfAIPro() {
         {/* ── VISTA RESUMEN RODEO ── */}
         {vistaSupl === "resumen" && (
           <div>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
+            <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, letterSpacing:1, marginBottom:10 }}>
               RESUMEN SUPLEMENTACIÓN — costo y Mcal total por categoría
             </div>
             {CATS.map(cat => {
@@ -2486,7 +2486,7 @@ function CalfAIPro() {
                   </div>
                   <div style={{ textAlign:"right" }}>
                     <div style={{ fontFamily:C.font, fontSize:11, color:cat.color, fontWeight:700 }}>{pct}% PV · {(d1+d2).toFixed(1)} kg/d</div>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>{mcal.toFixed(1)} Mcal · {Math.round(pb)}g PB</div>
+                    <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint }}>{mcal.toFixed(1)} Mcal · {Math.round(pb)}g PB</div>
                   </div>
                 </div>
               );
@@ -2528,7 +2528,7 @@ function CalfAIPro() {
           return (
             <div style={{ background:C.card2, border:"1px solid "+C.border,
               borderRadius:12, padding:"12px 14px", marginTop:8 }}>
-              <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint,
+              <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint,
                 letterSpacing:1, marginBottom:10 }}>
                 📦 NECESIDADES DE CAMPAÑA — {diasSupl} días ·{" "}
                 {mesesSupl.map(m=>["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][m]).join("·")}
@@ -2563,7 +2563,7 @@ function CalfAIPro() {
                     {detalle.map((d,i) => (
                       <div key={i} style={{ display:"flex", justifyContent:"space-between",
                         padding:"3px 0", borderTop:"1px solid "+C.border+"60" }}>
-                        <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+                        <span style={{ fontFamily:C.font, fontSize:10, color:C.textFaint }}>
                           {d.cat} ({d.n} cab × {d.dos} kg/d)
                         </span>
                         <span style={{ fontFamily:C.font, fontSize:9, color:C.text }}>
@@ -2607,7 +2607,7 @@ function CalfAIPro() {
   const renderSanidad = () => (
     <div>
       <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, letterSpacing:1, marginBottom:4 }}>🩺 SANIDAD REPRODUCTIVA</div>
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginBottom:16 }}>
+      <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, marginBottom:16 }}>
         La sanidad es el techo del sistema. Sin ella, cualquier mejora nutricional tiene rendimiento marginal.
       </div>
 
@@ -2651,7 +2651,7 @@ function CalfAIPro() {
       {/* Resumen alertas si hay motor */}
       {motor && sanidad?.alerts?.length > 0 && (
         <div style={{ marginTop:16 }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>ALERTAS SANITARIAS</div>
+          <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:8 }}>ALERTAS SANITARIAS</div>
           {sanidad.alerts.map((a,i) => (
             <Alerta key={i} tipo={a.nivel==="rojo"?"error":"warn"}>{a.msg}</Alerta>
           ))}
@@ -2736,7 +2736,7 @@ function CalfAIPro() {
       <div>
       {/* Análisis IA */}
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 18px" }}>
-        <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:12 }}>
+        <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:12 }}>
           INFORME IA — diagnóstico completo del sistema con recomendaciones personalizadas
         </div>
         {!result && !loading && (
@@ -2935,7 +2935,7 @@ function CalfAIPro() {
             <div style={{ fontFamily:C.font, fontSize:10, color:C.green, fontWeight:700 }}>
               ✓ Datos de {bannerProductor.nombre} cargados automáticamente
             </div>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginTop:2 }}>
+            <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, marginTop:2 }}>
               {bannerProductor.campos} campos precargados desde el formulario del productor · Revisá y completá lo que falta
             </div>
           </div>
