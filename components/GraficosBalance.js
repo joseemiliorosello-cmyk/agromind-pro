@@ -4,6 +4,7 @@
 
 import React, { useState, useMemo, useRef } from "react";
 import { balancePorCategoria } from "../lib/motor";
+import { calcCerebro } from "../lib/cerebro";
 
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
@@ -307,6 +308,109 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
   );
 }
 
+// ─── Cronograma anual ───
+function CronogramaAnual({ motor, form, sat }) {
+  const cerebro = useMemo(() => {
+    if (!motor) return null;
+    try { return calcCerebro(motor, form, sat); }
+    catch(e) { console.error("CronogramaAnual:", e); return null; }
+  }, [motor, form, sat]);
+
+  if (!cerebro?.cronograma) return null;
+
+  const { cronograma, calendarioAcciones } = cerebro;
+  const { hitos = [] } = calendarioAcciones || {};
+
+  const W = 680, H = 156;
+  const PL = 8, PR = 8;
+  const LABEL_H = 18;
+  const BAR_H = 72;
+  const EVENT_Y = LABEL_H + BAR_H + 6;
+  const colW = (W - PL - PR) / 12;
+
+  const bals = cronograma.map(m => m.bal);
+  const maxAbs = Math.max(30, ...bals.map(Math.abs));
+  const zeroY = LABEL_H + BAR_H / 2;
+  const barScale = (BAR_H / 2 - 4) / maxAbs;
+
+  return (
+    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
+        <div style={{ fontFamily:C.font, fontSize:11, color:C.text, fontWeight:700 }}>Cronograma anual del rodeo</div>
+        <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>balance Mcal/d · hitos del ciclo · suplementación</div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", display:"block" }}>
+        {cronograma.map((m, i) => {
+          const x0 = PL + i * colW;
+          const cx = x0 + colW / 2;
+          const bgFill = m.esInv ? C.amber + "09" : m.esActual ? C.green + "14" : "transparent";
+          const barH = Math.max(2, Math.abs(m.bal) * barScale);
+          const barY = m.bal >= 0 ? zeroY - barH : zeroY;
+          const barColor = m.bal >= 0 ? C.green : m.bal > -30 ? C.amber : C.red;
+          const labelFill = m.esActual ? C.green : m.esPasado ? C.textFaint : m.esInv ? C.orange : C.textDim;
+
+          return (
+            <g key={i}>
+              <rect x={x0} y={LABEL_H} width={colW} height={BAR_H + 32} fill={bgFill} />
+              {m.esActual && (
+                <rect x={x0+0.5} y={LABEL_H} width={colW-1} height={BAR_H+32}
+                  fill="none" stroke={C.green} strokeWidth={0.8} strokeDasharray="3,2" />
+              )}
+              <line x1={x0} y1={zeroY} x2={x0+colW} y2={zeroY} stroke={C.border} strokeWidth={0.5} />
+              <rect x={cx - colW*0.28} y={barY} width={colW*0.56} height={barH}
+                fill={barColor} opacity={0.82} rx={1.5} />
+              {(m.esSupl || m.esVerdeo) && (
+                <rect x={x0+1.5} y={H - 17} width={colW-3} height={7} rx={2}
+                  fill={(m.esVerdeo ? C.green : C.orange) + "50"}
+                  stroke={m.esVerdeo ? C.green : C.orange} strokeWidth={0.6} />
+              )}
+              <text x={cx} y={LABEL_H - 3} textAnchor="middle"
+                style={{ fontFamily:C.font, fontSize:"8.5px", fill:labelFill,
+                  fontWeight: m.esActual || m.esInv ? "700" : "400" }}>
+                {MESES[i]}
+              </text>
+              {Math.abs(m.bal) >= maxAbs * 0.28 && (
+                <text x={cx} y={m.bal >= 0 ? barY - 2 : barY + barH + 9}
+                  textAnchor="middle"
+                  style={{ fontFamily:C.font, fontSize:"6px", fill:barColor, fontWeight:"700" }}>
+                  {m.bal >= 0 ? "+" : ""}{Math.round(m.bal)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+
+        {hitos.map((h, idx) => {
+          if (h.mes === null || h.mes === undefined) return null;
+          const cx = PL + h.mes * colW + colW / 2;
+          const y = EVENT_Y + 3;
+          const abbr = { "Parto":"Par","Destete":"Des","Servicio":"Ser" }[h.label] || h.label.slice(0,3);
+          return (
+            <g key={idx}>
+              <circle cx={cx} cy={y + 5} r={7} fill={h.color + "28"} stroke={h.color} strokeWidth={1} />
+              <text x={cx} y={y + 9} textAnchor="middle"
+                style={{ fontFamily:C.font, fontSize:"6.5px", fill:h.color, fontWeight:"700" }}>
+                {abbr}
+              </text>
+              <text x={cx} y={y + 22} textAnchor="middle"
+                style={{ fontFamily:C.font, fontSize:"6px", fill:h.color }}>
+                {h.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginTop:5, fontFamily:C.font, fontSize:8, color:C.textDim }}>
+        <span><span style={{ display:"inline-block", width:8, height:8, background:C.green, marginRight:3, borderRadius:1 }} />Superávit</span>
+        <span><span style={{ display:"inline-block", width:8, height:8, background:C.red, marginRight:3, borderRadius:1 }} />Déficit</span>
+        <span><span style={{ display:"inline-block", width:8, height:8, background:C.orange+"50", border:`1px solid ${C.orange}`, marginRight:3, borderRadius:1 }} />Supl.</span>
+        <span><span style={{ display:"inline-block", width:8, height:8, background:C.green+"50", border:`1px solid ${C.green}`, marginRight:3, borderRadius:1 }} />Verdeo</span>
+        <span style={{ marginLeft:"auto", color:C.textFaint }}>Fondo ámbar=invierno · borde verde=hoy</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente principal ───
 export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
   const [conReco, setConReco] = useState(false);
@@ -439,6 +543,8 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
           </div>
         )
       ) : null}
+
+      <CronogramaAnual motor={motor} form={form} sat={sat} />
 
       <div style={{ fontFamily: C.font, fontSize: 8, color: C.textFaint, marginTop: 8, textAlign: "center" }}>
         Metodo: balance por categoria con consumo real (Rosello et al. 2025, Detmann 2010, NRC 2000).
