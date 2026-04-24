@@ -292,6 +292,20 @@ function CalfAIPro() {
     });
   }, [coords, form.enso, form.zona, form.provincia, form.localidad]);
 
+  // ── Keyboard navigation ─────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      const tag = e.target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "select" || tag === "textarea") return;
+      if (e.key === "ArrowLeft"  && step > 0) { e.preventDefault(); setStep(s => s - 1); }
+      if (e.key === "ArrowRight" && step < PASOS.length - 1) { e.preventDefault(); setStep(s => s + 1); }
+      const n = parseInt(e.key);
+      if (!isNaN(n) && n >= 1 && n <= PASOS.length) setStep(n - 1);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [step]);
+
   // ── GPS ───────────────────────────────────────────────────────
   async function gpsClick() {
     if (!navigator.geolocation) { setSat({ error:"GPS no disponible" }); return; }
@@ -2827,6 +2841,7 @@ function CalfAIPro() {
             <button onClick={()=>signOut()} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.textDim, padding:"5px 10px", fontFamily:C.font, fontSize:10, cursor:"pointer" }}>
               Salir
             </button>
+            <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, border:`1px solid ${C.border}60`, padding:"2px 7px", borderRadius:4, letterSpacing:.4 }}>← → 1-6</span>
             <button
               onClick={() => setShowHistorial(true)}
               style={{ background:C.green+"15", border:"1px solid "+C.green+"30", borderRadius:8,
