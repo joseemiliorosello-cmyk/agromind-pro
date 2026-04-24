@@ -1380,7 +1380,7 @@ function CalfAIPro() {
                     {/* Header fila */}
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
                       padding:"8px 12px", background:g.pr<35?"rgba(224,85,48,.07)":g.pr<55?"rgba(232,160,48,.06)":"rgba(126,200,80,.05)" }}>
-                      <span style={{ fontFamily:C.font, fontSize:11, color:C.text, fontWeight:600 }}>
+                      <span style={{ fontFamily:C.font, fontSize:13, color:C.text, fontWeight:600 }}>
                         CC {g.ccHoy} · {g.pct}% del rodeo
                       </span>
                       <div style={{ display:"flex", gap:6 }}>
@@ -2794,8 +2794,8 @@ function CalfAIPro() {
 
       {/* Header sticky */}
       <div style={{ background:C.card, borderBottom:`1px solid ${C.border}`, position:"sticky", top:0, zIndex:50 }}>
-        <div style={{ maxWidth:1100, margin:"0 auto", padding:"10px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ fontFamily:C.font, fontSize:14, color:C.green, letterSpacing:2, fontWeight:700 }}>
+        <div style={{ maxWidth:1400, margin:"0 auto", padding:"10px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontFamily:C.font, fontSize:16, color:C.green, letterSpacing:2, fontWeight:700 }}>
             CALF AI<span style={{ color:C.textDim, fontSize:10, marginLeft:6 }}>v1</span>
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
@@ -2817,7 +2817,7 @@ function CalfAIPro() {
         </div>
 
         {/* Tab nav horizontal */}
-        <div className="calfai-tabs" style={{ maxWidth:1100, margin:"0 auto", display:"flex", overflowX:"auto", borderTop:`1px solid ${C.border}` }}>
+        <div className="calfai-tabs" style={{ maxWidth:1400, margin:"0 auto", display:"flex", overflowX:"auto", borderTop:`1px solid ${C.border}` }}>
           {PASOS.map((p, i) => {
             const dotColor = (() => {
               const step_alerts = alertasMotor.filter(a => {
@@ -2837,7 +2837,7 @@ function CalfAIPro() {
                 background:"none", border:"none",
                 borderBottom: active ? `2px solid ${C.green}` : "2px solid transparent",
                 color: active ? C.green : C.textDim,
-                fontFamily:C.font, fontSize:11,
+                fontFamily:C.font, fontSize:13,
                 fontWeight: active ? 700 : 400,
                 cursor:"pointer", whiteSpace:"nowrap",
                 position:"relative",
@@ -2903,7 +2903,7 @@ function CalfAIPro() {
       )}
 
       {/* Contenido del paso */}
-      <div style={{ maxWidth:1100, margin:"0 auto", padding:"24px 20px 48px" }}>
+      <div style={{ maxWidth:1400, margin:"0 auto", padding:"24px 20px 48px" }}>
         {RENDERS[step]?.()}
       </div>
     </div>

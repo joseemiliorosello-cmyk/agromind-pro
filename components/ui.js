@@ -2,11 +2,11 @@
 
 // -------------------------------------------------------------------
 // components/ui.js
-// Componentes UI reutilizables  sin lgica de negocio
+// Componentes UI reutilizables — sin lógica de negocio
 // -------------------------------------------------------------------
 
 import React from "react";
-import { T } from "../lib/constantes";
+import { T, SUPLEMENTOS } from "../lib/constantes";
 
 // Alias
 const C = T;
@@ -25,27 +25,92 @@ const fAprovFenol = (fenol) => ({menor_10:1.00,"10_25":0.90,"25_50":0.75,mayor_5
 // --- PILL ---
 const Pill = ({ children, color = T.green, bg }) => (
   <span style={{
-    display:"inline-block", padding:"2px 9px", borderRadius:20,
-    fontSize:11, fontFamily:T.font,
+    display:"inline-block", padding:"3px 10px", borderRadius:20,
+    fontSize:12, fontFamily:T.font,
     color, background: bg || color + "22",
-    border:`1px solid ${color}44`, letterSpacing:.5,
+    border:`1px solid ${color}44`, letterSpacing:.4,
   }}>
     {children}
   </span>
 );
 
+// --- BUTTON ---
+const Button = ({ children, onClick, variant = "primary", size = "md", disabled, style: st }) => {
+  const variants = {
+    primary:   { bg: C.green,        color: "#fff",      border: C.green        },
+    secondary: { bg: "transparent",  color: C.green,     border: C.border       },
+    danger:    { bg: C.red + "15",   color: C.red,       border: C.red + "50"   },
+    ghost:     { bg: "transparent",  color: C.textDim,   border: "transparent"  },
+  };
+  const sizes = {
+    sm: { padding: "5px 12px",  fontSize: 12 },
+    md: { padding: "9px 18px",  fontSize: 14 },
+    lg: { padding: "12px 24px", fontSize: 15 },
+  };
+  const v = variants[variant] || variants.primary;
+  const s = sizes[size] || sizes.md;
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      background: v.bg, color: v.color, border: `1px solid ${v.border}`,
+      borderRadius: C.radius, padding: s.padding, fontFamily: C.fontSans,
+      fontSize: s.fontSize, cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.5 : 1, fontWeight: 500, lineHeight: 1.2,
+      transition: "all .15s", ...st,
+    }}>
+      {children}
+    </button>
+  );
+};
+
+// --- CARD ---
+const Card = ({ children, variant = "base", style: st }) => {
+  const variants = {
+    base:   { bg: C.card,            border: C.border        },
+    tinted: { bg: C.card2,           border: C.border        },
+    green:  { bg: C.green + "08",    border: C.green + "30"  },
+    amber:  { bg: C.amber + "08",    border: C.amber + "30"  },
+    red:    { bg: C.red + "08",      border: C.red + "30"    },
+  };
+  const v = variants[variant] || variants.base;
+  return (
+    <div style={{
+      background: v.bg, border: `1px solid ${v.border}`,
+      borderRadius: C.radius, padding: 16,
+      boxShadow: C.sh?.sm, ...st,
+    }}>
+      {children}
+    </div>
+  );
+};
+
+// --- SECTION ---
+const Section = ({ label, children, style: st }) => (
+  <div style={{ marginBottom: 20, ...st }}>
+    {label && (
+      <div style={{
+        fontFamily: C.font, fontSize: 11, color: C.textDim,
+        letterSpacing: 1.5, marginBottom: 10, textTransform: "uppercase",
+        borderBottom: `1px solid ${C.border}`, paddingBottom: 6,
+      }}>
+        {label}
+      </div>
+    )}
+    {children}
+  </div>
+);
+
 // --- ALERTA ---
 const Alerta = ({ tipo, children, style: st }) => {
   const cfg = {
-    ok:    { bg:"rgba(126,200,80,.08)",  border:"rgba(126,200,80,.35)",  icon:"?", color:T.green },
-    warn:  { bg:"rgba(232,160,48,.08)",  border:"rgba(232,160,48,.35)",  icon:"??", color:T.amber },
-    error: { bg:"rgba(224,85,48,.08)",   border:"rgba(224,85,48,.35)",   icon:"??", color:T.red   },
-    info:  { bg:"rgba(74,159,212,.08)",  border:"rgba(74,159,212,.25)",  icon:"??", color:T.blue  },
+    ok:    { bg:"rgba(46,120,24,.08)",    border:"rgba(46,120,24,.30)",    icon:"✓",  color:T.green },
+    warn:  { bg:"rgba(160,104,16,.08)",   border:"rgba(160,104,16,.30)",   icon:"⚠",  color:T.amber },
+    error: { bg:"rgba(184,40,16,.08)",    border:"rgba(184,40,16,.30)",    icon:"✕",  color:T.red   },
+    info:  { bg:"rgba(30,104,168,.08)",   border:"rgba(30,104,168,.25)",   icon:"ℹ",  color:T.blue  },
   };
   const s = cfg[tipo] || cfg.info;
   return (
-    <div style={{ background:s.bg, border:`1px solid ${s.border}`, borderRadius:10, padding:"10px 12px", marginBottom:8, ...st }}>
-      <span style={{ fontFamily:T.fontSans, fontSize:12, color:s.color }}>{s.icon} {children}</span>
+    <div style={{ background:s.bg, border:`1px solid ${s.border}`, borderRadius:10, padding:"10px 14px", marginBottom:8, ...st }}>
+      <span style={{ fontFamily:T.fontSans, fontSize:13, color:s.color, lineHeight:1.5 }}>{s.icon} {children}</span>
     </div>
   );
 };
@@ -54,8 +119,8 @@ const Alerta = ({ tipo, children, style: st }) => {
 const Slider = ({ label, value, min, max, step = 0.1, onChange, unit = "", color = T.green }) => (
   <div style={{ marginBottom:14 }}>
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
-      <span style={{ fontFamily:T.fontSans, fontSize:12, color:T.textDim }}>{label}</span>
-      <span style={{ fontFamily:T.font, fontSize:13, color, fontWeight:700 }}>{value}{unit}</span>
+      <span style={{ fontFamily:T.fontSans, fontSize:13, color:T.textDim }}>{label}</span>
+      <span style={{ fontFamily:T.font, fontSize:14, color, fontWeight:700 }}>{value}{unit}</span>
     </div>
     <input
       type="range" min={min} max={max} step={step} value={value}
@@ -63,8 +128,8 @@ const Slider = ({ label, value, min, max, step = 0.1, onChange, unit = "", color
       style={{ width:"100%", accentColor:color, cursor:"pointer", height:4 }}
     />
     <div style={{ display:"flex", justifyContent:"space-between" }}>
-      <span style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>{min}{unit}</span>
-      <span style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>{max}{unit}</span>
+      <span style={{ fontFamily:T.font, fontSize:10, color:T.textFaint }}>{min}{unit}</span>
+      <span style={{ fontFamily:T.font, fontSize:10, color:T.textFaint }}>{max}{unit}</span>
     </div>
   </div>
 );
@@ -100,38 +165,38 @@ function DistCC({ dist, onChange, label, nVacas }) {
 
   return (
     <div>
-      {label && <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim, letterSpacing:1, marginBottom:8 }}>{label}</div>}
+      {label && <div style={{ fontFamily:T.font, fontSize:11, color:T.textDim, letterSpacing:1, marginBottom:8 }}>{label}</div>}
       <div style={{ display:"flex", gap:6, marginBottom:10 }}>
-        {[["pct","% del rodeo"],["cab","N animales"]].map(([m,lbl]) => (
+        {[["pct","% del rodeo"],["cab","N° animales"]].map(([m,lbl]) => (
           <button key={m} onClick={() => setModo(m)}
             style={{ background: modo===m ? T.blue+"20" : "none",
               border:"1px solid "+(modo===m ? T.blue : T.border), borderRadius:6,
-              padding:"4px 10px", fontFamily:T.font, fontSize:9, cursor:"pointer",
+              padding:"5px 11px", fontFamily:T.font, fontSize:10, cursor:"pointer",
               color: modo===m ? T.blue : T.textDim }}>
             {lbl}
           </button>
         ))}
         {modo === "cab" && totalVacas === 0 && (
-          <span style={{ fontFamily:T.font, fontSize:8, color:T.amber, alignSelf:"center" }}>
-            Carg el nmero de vacas primero
+          <span style={{ fontFamily:T.font, fontSize:9, color:T.amber, alignSelf:"center" }}>
+            Cargá el número de vacas primero
           </span>
         )}
       </div>
       {(dist || []).map((d, i) => (
         <div key={i} style={{ display:"flex", gap:8, marginBottom:8, alignItems:"center" }}>
           <div style={{ flex:1.2 }}>
-            <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginBottom:3 }}>CC (escala 1-9)</div>
+            <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim, marginBottom:3 }}>CC (escala 1-9)</div>
             <select value={d.cc} onChange={e => upd(i, "cc", e.target.value)}
               style={{ width:"100%", background:T.card, border:`1px solid ${T.border}`, borderRadius:8, color:T.text, padding:"9px 10px", fontFamily:T.font, fontSize:13 }}>
               {opcionesCC.map(v => {
                 const n = parseFloat(v);
-                const ref = n >= 7.0 ? "Exceso" : n >= 6.0 ? "Llena" : n >= 5.5 ? "Muy buena" : n >= 5.0 ? "Buena ✓" : n >= 4.5 ? "Aceptable" : n >= 4.0 ? "Baja ⚠" : "Critica";
+                const ref = n >= 7.0 ? "Exceso" : n >= 6.0 ? "Llena" : n >= 5.5 ? "Muy buena" : n >= 5.0 ? "Buena ✓" : n >= 4.5 ? "Aceptable" : n >= 4.0 ? "Baja ⚠" : "Crítica";
                 return <option key={v} value={v}>CC {v}  {ref}</option>;
               })}
             </select>
           </div>
           <div style={{ flex:1 }}>
-            <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, marginBottom:3 }}>
+            <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim, marginBottom:3 }}>
               {modo === "cab" ? `Cabezas${totalVacas>0?" / "+totalVacas:""}` : "% del rodeo"}
             </div>
             {modo === "cab" ? (
@@ -143,7 +208,7 @@ function DistCC({ dist, onChange, label, nVacas }) {
             )}
           </div>
           <div style={{ width:36, textAlign:"center", flexShrink:0, marginTop:14 }}>
-            <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, lineHeight:1.2 }}>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, lineHeight:1.2 }}>
               {modo === "cab"
                 ? (parseFloat(d.pct) > 0 ? parseFloat(d.pct).toFixed(0)+"%" : "")
                 : (totalVacas > 0 && parseFloat(d.pct) > 0 ? Math.round(parseFloat(d.pct)*totalVacas/100)+"v" : "")}
@@ -153,48 +218,48 @@ function DistCC({ dist, onChange, label, nVacas }) {
         </div>
       ))}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:4 }}>
-        <button onClick={addRow} style={{ background:`${T.green}08`, border:`1px solid ${T.border}`, borderRadius:8, color:T.green, padding:"7px 14px", fontFamily:T.font, fontSize:11, cursor:"pointer" }}>
+        <button onClick={addRow} style={{ background:`${T.green}08`, border:`1px solid ${T.border}`, borderRadius:8, color:T.green, padding:"7px 14px", fontFamily:T.font, fontSize:12, cursor:"pointer" }}>
           + Agregar grupo
         </button>
-        <span style={{ fontFamily:T.font, fontSize:11,
+        <span style={{ fontFamily:T.font, fontSize:12,
           color: modo==="cab"
             ? (totalVacas > 0 ? (Math.abs(totalCab - totalVacas) <= 2 ? T.green : T.amber) : T.textDim)
             : (total === 100 ? T.green : T.amber) }}>
           {modo === "cab"
             ? (totalVacas > 0 ? totalCab+" / "+totalVacas+"v" : totalCab+"v")
-            : total+"%"}{(modo==="pct"&&total!==100)||( modo==="cab"&&totalVacas>0&&Math.abs(totalCab-totalVacas)>2) ? " ?" : ""}
+            : total+"%"}{(modo==="pct"&&total!==100)||( modo==="cab"&&totalVacas>0&&Math.abs(totalCab-totalVacas)>2) ? " ⚠" : ""}
         </span>
       </div>
       {total === 0 && (
-        <div style={{ background:T.amber+"15", border:"1px solid "+T.amber+"40", borderRadius:6, padding:"8px 10px", marginBottom:8, fontFamily:T.font, fontSize:10, color:T.amber }}>
-          ? Ingres el % de vacas en cada grupo de CC  la suma debe ser 100%.
+        <div style={{ background:T.amber+"15", border:"1px solid "+T.amber+"40", borderRadius:6, padding:"8px 10px", marginBottom:8, fontFamily:T.font, fontSize:11, color:T.amber }}>
+          ⚠ Ingresá el % de vacas en cada grupo de CC — la suma debe ser 100%.
         </div>
       )}
       {total > 0 && total !== 100 && (
-        <div style={{ background:T.amber+"10", border:"1px solid "+T.amber+"30", borderRadius:6, padding:"6px 10px", marginBottom:6, fontFamily:T.font, fontSize:10, color:T.amber }}>
-          Suma actual: {total}%  complet hasta 100%
+        <div style={{ background:T.amber+"10", border:"1px solid "+T.amber+"30", borderRadius:6, padding:"6px 10px", marginBottom:6, fontFamily:T.font, fontSize:11, color:T.amber }}>
+          Suma actual: {total}% — completá hasta 100%
         </div>
       )}
       {total === 100 && (
-        <div style={{ fontFamily:T.font, fontSize:10, color:T.green, marginBottom:6 }}>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.green, marginBottom:6 }}>
           ✓ CC ponderada del rodeo: <strong>{
             ((dist||[]).reduce((s,d)=>s+(parseFloat(d.pct)||0)*(parseFloat(d.cc)||0),0)/100).toFixed(1)
           }</strong> (escala 1-9)
         </div>
       )}
       <div style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:"8px 10px", marginTop:8 }}>
-        <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, letterSpacing:1, marginBottom:5 }}>
-          REFERENCIA ESCALA 19 INTA EEA Colonia Bentez  Stahringer 2003
+        <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:5 }}>
+          REFERENCIA ESCALA 1–9 · INTA EEA Colonia Benítez — Stahringer 2003
         </div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:3 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:3 }}>
           {[
-            ["\u2264 3.0","Critica","Costillas y vertebras visibles",T.red],
-            ["4.0","Baja","Costillas palpables con presion leve",T.amber],
-            ["4.5","Aceptable","Costillas palpables con presion firme",T.amber],
-            ["5.0","Buena \u2713","Costillas no visibles \u2014 optima al servicio",T.green],
+            ["≤ 3.0","Crítica","Costillas y vértebras visibles",T.red],
+            ["4.0","Baja","Costillas palpables con presión leve",T.amber],
+            ["4.5","Aceptable","Costillas palpables con presión firme",T.amber],
+            ["5.0","Buena ✓","Costillas no visibles — óptima al servicio",T.green],
             ["5.5","Muy buena","Algo de grasa en costillas",T.green],
             ["6.0","Llena","Grasa visible en cadera",T.textDim],
-            ["\u2265 7.0","Exceso","Grasa acumulada \u2014 improductiva",T.textDim],
+            ["≥ 7.0","Exceso","Grasa acumulada — improductiva",T.textDim],
             ["-","-","-",T.textFaint],
           ].map(([cc,est,desc,color]) => (
             <div key={cc+est} style={{ padding:"3px 4px", borderRadius:4, background:color+"10" }}>
@@ -221,7 +286,7 @@ function LoadingPanel({ msg }) {
           }} />
         ))}
       </div>
-      <div style={{ fontFamily:T.font, fontSize:12, color:T.green, letterSpacing:1 }}>{msg}</div>
+      <div style={{ fontFamily:T.font, fontSize:13, color:T.green, letterSpacing:1 }}>{msg}</div>
     </div>
   );
 }
@@ -230,25 +295,22 @@ function LoadingPanel({ msg }) {
 function Input({ label, value, onChange, placeholder, type = "text", sub, warn, id }) {
   return (
     <div style={{ marginBottom:14 }}>
-      {label && <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:5 }}>{label}</div>}
+      {label && <div style={{ fontFamily:C.font, fontSize:12, color:C.textDim, letterSpacing:.8, marginBottom:5 }}>{label}</div>}
       <input
         id={id} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{ width:"100%", background:C.card2, border:`1px solid ${warn ? "rgba(232,160,48,.5)" : C.border}`, borderRadius:10, color:C.text, padding:"12px 14px", fontFamily:C.sans, fontSize:14, boxSizing:"border-box" }}
+        style={{ width:"100%", background:C.card2, border:`1px solid ${warn ? "rgba(160,104,16,.5)" : C.border}`, borderRadius:10, color:C.text, padding:"12px 14px", fontFamily:C.sans, fontSize:14, boxSizing:"border-box" }}
       />
-      {sub  && <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:4 }}>{sub}</div>}
-      {warn && <div style={{ fontFamily:C.sans, fontSize:10, color:C.amber,    marginTop:4 }}>? {warn}</div>}
+      {sub  && <div style={{ fontFamily:C.sans, fontSize:11, color:C.textFaint, marginTop:4 }}>{sub}</div>}
+      {warn && <div style={{ fontFamily:C.sans, fontSize:11, color:C.amber,    marginTop:4 }}>⚠ {warn}</div>}
     </div>
   );
 }
 
 // --- SELECTF ---
 function SelectF({ label, value, onChange, options, groups, sub, placeholder }) {
-  // options = [[val, label], ...] plana
-  // groups  = [{ label:"Grupo", opts:[[val,label],...] }, ...]
-  // placeholder = opcin vaca inicial
   return (
     <div style={{ marginBottom:14 }}>
-      {label && <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:5 }}>{label}</div>}
+      {label && <div style={{ fontFamily:C.font, fontSize:12, color:C.textDim, letterSpacing:.8, marginBottom:5 }}>{label}</div>}
       <select
         value={value} onChange={e => onChange(e.target.value)}
         style={{ width:"100%", background:C.card2, border:`1px solid ${C.border}`, borderRadius:10,
@@ -265,20 +327,18 @@ function SelectF({ label, value, onChange, options, groups, sub, placeholder }) 
           : (options||[]).map(([v, l]) => <option key={v} value={v}>{l}</option>)
         }
       </select>
-      {sub && <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, marginTop:3 }}>{sub}</div>}
+      {sub && <div style={{ fontFamily:C.sans, fontSize:11, color:C.textFaint, marginTop:3 }}>{sub}</div>}
     </div>
   );
 }
 
 // --- SUPLSELECTOR ---
 function SuplSelector({ label, supl, dosis, onSuplChange, onDosisChange, fenolPasto, color = T.green }) {
-  const s    = SUPLEMENTOS[supl];
-  const sinc = supl && dosis > 0 ? evaluarSincronia(fenolPasto, supl, dosis) : null;
-  const mcal = mcalSuplemento(supl, dosis);
+  const s = SUPLEMENTOS[supl];
 
   return (
     <div style={{ background:T.card2, borderRadius:T.radius, padding:14, border:`1px solid ${T.border}`, marginBottom:12 }}>
-      <div style={{ fontFamily:T.font, fontSize:10, color, letterSpacing:1, marginBottom:10 }}>{label}</div>
+      <div style={{ fontFamily:T.font, fontSize:11, color, letterSpacing:1, marginBottom:10 }}>{label}</div>
       <select
         value={supl || ""} onChange={e => onSuplChange(e.target.value)}
         style={{ width:"100%", background:T.card, border:`1px solid ${T.border}`, borderRadius:8, color:T.text, padding:"10px 12px", fontFamily:T.fontSans, fontSize:13, marginBottom:10 }}
@@ -288,46 +348,44 @@ function SuplSelector({ label, supl, dosis, onSuplChange, onDosisChange, fenolPa
           <option key={k} value={k}>{SUPLEMENTOS[k].label} (PB {SUPLEMENTOS[k].pb}% | {SUPLEMENTOS[k].em} Mcal/kg)</option>
         ))}
       </select>
-
-      <div style={{ display: supl ? "block" : "none" }}>
-  <Slider label="Dosis kg/vaca/da" value={dosis} min={0.1} max={5} step={0.1} onChange={onDosisChange} unit=" kg" color={color} />
-</div>
-
-     <div style={{ display: (supl && dosis > 0) ? "flex" : "none", gap:8, flexWrap:"wrap", marginBottom:8 }}>
-  <Pill color={T.blue}>+{mcal.toFixed(1)} Mcal/v/d</Pill>
-  <Pill color={color}>PB {s.pb}%</Pill>
-  {sinc && <Pill color={sinc.eficiente ? T.green : T.red}>{sinc.eficiente ? "? Sincrona OK" : "? Riesgo sincrona"}</Pill>}
-</div>
-
-      {sinc && sinc.warnings.map((w, i) => <Alerta key={i} nivel={w.nivel}>{w.msg}</Alerta>)}
+      {supl && (
+        <Slider label="Dosis kg/vaca/día" value={dosis} min={0.1} max={5} step={0.1} onChange={onDosisChange} unit=" kg" color={color} />
+      )}
+      {supl && dosis > 0 && s && (
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
+          <Pill color={T.blue}>+{(s.em * dosis).toFixed(1)} Mcal/v/d</Pill>
+          <Pill color={color}>PB {s.pb}%</Pill>
+        </div>
+      )}
     </div>
   );
 }
 
 // --- METRICCARD ---
 const MetricCard = ({ label, value, color = T.green, sub, style: st }) => (
-  <div style={{ background:T.card2, borderRadius:T.radius, padding:"10px 12px", border:`1px solid ${T.border}`, ...st }}>
-    <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, letterSpacing:1, marginBottom:3 }}>{label}</div>
-    <div style={{ fontFamily:T.font, fontSize:18, fontWeight:700, color, lineHeight:1 }}>{value}</div>
-    {sub && <div style={{ fontFamily:T.fontSans, fontSize:10, color:T.textFaint, marginTop:2 }}>{sub}</div>}
+  <div style={{ background:T.card2, borderRadius:T.radius, padding:"12px 14px", border:`1px solid ${T.border}`, boxShadow:T.sh?.sm, ...st }}>
+    <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim, letterSpacing:1, marginBottom:4 }}>{label}</div>
+    <div style={{ fontFamily:T.font, fontSize:22, fontWeight:700, color, lineHeight:1 }}>{value}</div>
+    {sub && <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.textFaint, marginTop:3 }}>{sub}</div>}
   </div>
 );
 
 // --- TOGGLE ---
 const Toggle = ({ label, value, onChange }) => (
   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:`1px solid ${T.border}` }}>
-    <span style={{ fontFamily:T.fontSans, fontSize:13, color:T.text }}>{label}</span>
+    <span style={{ fontFamily:T.fontSans, fontSize:14, color:T.text }}>{label}</span>
     <div
       onClick={() => onChange(!value)}
-      style={{ width:44, height:24, borderRadius:12, background:value ? T.green : "rgba(255,255,255,.1)", cursor:"pointer", position:"relative", transition:"all .2s" }}
+      style={{ width:44, height:24, borderRadius:12, background:value ? T.green : T.border, cursor:"pointer", position:"relative", transition:"all .2s" }}
     >
-      <div style={{ position:"absolute", top:3, left:value ? 22 : 3, width:18, height:18, borderRadius:9, background:"white", transition:"all .2s" }} />
+      <div style={{ position:"absolute", top:3, left:value ? 22 : 3, width:18, height:18, borderRadius:9, background:"white", transition:"all .2s", boxShadow:"0 1px 3px rgba(0,0,0,.2)" }} />
     </div>
   </div>
 );
 
 
 export {
-  Pill, Alerta, Slider, DistCC, LoadingPanel, Input, SelectF, SuplSelector,
+  Pill, Button, Card, Section,
+  Alerta, Slider, DistCC, LoadingPanel, Input, SelectF, SuplSelector,
   smf, smf2, mcalKgAdj, pbPasto, fAprovFenol, MetricCard, Toggle,
 };
