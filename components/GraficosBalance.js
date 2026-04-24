@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useRef } from "react";
-import { balancePorCategoria } from "../lib/motor";
+import { balancePorCategoria, calcTrayectoriaCC, calcCadena } from "../lib/motor";
 import { calcCerebro } from "../lib/cerebro";
 
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -308,6 +308,189 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
   );
 }
 
+// ─── Trayectoria CC ───
+function TrayectoriaCC({ form, motor }) {
+  const trayFull = useMemo(() => {
+    if (!form?.distribucionCC?.length) return null;
+    try {
+      const cadena = form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null;
+      return calcTrayectoriaCC({
+        dist: form.distribucionCC, cadena,
+        destTrad: form.destTrad, destAntic: form.destAntic, destHiper: form.destHiper,
+        supHa: form.supHa, vacasN: form.vacasN,
+        biotipo: form.biotipo, primerParto: form.primerParto,
+        supl1: form.supl1 || "", dosis1: form.dosis1 || "0",
+        supl2: "", dosis2: "0",
+        supl3: form.supl3 || "", dosis3: form.dosis3 || "0",
+        provincia: form.provincia,
+      });
+    } catch(e) { return null; }
+  }, [form]);
+
+  const [tooltip, setTooltip] = useState(null);
+  const containerRef = useRef(null);
+
+  if (!trayFull) return null;
+
+  const { ccHoy, ccParto, ccMinLact, ccServ, ccServAntic, ccServHiper,
+          mesParto, mesDestete, mesServ, mesesLact } = trayFull;
+
+  const W = 680, H = 190;
+  const PL = 30, PR = 8, PT = 10, PB = 26;
+  const drawW = W - PL - PR;
+  const drawH = H - PT - PB;
+  const CC_MIN = 3.0, CC_MAX = 6.5;
+  const colW = drawW / 12;
+  const mesHoy = new Date().getMonth();
+
+  const yCC  = (cc) => PT + drawH - ((cc - CC_MIN) / (CC_MAX - CC_MIN)) * drawH;
+  const xMes = (i)  => PL + i * colW + colW / 2;
+
+  const mesesLactN = Math.ceil(parseFloat(mesesLact) || 6);
+  const mesDestN   = (mesParto + mesesLactN) % 12;
+  const mesServN   = typeof mesServ === "number" ? mesServ : (mesDestN + 2) % 12;
+
+  function interpCC(ccH, ccP, ccML, ccS, mi) {
+    let cc;
+    if (mesParto > mesServN) {
+      if      (mi < mesParto)                              cc = ccH  + (ccP  - ccH)  * (mi / Math.max(1, mesParto));
+      else if (mi < mesDestN || mesDestN <= mesParto)      cc = ccP  + (ccML - ccP)  * Math.min(1, (mi - mesParto)  / Math.max(1, mesesLactN));
+      else if (mi <= mesServN || mesServN < mesDestN)      cc = ccML + (ccS  - ccML) * Math.min(1, (mi - mesDestN)  / Math.max(1, (mesServN - mesDestN + 12) % 12 || 3));
+      else                                                  cc = ccS  + (ccH  - ccS)  * Math.min(1, (mi - mesServN)  / Math.max(1, 12 - mesServN));
+    } else {
+      if      (mi < mesParto)  cc = ccH  + (ccP  - ccH)  * (mi / Math.max(1, mesParto));
+      else if (mi < mesDestN)  cc = ccP  + (ccML - ccP)  * ((mi - mesParto) / Math.max(1, mesesLactN));
+      else if (mi < mesServN)  cc = ccML + (ccS  - ccML) * ((mi - mesDestN) / Math.max(1, mesServN - mesDestN || 2));
+      else                      cc = ccS  + (ccH  - ccS)  * Math.min(1, (mi - mesServN) / Math.max(1, 12 - mesServN));
+    }
+    return Math.max(CC_MIN, Math.min(CC_MAX, cc));
+  }
+
+  const lineActual = Array.from({ length:12 }, (_, i) =>
+    interpCC(ccHoy, ccParto, ccMinLact, ccServ, i)
+  );
+  const pts = lineActual.map((cc, i) => `${xMes(i)},${yCC(cc)}`).join(" ");
+  const lineColor = ccServ >= 5.0 ? C.green : ccServ >= 4.5 ? C.amber : C.red;
+
+  const y50 = yCC(5.0), y45 = yCC(4.5), y40 = yCC(4.0);
+
+  const handleHover = (e, i) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setTooltip({
+      x: Math.min(e.clientX - rect.left + 8, rect.width - 150),
+      y: Math.max(4, e.clientY - rect.top - 64),
+      lines: [
+        MESES[i] + ([5,6,7].includes(i) ? " ❄" : ""),
+        `CC: ${lineActual[i].toFixed(2)}`,
+        i === mesParto  ? "Parto"   : null,
+        i === mesDestN  ? "Destete" : null,
+        i === mesServN  ? "Inicio servicio" : null,
+      ].filter(Boolean),
+    });
+  };
+
+  return (
+    <div ref={containerRef} style={{ position:"relative", background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px", marginBottom:10 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:5 }}>
+        <div style={{ fontFamily:C.font, fontSize:11, color:C.text, fontWeight:700 }}>
+          Trayectoria CC — ciclo anual proyectado
+        </div>
+        <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
+          {ccHoy?.toFixed(1)} hoy → {ccParto?.toFixed(1)} parto → {ccMinLact?.toFixed(1)} min → {ccServ?.toFixed(1)} servicio
+        </div>
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", display:"block" }}
+        onMouseLeave={() => setTooltip(null)}>
+
+        {/* Threshold bands */}
+        <rect x={PL} y={PT}  width={drawW} height={y40 - PT}  fill={C.green + "05"} />
+        <rect x={PL} y={y50} width={drawW} height={y45 - y50} fill={C.green + "08"} />
+        <rect x={PL} y={y45} width={drawW} height={y40 - y45} fill={C.amber + "0b"} />
+        <rect x={PL} y={y40} width={drawW} height={PT + drawH - y40} fill={C.red + "08"} />
+
+        {/* Month tints */}
+        {[5,6,7].map(i => <rect key={i} x={PL + i*colW} y={PT} width={colW} height={drawH} fill={C.amber+"06"} />)}
+        <rect x={PL + mesHoy*colW} y={PT} width={colW} height={drawH} fill={C.green+"12"} />
+
+        {/* Threshold lines */}
+        {[{y:y50,c:C.green,l:"5.0"},{y:y45,c:C.amber,l:"4.5"},{y:y40,c:C.red,l:"4.0"}].map(t => (
+          <g key={t.l}>
+            <line x1={PL} y1={t.y} x2={W-PR} y2={t.y} stroke={t.c} strokeWidth={0.7} strokeDasharray="4,3" opacity={0.55}/>
+            <text x={PL-3} y={t.y+3} textAnchor="end" style={{ fontFamily:C.font, fontSize:"6.5px", fill:t.c, fontWeight:"600" }}>{t.l}</text>
+          </g>
+        ))}
+
+        {/* Event vertical markers */}
+        {[{m:mesParto,l:"Parto",c:C.green},{m:mesDestN,l:"Dest.",c:C.amber},{m:mesServN,l:"Serv.",c:C.blue}]
+          .filter(e => e.m !== null && e.m !== undefined)
+          .map(e => (
+            <g key={e.l}>
+              <line x1={xMes(e.m)} y1={PT} x2={xMes(e.m)} y2={H-PB} stroke={e.c} strokeWidth={0.8} strokeDasharray="3,2" opacity={0.65}/>
+              <text x={xMes(e.m)} y={H-PB+12} textAnchor="middle" style={{ fontFamily:C.font, fontSize:"6.5px", fill:e.c, fontWeight:"600" }}>{e.l}</text>
+            </g>
+          ))
+        }
+
+        {/* Trajectory polyline */}
+        <polyline points={pts} fill="none" stroke={lineColor} strokeWidth={2.2} opacity={0.9} strokeLinejoin="round"/>
+
+        {/* Hover rectangles + key-point dots */}
+        {lineActual.map((cc, i) => {
+          const isKey = [mesParto, mesDestN, mesServN, mesHoy].includes(i);
+          return (
+            <g key={i} style={{ cursor:"crosshair" }} onMouseEnter={e => handleHover(e, i)}>
+              <rect x={PL + i*colW} y={PT} width={colW} height={drawH} fill="transparent"/>
+              {isKey && <circle cx={xMes(i)} cy={yCC(cc)} r={3.5} fill={lineColor} stroke={C.card} strokeWidth={1.2}/>}
+            </g>
+          );
+        })}
+
+        {/* Scenario dots at mesServN */}
+        {[
+          { cc:ccServAntic, off:-8, color:C.blue,   label:`A ${ccServAntic?.toFixed(1)}` },
+          { cc:ccServHiper, off: 8, color:C.purple,  label:`H ${ccServHiper?.toFixed(1)}` },
+        ].filter(s => s.cc && mesServN !== null).map(s => (
+          <g key={s.label}>
+            <circle cx={xMes(mesServN) + s.off} cy={yCC(s.cc)} r={3} fill={s.color+"80"} stroke={s.color} strokeWidth={0.8}/>
+            <text x={xMes(mesServN) + s.off + (s.off > 0 ? 6 : -6)} y={yCC(s.cc)+3}
+              textAnchor={s.off > 0 ? "start" : "end"}
+              style={{ fontFamily:C.font, fontSize:"6px", fill:s.color }}>{s.label}</text>
+          </g>
+        ))}
+
+        {/* Month labels */}
+        {MESES.map((mes, i) => (
+          <text key={i} x={xMes(i)} y={H-2} textAnchor="middle"
+            style={{ fontFamily:C.font, fontSize:"6.5px",
+              fill: i === mesHoy ? C.green : [5,6,7].includes(i) ? C.amber : C.textFaint,
+              fontWeight: i === mesHoy || [5,6,7].includes(i) ? "700" : "400" }}>
+            {MESES[i]}
+          </text>
+        ))}
+      </svg>
+
+      {tooltip && (
+        <div style={{ position:"absolute", left:tooltip.x, top:tooltip.y,
+          background:C.text, color:"#e8f5e4", borderRadius:6, padding:"5px 9px",
+          fontFamily:C.font, fontSize:8.5, lineHeight:1.55,
+          pointerEvents:"none", zIndex:20, whiteSpace:"nowrap",
+          boxShadow:"0 2px 8px rgba(0,0,0,.3)" }}>
+          {tooltip.lines.map((l,i) => <div key={i}>{l}</div>)}
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap:12, marginTop:5, fontFamily:C.font, fontSize:8, color:C.textDim }}>
+        <span style={{ color:lineColor }}>● Actual: CC serv {ccServ?.toFixed(1)}</span>
+        {ccServAntic && <span style={{ color:C.blue }}>● Anticipado 90d: {ccServAntic?.toFixed(1)}</span>}
+        {ccServHiper && <span style={{ color:C.purple }}>● Hiperprecoz 50d: {ccServHiper?.toFixed(1)}</span>}
+        <span style={{ marginLeft:"auto", color:C.textFaint }}>Bandas: ≥5.0 óptimo · ≥4.5 aceptable · &lt;4.0 crítico</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Cronograma anual ───
 function CronogramaAnual({ motor, form, sat }) {
   const cerebro = useMemo(() => {
@@ -476,6 +659,8 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
           Proyeccion con ajustes estandar: suplementacion proteica vaq1 y vaq2 en invierno + verdeo orientado a recria.
         </div>
       )}
+
+      <TrayectoriaCC form={form} motor={motor} />
 
       {datos.general && (
         <GraficoMcal
