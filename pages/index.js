@@ -2727,12 +2727,13 @@ function CalfAIPro() {
     );
   };
   const renderRecomendaciones = () => (
-    <div>
-      {/* Cerebro estructurado (cálculo local) */}
-      <TabCerebro motor={motorEfectivo} form={form} sat={sat} />
+    <div className="reco-grid">
+      <div className="diag-sticky">
+        {/* Cerebro estructurado (cálculo local) */}
+        <TabCerebro motor={motorEfectivo} form={form} sat={sat} />
+      </div>
 
-      <div style={{ height:1, background:C.border, margin:"24px 0" }} />
-
+      <div>
       {/* Análisis IA */}
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 18px" }}>
         <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:12 }}>
@@ -2774,6 +2775,7 @@ function CalfAIPro() {
             </button>
           </>
         )}
+      </div>
       </div>
     </div>
   );
@@ -2824,6 +2826,11 @@ function CalfAIPro() {
         @media (min-width:1200px) {
           .diag-grid { grid-template-columns:420px 1fr; gap:28px; align-items:start; }
           .diag-sticky { position:sticky; top:80px; max-height:calc(100vh - 100px); overflow-y:auto; scrollbar-width:thin; }
+        }
+        /* Split layout — recomendaciones */
+        .reco-grid { display:grid; gap:0; }
+        @media (min-width:1200px) {
+          .reco-grid { grid-template-columns:1fr 1fr; gap:28px; align-items:start; }
         }
       `}</style>
 
