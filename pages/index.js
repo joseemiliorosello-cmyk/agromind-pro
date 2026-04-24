@@ -2699,13 +2699,16 @@ function CalfAIPro() {
       </div>
     );
     return (
-      <div>
-        <DashboardEstablecimiento
-          motor={motorEfectivo} form={form} sat={sat} score={scoreD}
-          confianza={confianza} onTab={(t) => t === "cerebro" && setStep(5)}
-        />
-        <div style={{ height:1, background:C.border, margin:"20px 0" }} />
-        {motor && <GraficosBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />}
+      <div className="diag-grid">
+        <div className="diag-sticky">
+          <DashboardEstablecimiento
+            motor={motorEfectivo} form={form} sat={sat} score={scoreD}
+            confianza={confianza} onTab={(t) => t === "cerebro" && setStep(5)}
+          />
+        </div>
+        <div>
+          {motor && <GraficosBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />}
+        </div>
       </div>
     );
   };
@@ -2790,6 +2793,24 @@ function CalfAIPro() {
         @keyframes pulse { 0%,100%{opacity:.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.2)} }
         .calfai-tabs::-webkit-scrollbar { display:none; }
         .calfai-tabs { -ms-overflow-style:none; scrollbar-width:none; }
+        /* Hover/focus/transition states */
+        button { transition: opacity .15s, transform .12s, background .15s, box-shadow .15s; }
+        button:hover:not(:disabled) { opacity: .84; }
+        button:active:not(:disabled) { transform: scale(0.975); }
+        select:focus, input[type=text]:focus, input[type=number]:focus,
+        input[type=date]:focus, textarea:focus {
+          outline: 2px solid #2e7818 !important;
+          outline-offset: 1px;
+        }
+        /* Step content entrance animation */
+        .calfai-step { animation: stepIn .18s ease-out; }
+        @keyframes stepIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        /* Split layout — diagnóstico */
+        .diag-grid { display:grid; gap:0; }
+        @media (min-width:1200px) {
+          .diag-grid { grid-template-columns:420px 1fr; gap:28px; align-items:start; }
+          .diag-sticky { position:sticky; top:80px; max-height:calc(100vh - 100px); overflow-y:auto; scrollbar-width:thin; }
+        }
       `}</style>
 
       {/* Header sticky */}
@@ -2904,7 +2925,9 @@ function CalfAIPro() {
 
       {/* Contenido del paso */}
       <div style={{ maxWidth:1400, margin:"0 auto", padding:"24px 20px 48px" }}>
-        {RENDERS[step]?.()}
+        <div key={step} className="calfai-step">
+          {RENDERS[step]?.()}
+        </div>
       </div>
     </div>
   );
