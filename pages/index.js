@@ -1847,7 +1847,7 @@ function CalfAIPro() {
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                 <span style={{ fontFamily:C.font, fontSize:12, color:C.green, fontWeight:600 }}>Potrero {i+1}</span>
                 {potreros.length > 1 && (
-                  <button onClick={()=>setPotreros(ps=>ps.filter((_,j)=>j!==i))} style={{ background:"none", border:"none", color:C.red, cursor:"pointer", fontFamily:C.font, fontSize:12 }}>✕</button>
+                  <button aria-label="Eliminar potrero" onClick={()=>setPotreros(ps=>ps.filter((_,j)=>j!==i))} style={{ background:"none", border:"none", color:C.red, cursor:"pointer", fontFamily:C.font, fontSize:12 }}>✕</button>
                 )}
               </div>
 
@@ -2847,7 +2847,7 @@ function CalfAIPro() {
                 color:C.textDim }}>
               Nuevo
             </button>
-            <button onClick={() => setBorradorRecuperado(false)}
+            <button aria-label="Descartar aviso" onClick={() => setBorradorRecuperado(false)}
               style={{ background:"none", border:"none", color:C.textFaint,
                 fontSize:14, cursor:"pointer", padding:"0 4px" }}>✕</button>
           </div>
@@ -2875,7 +2875,7 @@ function CalfAIPro() {
               {bannerProductor.campos} campos precargados desde el formulario del productor · Revisá y completá lo que falta
             </div>
           </div>
-          <button onClick={() => setBannerProductor(null)}
+          <button aria-label="Cerrar aviso" onClick={() => setBannerProductor(null)}
             style={{ background:"none", border:"none", color:C.textFaint,
               cursor:"pointer", fontSize:16, flexShrink:0, padding:"0 4px" }}>✕</button>
         </div>
