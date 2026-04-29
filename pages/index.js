@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signOut, signIn, SessionProvider } from "next-auth/react";
-import { T as C, FORM_DEF, MESES_NOM, CALIDAD_C4_CALIBRADA, cc5 } from "../lib/constantes";
+import { T as C, FORM_DEF, MESES_NOM, CALIDAD_C4_CALIBRADA, cc5, SUPLEMENTOS } from "../lib/constantes";
 import { correrMotor, useMotor, calcCadena, calcConsumoAgua, calcDisp,
          calcScore, calcGEI, calcTrayectoriaCC, calcDisponibilidadMS,
          calcSupervivencia, calcV2S, mcalSuplemento, fetchSat,
@@ -342,7 +342,7 @@ function CalfAIPro() {
       // Guardar en historial antes de analizar
       guardarEnHistorial(form, motorEfectivo, null);
       const cerebroData = calcCerebro(motorEfectivo, form, sat);
-      prompt = buildPromptFull(motorEfectivo, form, sat, cerebroData, potreros);
+      const prompt = buildPromptFull(motorEfectivo, form, sat, cerebroData, potreros);
       const res  = await fetch("/api/analyze", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
