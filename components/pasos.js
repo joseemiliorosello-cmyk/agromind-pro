@@ -13,7 +13,7 @@ import { T as C, MESES_NOM, FORM_DEF, getBiotipo, BIOTIPOS, SUPLEMENTOS, UBICACI
 const T = C;
 import { calcCadena, calcFaseCiclo, fmtFecha, FENOLOGIAS, GWP_CH4, GWP100, AR6,
          calcConsumoAgua, evaluarAgua, calcDisponibilidadMS,
-         calcConsumoPasto, calcGEI, calcOfPasto, calcScore,
+         calcGEI, calcOfPasto, calcScore,
          calcV2S, diagnosticarSistema, getClima, mcalSuplemento,
          reqEM, calcYm, calcGE_kgMS, calcCH4_kgMS } from "../lib/motor";
 import { DistCC, Input, SelectF, Slider, SuplSelector, Alerta, Pill, MetricCard, Toggle,
@@ -931,7 +931,6 @@ const renderUbicacion = () => {
         </div>
       )}
       <Toggle label="┬┐Incluye vacas de 1° parto?" value={form.primerParto} onChange={v=>set("primerParto",v)} />
-      {form.primerParto && <Alerta tipo="warn">1° parto: requerimientos +10% · Umbral anestro +0.3 CC</Alerta>}
       <div style={{ height:12 }} />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
         <Input label="VACAS"  value={form.vacasN}  onChange={v=>set("vacasN",v)}  placeholder="" type="number" />
@@ -1099,7 +1098,6 @@ const renderUbicacion = () => {
               </div>
             ))}
           </div>
-          {cadena.terneroOtono && <Alerta tipo="error" style={{ marginTop:8 }}>⚠️´©Å Ternero al pie en otoño — destete anticipado URGENTE</Alerta>}
         </div>
       )}
       <div style={{ background:`${C.amber}08`, border:`1px solid ${C.amber}30`, borderRadius:12, padding:14, marginTop:4 }}>
@@ -1189,13 +1187,7 @@ const renderUbicacion = () => {
               </div>
             );
           }
-          const caidaEst = (diasDesde/30 * 0.40 * bt.movCC).toFixed(1);
-          return (
-            <Alerta tipo="warn" style={{marginTop:6}}>
-              Han pasado ~{Math.round(diasDesde/30)} meses desde el tacto. Si el rodeo ya parió y está en lactación,
-              la CC actual puede ser {caidaEst} unidades menor que la ingresada. Considerá medir nuevamente o ajustar el valor.
-            </Alerta>
-          );
+          return null;
         })()}
       </div>
       <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:6 }}>CC AL TACTO (pre-parto) — distribución por grupo (escala 1–9 INTA)</div>
@@ -1244,9 +1236,6 @@ const renderUbicacion = () => {
           <Alerta tipo="warn">
             Suma: {(parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0)}% — debe ser 100%
           </Alerta>
-        )}
-        {(parseFloat(form.destHiper)||0) > 30 && (
-          <Alerta tipo="warn">Hiperprecoz {">"} 30% — planificar suplementación proteica inmediata post-destete (ternero {"<"} 60 kg).</Alerta>
         )}
       </div>
 
@@ -1304,13 +1293,6 @@ const renderUbicacion = () => {
               sub={dist?.grupos?.length > 1 ? "CC promedio — preñez real por grupo ↓" : `Anestro posparto: ${tray.anestro?.dias}d`} />
           </div>
 
-          {/* Alerta anestro */}
-          <Alerta tipo={tray.anestro?.riesgo?"error":"ok"}>
-            Anestro posparto: <strong>{tray.anestro?.dias} días</strong> — {tray.anestro?.riesgo
-              ? "⚠️´©Å RIESGO: puede no ciclar durante el servicio → revisar CC al parto y destete"
-              : "✅ OK — debería ciclar dentro del período de servicio"}
-          </Alerta>
-
           {/* Por grupos — CC, preñez Y supervivencia */}
           {dist?.grupos?.length >= 1 && (
             <div style={{ marginTop:10 }}>
@@ -1349,18 +1331,7 @@ const renderUbicacion = () => {
                           </div>
                         </React.Fragment>
                       ))}
-                      <div style={{ flex:1, fontFamily:C.font, fontSize:9, color:C.textFaint, textAlign:"right" }}>
-                        {g.recDestete}
-                      </div>
                     </div>
-                    {/* Destete urgente si CC serv < 4.0 */}
-                    {parseFloat(g.ccServ) < 4.0 && (
-                      <div style={{ padding:"6px 12px", background:"rgba(224,85,48,.08)", borderTop:"1px solid rgba(224,85,48,.20)" }}>
-                        <span style={{ fontFamily:C.sans, fontSize:11, color:C.red }}>
-                          CC serv. {g.ccServ} &lt; 4.0 mínimo — preñez comprometida · {g.recDestete}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -1369,11 +1340,6 @@ const renderUbicacion = () => {
         </div>
       )}
 
-      {ccPondVal > 0 && !tray && (
-        <Alerta tipo="info" style={{ marginTop:10 }}>
-          Ingresá fechas de servicio (Paso Rodeo) para ver la proyección completa de CC.
-        </Alerta>
-      )}
     </div>
   );
 
@@ -1387,14 +1353,7 @@ const renderUbicacion = () => {
             <MetricCard label="TERNEROS DESTETADOS" value={tcSave.terneros}    color={C.green} />
             <MetricCard label="PV POND. MAYO (kg)"  value={tcSave.pvMayoPond} color={C.amber} sub="Entrada 1°inv" />
           </div>
-          {tcSave.alertaHiper && <Alerta tipo="warn" style={{ marginTop:10 }}>Hiperprecoz {">"} 30% — suplementación proteica inmediata post-destete.</Alerta>}
-          {/* Info GDP */}
-          <div style={{ marginTop:8, padding:"6px 10px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}18` }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:2 }}>BASE DE CÁLCULO · NRC 2000 + INTA Colonia Benítez</div>
-            <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim }}>
-              Nacimiento: 35 kg · Al pie: 700 g/d · Post-destete campo: 400 g/d hasta mayo
-            </div>
-          </div>
+
           {tcSave.detalle?.map((d, i) => d.pct > 0 ? (
             <div key={i} style={{ marginTop:6, borderTop:`1px solid ${C.border}`, paddingTop:6 }}>
               <div style={{ display:"flex", justifyContent:"space-between", fontFamily:C.font, fontSize:11 }}>
@@ -1444,75 +1403,10 @@ const renderUbicacion = () => {
                 color:vaq1E.pvFuenteDato==="real" ? C.green : C.amber, fontWeight:700 }}>
                 {vaq1E.pvEntrada} kg
               </div>
-              {vaq1E.pvFuenteDato !== "real" && (
-                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:3 }}>
-                  ↑ Ingresá el PV real en el campo "PV ACTUAL VAQ1" para mayor precisión
-                </div>
-              )}
+
             </div>
           ) : null}
-          {vaq1E && vaq1E.mensaje && <Alerta tipo="ok">{vaq1E.mensaje}</Alerta>}
-          {vaq1E && vaq1E.alertaSinSupl && <Alerta tipo="error">{vaq1E.alertaSinSupl}</Alerta>}
-          {vaq1E && !vaq1E.sinSupl && vaq1E.alertaSinSupl === null && vaq1E.mcalSuplReal > 0 && (parseFloat(vaq1E.gdpConSuplReal) < 400) && (
-            <Alerta tipo="warn">Suplemento cargado pero GDP estimado {Math.round(vaq1E.gdpConSuplReal)}g/d — insuficiente para el objetivo de recría.</Alerta>
-          )}
-          {vaq1E && !vaq1E.mensaje && (
-            <div style={{ padding:"10px 12px", background:`${C.card}`, border:`1px solid ${C.border}`, borderRadius:8, marginBottom:8 }}>
-              <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:6 }}>
-                <div style={{ textAlign:"center" }}>
-                  <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:C.amber, lineHeight:1 }}>
-                    {vaq1E.gdpPasto} g/d
-                  </div>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>GDP solo pasto</div>
-                </div>
-                <div style={{ color:C.textFaint, fontSize:14, alignSelf:"center" }}>→</div>
-                <div style={{ textAlign:"center" }}>
-                  <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:C.green, lineHeight:1 }}>
-                    {vaq1E.gdpReal} g/d
-                  </div>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>GDP con suplemento*</div>
-                </div>
-                <div style={{ color:C.textFaint, fontSize:14, alignSelf:"center" }}>→</div>
-                <div style={{ textAlign:"center" }}>
-                  <div style={{ fontFamily:C.font, fontSize:18, fontWeight:700, color:vaq1E.pvSal>=220?C.green:C.amber, lineHeight:1 }}>
-                    {vaq1E.pvSal} kg
-                  </div>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>PV agosto est.</div>
-                </div>
-              </div>
-              <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, borderTop:`1px solid ${C.border}`, paddingTop:4 }}>
-                * GDP con suplemento = estimación al cargar suplemento en el paso siguiente.
-                Sin suplementar, el pasto C4 en invierno da {vaq1E.gdpPasto} g/día — el objetivo de recría no se cumple con pasto solo.
-              </div>
-            </div>
-          )}
-          {vaq1E && !vaq1E.mensaje && (() => {
-            const pvAdulta = parseFloat(form.pvVacaAdulta)||320;
-            const pvAgosto = vaq1E.pvSal || 0;
-            const obj220   = 220;
-            const pct65    = Math.round(pvAdulta * 0.65);
-            const llegaObj = pvAgosto >= obj220;
-            const llegaPct65 = pvAgosto >= pct65;
-            return (
-              <div style={{ marginTop:8, padding:"10px 12px", borderRadius:8, background:`${C.blue}08`, border:`1px solid ${C.blue}20` }}>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.blue, marginBottom:4 }}>OBJETIVO AGOSTO</div>
-                <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, marginBottom:6 }}>
-                  PV objetivo: <strong style={{color:C.text}}>≥ {obj220} kg</strong>
-                  {llegaObj
-                    ? <span style={{color:C.green}}> ✓ Proyectado {pvAgosto} kg</span>
-                    : <span style={{color:C.amber}}> ⚠️ Proyectado {pvAgosto} kg — ajustar suplementación</span>}
-                </div>
-                {llegaPct65 && (
-                  <div style={{ padding:"6px 10px", borderRadius:6, background:`${C.green}12`, border:`1px solid ${C.green}30` }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.green, fontWeight:700, marginBottom:2 }}>✅ APTA ENTORE ANTICIPADO</div>
-                    <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim }}>
-                      {pvAgosto} kg en agosto = {Math.round(pvAgosto/(parseFloat(form.pvVacaAdulta)||320)*100)}% PV adulto. Evaluá entore anticipado en agosto–septiembre.
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+
         </div>
       </details>
 
@@ -1523,11 +1417,7 @@ const renderUbicacion = () => {
             <span style={{ fontFamily:C.font, fontSize:11, color:C.blue, fontWeight:600 }}>
               🐂 VAQ. 2° INVIERNO · {form.vaq2N?`${form.vaq2N} cab.`:"Ingresar cantidad"}
             </span>
-            {vaq2E && (
-              <span style={{ marginLeft:"auto", fontFamily:C.font, fontSize:9, color:vaq2E.llegas?C.green:C.red }}>
-                {vaq2E.llegas?"✓ Llega al entore":"⚠️ No llega al objetivo"}
-              </span>
-            )}
+
           </summary>
           <div style={{ background:C.card2, borderRadius:"0 0 12px 12px", padding:14, border:`1px solid ${C.border}`, borderTop:"none" }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
@@ -1535,93 +1425,7 @@ const renderUbicacion = () => {
               <Input label="PV ACTUAL VAQ2 (kg)" value={form.vaq2PV} onChange={v=>set("vaq2PV",v)} placeholder="" type="number"
                 sub="Peso real hoy" />
             </div>
-            {vaq2E?.alertaSinSupl && <Alerta tipo="error">{vaq2E.alertaSinSupl}</Alerta>}
-            {vaq2E && (
-              <div>
-                {/* Trayectoria sin suplemento vs con suplemento */}
-                <div style={{ background:`${C.card}`, border:`1px solid ${C.border}`, borderRadius:10, padding:12, marginBottom:10 }}>
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:10 }}>TRAYECTORIA PV — INVIERNO 2°</div>
-                  {/* Sin suplemento */}
-                  <div style={{ marginBottom:10 }}>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.red, marginBottom:4 }}>SIN SUPLEMENTO</div>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                      <div style={{ textAlign:"center" }}>
-                        <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:C.text }}>{pvEntradaVaq2||"—"} kg</div>
-                        <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>mayo</div>
-                      </div>
-                      <div style={{ color:C.red, fontSize:10 }}>→ {vaq2E.gdpPastoInv||0}g/d →</div>
-                      <div style={{ textAlign:"center" }}>
-                        <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:C.red }}>
-                          {Math.round((parseFloat(pvEntradaVaq2)||0) + (vaq2E.gdpPastoInv||0) * 90 / 1000)} kg
-                        </div>
-                        <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>agosto</div>
-                      </div>
-                      <div style={{ color:C.textFaint, fontSize:10 }}>→ {vaq2E.gdpPrimavera||280}g/d →</div>
-                      <div style={{ textAlign:"center" }}>
-                        <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:vaq2E.llegas?C.green:C.red }}>
-                          {Math.round((parseFloat(pvEntradaVaq2)||0) + (vaq2E.gdpPastoInv||0)*90/1000 + (vaq2E.gdpPrimavera||280)*60/1000)} kg
-                        </div>
-                        <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>entore nov</div>
-                      </div>
-                      <div style={{ fontFamily:C.font, fontSize:8, color:C.red, marginLeft:"auto" }}>
-                        obj: {vaq2E.pvMinEntore} kg
-                      </div>
-                    </div>
-                  </div>
-                  {/* Con suplemento — solo si tiene suplemento cargado */}
-                  {!vaq2E.sinSupl && (
-                    <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:10 }}>
-                      <div style={{ fontFamily:C.font, fontSize:8, color:C.green, marginBottom:4 }}>CON SUPLEMENTO CARGADO</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-                        <div style={{ textAlign:"center" }}>
-                          <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:C.text }}>{pvEntradaVaq2||"—"} kg</div>
-                          <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>mayo</div>
-                        </div>
-                        <div style={{ color:C.green, fontSize:10 }}>→ {Math.round(vaq2E.gdpInv||0)}g/d →</div>
-                        <div style={{ textAlign:"center" }}>
-                          <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:C.green }}>{vaq2E.pvV2Agosto||"—"} kg</div>
-                          <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>agosto</div>
-                        </div>
-                        <div style={{ color:C.textFaint, fontSize:10 }}>→ {vaq2E.gdpPrimavera||280}g/d →</div>
-                        <div style={{ textAlign:"center" }}>
-                          <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:vaq2E.llegas?C.green:C.red }}>{vaq2E.pvEntore||"—"} kg</div>
-                          <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>entore nov</div>
-                        </div>
-                        <div style={{ fontFamily:C.font, fontSize:8, color:vaq2E.llegas?C.green:C.amber, marginLeft:"auto" }}>
-                          {vaq2E.llegas ? "✅ llega" : `⚠️ falta ${(vaq2E.pvMinEntore||0)-(vaq2E.pvEntore||0)} kg`}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {!vaq2E.llegas && !vaq2E.sinSupl && (
-                  <Alerta tipo="error">No llega a {vaq2E.pvMinEntore} kg — ajustá la dosis de suplemento</Alerta>
-                )}
-                {vaq2E.llegas && (
-                  <div style={{ padding:"6px 10px", background:`${C.green}10`, borderRadius:8, fontFamily:C.font, fontSize:9, color:C.green }}>
-                    ✅ Con esta suplementación llega al entore a los {form.edadPrimerEntore||24} meses
-                  </div>
-                )}
-                {/* Entore anticipado — si supera 65% PV adulto en agosto */}
-                {vaq2E.aptaEntoreAntic && (
-                  <div style={{ marginTop:8, padding:"10px 12px", background:"rgba(126,200,80,.08)",
-                    border:"1px solid rgba(126,200,80,.30)", borderRadius:10 }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.green, fontWeight:700, marginBottom:4 }}>
-                      🚀 OPORTUNIDAD: ENTORE ANTICIPADO POSIBLE
-                    </div>
-                    <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim, lineHeight:1.5, marginBottom:6 }}>
-                      En agosto proyecta <strong style={{color:C.green}}>{vaq2E.pvV2Agosto} kg</strong> ({vaq2E.pctPVAgosto}% PV adulto) — supera el umbral del 65% ({vaq2E.pvMinEntoreAntic} kg) necesario para ciclar y quedar preñada ese mismo año.
-                    </div>
-                    <div style={{ fontFamily:C.sans, fontSize:10, color:C.text, lineHeight:1.5, marginBottom:4 }}>
-                      <strong>Recomendación:</strong> integrarlas al servicio general de <strong>agosto–noviembre</strong> de este año en lugar de esperar al ciclo del año siguiente. Ganás <strong>un ciclo productivo completo</strong> — una ternera más sin aumentar la carga animal.
-                    </div>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
-                      Bavera 2005 · umbral ciclicidad: ≥65% PV adulto al servicio
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+
           </div>
         </details>
       )}
@@ -1649,16 +1453,6 @@ const renderUbicacion = () => {
         </summary>
         <div style={{ background:C.card2, borderRadius:"0 0 12px 12px", padding:14, border:`1px solid ${C.border}`, borderTop:"none" }}>
 
-          {/* Banner categoría crítica */}
-          <div style={{ background:"rgba(232,160,48,.06)", border:"1px solid rgba(232,160,48,.25)", borderRadius:10, padding:"10px 12px", marginBottom:14 }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.amber, letterSpacing:1, marginBottom:4 }}>⚠️ CATEGORÍA DE MAYOR RIESGO DEL RODEO</div>
-            <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, lineHeight:1.5 }}>
-              Las V2S tienen el triple estrés fisiológico más exigente: <strong style={{color:C.text}}>están creciendo</strong> (2°–3° año, aún no llegaron al PV adulto), 
-              <strong style={{color:C.text}}> amamantando</strong> (bloqueo LH activo si tienen ternero) 
-              y deben <strong style={{color:C.text}}>quedar preñadas</strong> nuevamente. 
-              Sus requerimientos energéticos superan a las vacas adultas en un 10–15% (NRC 2000).
-            </div>
-          </div>
 
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
             <Input label="CANTIDAD (cab)" value={form.v2sN}  onChange={v=>set("v2sN",v)}  placeholder="" type="number" />
@@ -1693,104 +1487,9 @@ const renderUbicacion = () => {
             value={form.v2sTernero === "si"}
             onChange={v => set("v2sTernero", v ? "si" : "no")}
           />
-          {form.v2sTernero === "si" && (
-            <Alerta tipo="warn">Ternero al pie: bloqueo LH activo · Anestro +10–20 días extra · Evaluar destete anticipado o hiperprecoz urgente</Alerta>
-          )}
 
-          {/* Diagnóstico real por grupo usando calcV2S */}
-          {form.v2sN && form.v2sPV && (
-            <div style={{ marginTop:12 }}>
-              {(form.cc2sDist || [{cc:"4.5",pct:"100"}]).filter(g => parseFloat(g.cc) && parseFloat(g.pct) > 0).map((g, i) => {
-                const r = calcV2S(form.v2sPV, form.pvVacaAdulta, g.cc, form.v2sTernero === "si", form.biotipo, cadena);
-                if (!r) return null;
-                const nG = Math.round((parseInt(form.v2sN)||0) * (parseFloat(g.pct)||0) / 100);
-                // Calcular déficit con pasto actual
-                const cons   = calcConsumoPasto(form.v2sPV, form.fenologia || "menor_10", sat?.temp || 25);
-                const oferta = cons?.emTotal || 0;
-                const deficit = Math.max(0, (r.reqMcal || 0) - oferta);
-                return (
-                  <div key={i} style={{ background:r.critico ? "rgba(224,85,48,.06)" : "rgba(232,160,48,.06)",
-                    border:`1px solid ${r.critico ? "rgba(224,85,48,.25)" : "rgba(232,160,48,.20)"}`,
-                    borderRadius:10, padding:12, marginBottom:10 }}>
-                    <div style={{ fontFamily:C.font, fontSize:10, color:r.critico ? C.red : C.amber, marginBottom:8, display:"flex", justifyContent:"space-between" }}>
-                      <span>GRUPO {i+1} · CC {g.cc} · {nG} vac. ({g.pct}%)</span>
-                      {r.critico && <span style={{ background:"rgba(224,85,48,.15)", padding:"2px 8px", borderRadius:6, fontSize:9 }}>🔴 CRÍTICO</span>}
-                    </div>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:10 }}>
-                      <MetricCard label="CC PARTO"
-                        value={r.ccParto}
-                        color={r.ccParto >= 4.5 ? C.green : r.ccParto >= 4.0 ? C.amber : C.red}
-                        sub={r.ccParto < 4.5 ? "⚠️ Riesgo" : "OK"} />
-                      <MetricCard label="CC SERVICIO"
-                        value={r.ccServ}
-                        color={r.ccServ >= 5.0 ? C.green : r.ccServ >= 4.5 ? C.amber : C.red} />
-                      <MetricCard label="PREÑEZ"
-                        value={r.prenez + "%"}
-                        color={r.prenez >= 55 ? C.green : r.prenez >= 35 ? C.amber : C.red} />
-                      <MetricCard label="ANESTRO"
-                        value={r.diasAnestro + "d"}
-                        color={r.diasAnestro <= 55 ? C.green : r.diasAnestro <= 75 ? C.amber : C.red} />
-                    </div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:8 }}>
-                      <MetricCard label="REQ. ENERGÉTICO"
-                        value={(r.reqMcal || "—") + " Mcal/d"}
-                        color={C.amber}
-                        sub="NRC 2000 — triple estrés" />
-                      <MetricCard label={deficit > 0 ? "DÉFICIT PASTO HOY" : "PASTO HOY"}
-                        value={deficit > 0 ? "→"+deficit.toFixed(1)+" Mcal" : "Cubre req."}
-                        color={deficit > 0 ? C.red : r.prenez < 55 ? C.amber : C.green}
-                        sub={deficit > 0 ? `Oferta: ${oferta.toFixed(1)} Mcal · req: ${(r.reqMcal||0).toFixed(1)}` : r.prenez < 55 ? "Pasto OK · CC baja el riesgo" : "Sin déficit energético"} />
-                    </div>
-                    {/* Recomendaciones específicas por grupo */}
-                    {r.critico && (
-                      <div style={{ marginTop:6 }}>
-                        {r.ccParto < 4.5 && (
-                          <Alerta tipo="error">CC parto {r.ccParto} — preñez proyectada {r.prenez}%. Suplementar en preparto: 0.5–0.8 kg expeller soja/día + destete inmediato si tiene ternero.</Alerta>
-                        )}
-                        {r.diasAnestro > 70 && form.v2sTernero === "si" && (
-                          <Alerta tipo="error">Anestro proyectado {r.diasAnestro}d con ternero al pie — NO va a llegar al servicio. Destete hiperprecoz urgente: recupera ciclos en 7–14 días (Wiltbank 1990).</Alerta>
-                        )}
-                        {deficit > 3 && (
-                          <Alerta tipo="error">Déficit de {deficit.toFixed(1)} Mcal/día — para cubrirlo: {(deficit/2.6).toFixed(1)} kg expeller girasol o {(deficit/3.3).toFixed(1)} kg maíz/vaca/día.</Alerta>
-                        )}
-                      </div>
-                    )}
-                    {!r.critico && (
-                      <Alerta tipo="ok">CC y anestro en rango aceptable para este grupo. Monitorear suplementación y destete según momento del servicio.</Alerta>
-                    )}
-                  </div>
-                );
-              })}
 
-              {/* Resumen total V2S */}
-              {(() => {
-                const grupos = (form.cc2sDist || []).filter(g => parseFloat(g.cc) && parseFloat(g.pct) > 0);
-                if (grupos.length === 0) return null;
-                const prenezPond = grupos.reduce((s, g) => {
-                  const r = calcV2S(form.v2sPV, form.pvVacaAdulta, g.cc, form.v2sTernero === "si", form.biotipo, cadena);
-                  return s + (r?.prenez || 0) * (parseFloat(g.pct) / 100);
-                }, 0);
-                const color = prenezPond >= 55 ? C.green : prenezPond >= 35 ? C.amber : C.red;
-                return (
-                  <div style={{ background:`${color}10`, border:`1px solid ${color}30`, borderRadius:10, padding:"10px 14px" }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginBottom:4 }}>PREÑEZ PONDERADA V2S</div>
-                    <div style={{ fontFamily:C.font, fontSize:24, fontWeight:700, color }}>
-                      {Math.round(prenezPond)}%
-                      <span style={{ fontSize:11, color:C.textDim, marginLeft:8, fontWeight:400 }}>
-                        {parseInt(form.v2sN)||0} vacas · {Math.round((parseInt(form.v2sN)||0) * prenezPond / 100)} preñadas esperadas
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
 
-          {!form.v2sN && (
-            <div style={{ textAlign:"center", padding:"16px 0", fontFamily:C.fontSans, fontSize:11, color:C.textFaint }}>
-              Ingresá la cantidad de V2S para ver el diagnóstico completo
-            </div>
-          )}
         </div>
       </details>
     </div>
@@ -2539,19 +2238,13 @@ const renderUbicacion = () => {
   const renderSanidad = () => (
     <div>
       <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, letterSpacing:1, marginBottom:4 }}>🏥 SANIDAD REPRODUCTIVA</div>
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, marginBottom:16 }}>
-        La sanidad es el techo del sistema. Sin ella, cualquier mejora nutricional tiene rendimiento marginal.
-      </div>
 
       {/* Vacunas obligatorias */}
       <Toggle label="💉 ┬┐Vacunación Aftosa al día?"        value={form.sanAftosa     === "si"} onChange={v => set("sanAftosa",     v ? "si" : "no")} />
-      {form.sanAftosa === "no" && <Alerta tipo="error">Aftosa sin vacunar — obligatoria (SENASA). Dos dosis anuales mínimo. Riesgo de brote y clausura comercial.</Alerta>}
 
       <Toggle label="💉 ┬┐Vacunación Brucelosis al día?"    value={form.sanBrucelosis === "si"} onChange={v => set("sanBrucelosis", v ? "si" : "no")} />
-      {form.sanBrucelosis === "no" && <Alerta tipo="error">Brucelosis sin vacunar — obligatoria en terneras 3–8 meses (SENASA RES.114/21). Zoonosis. Riesgo de aborto masivo al 7° mes.</Alerta>}
 
       <Toggle label="💉 ┬┐Vacunación IBR/DVB al día?"       value={form.sanVacunas  === "si"} onChange={v => set("sanVacunas",   v ? "si" : "no")} />
-      {form.sanVacunas === "no" && <Alerta tipo="error">IBR/DVB sin vacunar: riesgo de reducción de preñez hasta →15 pp.</Alerta>}
 
       {/* Parásitos */}
       <SelectF label="PARÁSITOS EXTERNOS (garrapatas)" value={form.sanParasitoExt||""} onChange={v=>set("sanParasitoExt",v)} options={[
@@ -2566,29 +2259,14 @@ const renderUbicacion = () => {
         ["parcial",    "Control parcial"],
         ["no",         "Sin control"],
       ]} />
-      {(form.sanParasitoExt==="no" || form.sanParasitoInt==="no") && (
-        <Alerta tipo="warn">Parásitos sin control: pérdida de GDP y supresión inmune. En NEA, garrapata transmite Babesia/Anaplasma — riesgo de mortalidad en animales no inmunizados.</Alerta>
-      )}
 
       {/* Toros y programa */}
       <Toggle label="🐂 ┬┐Toros con revisión pre-servicio?"  value={form.sanToros    === "con_control"} onChange={v => set("sanToros",     v ? "con_control" : "sin_control")} />
-      {form.sanToros === "sin_control" && <Alerta tipo="error">Toros sin revisión pre-servicio: un toro con lesión no detectada puede dejar 15–20 vacas vacías sin que nadie lo note hasta el tacto.</Alerta>}
 
       <Toggle label="📋 ┬┐Historia de abortos en el rodeo?" value={form.sanAbortos  === "si"} onChange={v => set("sanAbortos",   v ? "si" : "no")} />
-      {form.sanAbortos === "si" && <Alerta tipo="warn">Historia de abortos: diagnóstico diferencial IBR/DVB/Leptospira/Brucelosis/Neospora prioritario.</Alerta>}
 
       <Toggle label="📋 ┬┐Programa sanitario estructurado?" value={form.sanPrograma === "si"} onChange={v => set("sanPrograma",  v ? "si" : "no")} />
-      {form.sanPrograma === "no" && <Alerta tipo="warn">Sin programa sanitario estructurado. La sanidad es el techo del sistema — ninguna mejora nutricional compensa enfermedades activas.</Alerta>}
 
-      {/* Resumen alertas si hay motor */}
-      {motor && sanidad?.alerts?.length > 0 && (
-        <div style={{ marginTop:16 }}>
-          <div style={{ fontFamily:C.font, fontSize:9, color:C.textDim, letterSpacing:1, marginBottom:8 }}>ALERTAS SANITARIAS</div>
-          {sanidad.alerts.map((a,i) => (
-            <Alerta key={i} tipo={a.nivel==="rojo"?"error":"warn"}>{a.msg}</Alerta>
-          ))}
-        </div>
-      )}
     </div>
   );
 

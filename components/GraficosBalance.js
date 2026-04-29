@@ -586,6 +586,183 @@ function CronogramaAnual({ motor, form, sat }) {
   );
 }
 
+// ─── Trayectoria PV Vaquillona ───
+// Shows CON vs SIN supplementation weight trajectory from May yr1 to Nov yr2.
+// X axis: 5 proportional key dates (real days). Y axis: PV (kg).
+function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
+  if (!vaq1E || !vaq2E || !vaq1E.pvEntrada || !vaq2E.pvMayo2Inv) return null;
+
+  // ── Build key points ──────────────────────────────────────────
+  const DIAS_INV1 = 122;  // may → sep
+  const DIAS_VER  = 270;  // sep yr1 → may yr2
+  const DIAS_INV2 = 90;   // may → ago
+  const DIAS_ENT  = 90;   // ago → nov (primavera hacia entore)
+  const TOTAL     = DIAS_INV1 + DIAS_VER + DIAS_INV2 + DIAS_ENT; // 572
+
+  const pvIni   = vaq1E.pvEntrada;
+  const pvMin   = vaq2E.pvMinEntore;
+
+  // CON supl
+  const pvSepCon  = vaq1E.pvSal;
+  const pvMayCon  = vaq2E.pvMayo2Inv;
+  const pvAgoCon  = vaq2E.pvV2Agosto;
+  const pvNovCon  = vaq2E.pvEntore;
+
+  // SIN supl — derived from motor exports
+  const gdpP1     = vaq1E.gdpPasto || 0;
+  const gdpP2     = vaq2E.gdpPastoInv || 0;
+  const gdpP3     = 280; // primavera sin supl (matches calcVaq2 constant)
+  const pvSepSin  = Math.round(pvIni + gdpP1 * DIAS_INV1 / 1000);
+  // calcPvEntradaVaq2 adds a fixed ~92 kg regardless of start PV
+  const ganVer    = pvMayCon - pvSepCon; // same summer gain for both paths
+  const pvMaySin  = Math.round(pvSepSin + ganVer);
+  const pvAgoSin  = Math.round(pvMaySin + gdpP2 * DIAS_INV2 / 1000);
+  const pvNovSin  = Math.round(pvAgoSin + gdpP3 * DIAS_ENT  / 1000);
+
+  // ── SVG coords ───────────────────────────────────────────────
+  const W = 680, H = 150;
+  const PL = 36, PR = 60, PT = 10, PB = 30;
+  const dW = W - PL - PR, dH = H - PT - PB;
+
+  const xDays = [0, DIAS_INV1, DIAS_INV1 + DIAS_VER, DIAS_INV1 + DIAS_VER + DIAS_INV2, TOTAL];
+  const xPct  = xDays.map(d => d / TOTAL);
+  const xPos  = xPct.map(p => PL + p * dW);
+
+  const pvCon = [pvIni, pvSepCon, pvMayCon, pvAgoCon, pvNovCon];
+  const pvSin = [pvIni, pvSepSin, pvMaySin, pvAgoSin, pvNovSin];
+  const allPv = [...pvCon, ...pvSin, pvMin];
+  const pvLo  = Math.floor(Math.min(...allPv) / 10) * 10 - 10;
+  const pvHi  = Math.ceil( Math.max(...allPv) / 10) * 10 + 10;
+  const yPV   = (v) => PT + dH - ((v - pvLo) / (pvHi - pvLo)) * dH;
+  const yMin  = yPV(pvMin);
+
+  const ptsCon = pvCon.map((v, i) => `${xPos[i].toFixed(1)},${yPV(v).toFixed(1)}`).join(" ");
+  const ptsSin = pvSin.map((v, i) => `${xPos[i].toFixed(1)},${yPV(v).toFixed(1)}`).join(" ");
+
+  const HITOS = [
+    { label: "May Año 1", sub: "destete" },
+    { label: "Sep", sub: "fin 1° inv" },
+    { label: "May Año 2", sub: "ini 2° inv" },
+    { label: "Ago", sub: "fin 2° inv" },
+    { label: "Nov", sub: "entore" },
+  ];
+
+  // Y-axis ticks
+  const pvRange = pvHi - pvLo;
+  const step    = pvRange <= 80 ? 20 : pvRange <= 160 ? 40 : 60;
+  const yTicks  = [];
+  for (let v = Math.ceil(pvLo / step) * step; v <= pvHi; v += step) yTicks.push(v);
+
+  const llegaCon  = pvNovCon >= pvMin;
+  const llegaSin  = pvNovSin >= pvMin;
+
+  return (
+    <div style={{ position: "relative", marginBottom: 12, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 10px 6px" }}>
+      <div style={{ fontFamily: C.font, fontSize: 9, color: C.textDim, letterSpacing: 1, marginBottom: 4 }}>
+        TRAYECTORIA PESO VIVO — RECRÍA VAQUILLONA (1° y 2° INVIERNO)
+      </div>
+      <div style={{ position: "relative", overflowX: "auto" }}>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", maxWidth: W }}>
+          {/* invierno backgrounds */}
+          {[
+            [xPos[0], xPos[1]],
+            [xPos[2], xPos[3]],
+          ].map(([x1, x2], i) => (
+            <rect key={i} x={x1} y={PT} width={x2 - x1} height={dH}
+              fill={C.amber + "14"} />
+          ))}
+
+          {/* y-axis ticks + grid */}
+          {yTicks.map(v => {
+            const y = yPV(v);
+            return (
+              <g key={v}>
+                <line x1={PL} x2={W - PR} y1={y} y2={y} stroke={C.border} strokeWidth={0.6} />
+                <text x={PL - 3} y={y + 3} textAnchor="end"
+                  style={{ fontFamily: C.font, fontSize: "7px", fill: C.textFaint }}>{v}</text>
+              </g>
+            );
+          })}
+
+          {/* pvMinEntore reference */}
+          <line x1={PL} x2={W - PR} y1={yMin} y2={yMin}
+            stroke={C.amber} strokeWidth={1} strokeDasharray="4,3" />
+          <text x={W - PR + 3} y={yMin + 3}
+            style={{ fontFamily: C.font, fontSize: "7px", fill: C.amber }}>
+            {pvMin} kg
+          </text>
+          <text x={W - PR + 3} y={yMin + 10}
+            style={{ fontFamily: C.font, fontSize: "6px", fill: C.amber + "cc" }}>
+            mín
+          </text>
+
+          {/* SIN supl — red dashed */}
+          <polyline points={ptsSin} fill="none"
+            stroke={C.red} strokeWidth={1.5} strokeDasharray="5,3" />
+
+          {/* CON supl — green solid */}
+          <polyline points={ptsCon} fill="none"
+            stroke={C.green} strokeWidth={2} />
+
+          {/* Dots CON */}
+          {pvCon.map((v, i) => (
+            <circle key={i} cx={xPos[i]} cy={yPV(v)} r={3} fill={C.green} />
+          ))}
+          {/* Dots SIN */}
+          {pvSin.map((v, i) => (
+            <circle key={i} cx={xPos[i]} cy={yPV(v)} r={2.5} fill="none"
+              stroke={C.red} strokeWidth={1.2} />
+          ))}
+
+          {/* PV labels at end (Nov) */}
+          <text x={xPos[4] + 3} y={yPV(pvNovCon) + 3}
+            style={{ fontFamily: C.font, fontSize: "7.5px", fill: llegaCon ? C.green : C.amber, fontWeight: "700" }}>
+            {pvNovCon}
+          </text>
+          <text x={xPos[4] + 3} y={yPV(pvNovSin) + 3}
+            style={{ fontFamily: C.font, fontSize: "7.5px", fill: llegaSin ? C.green : C.red + "dd" }}>
+            {pvNovSin}
+          </text>
+
+          {/* X-axis hitos */}
+          {HITOS.map((h, i) => (
+            <g key={i}>
+              <line x1={xPos[i]} x2={xPos[i]} y1={PT} y2={PT + dH}
+                stroke={C.border} strokeWidth={0.6} strokeDasharray={i > 0 ? "2,3" : "none"} />
+              <text x={xPos[i]} y={H - PB + 11} textAnchor="middle"
+                style={{ fontFamily: C.font, fontSize: "7px", fill: C.textDim }}>
+                {h.label}
+              </text>
+              <text x={xPos[i]} y={H - PB + 20} textAnchor="middle"
+                style={{ fontFamily: C.font, fontSize: "6px", fill: C.textFaint }}>
+                {h.sub}
+              </text>
+            </g>
+          ))}
+        </svg>
+      </div>
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontFamily: C.font, fontSize: 8, color: C.textDim, marginTop: 3 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <svg width={18} height={8}><line x1={0} y1={4} x2={18} y2={4} stroke={C.green} strokeWidth={2} /></svg>
+          Con suplementación · {pvNovCon} kg
+          {llegaCon
+            ? <span style={{ color: C.green }}> ✓ llega al entore</span>
+            : <span style={{ color: C.amber }}> ⚠ falta {pvMin - pvNovCon} kg</span>}
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <svg width={18} height={8}><line x1={0} y1={4} x2={18} y2={4} stroke={C.red} strokeWidth={1.5} strokeDasharray="4,2" /></svg>
+          Sin suplementación · {pvNovSin} kg
+          {llegaSin
+            ? <span style={{ color: C.green }}> ✓ llega</span>
+            : <span style={{ color: C.red }}> ✗ no llega ({pvMin - pvNovSin} kg)</span>}
+        </span>
+        <span style={{ color: C.textFaint }}>Fondo ámbar = invierno · línea ámbar = peso mínimo entore ({pvMin} kg)</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente principal ───
 export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
   const [conReco, setConReco] = useState(false);
@@ -671,6 +848,8 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
           mostrarMovCC={true}
         />
       )}
+
+      <GraficoTrayectoriaVaq vaq1E={motor?.vaq1E} vaq2E={motor?.vaq2E} />
 
       {datos.vaq1 ? (
         datos.vaq1.nAnimales > 0 ? (
