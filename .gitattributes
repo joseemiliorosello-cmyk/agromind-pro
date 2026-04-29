@@ -1,0 +1,17 @@
+# Normalizar todos los archivos de texto a LF en el repo
+* text=auto eol=lf
+
+# Forzar LF en JS/CSS/JSON independientemente de la plataforma
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.md   text eol=lf
+
+# Binarios — sin conversión
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.pdf  binary

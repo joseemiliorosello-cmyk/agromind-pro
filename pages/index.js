@@ -172,83 +172,54 @@ function CalfAIPro() {
   // Un único hook que propaga todos los cambios en cascada
   const motor = useMotor(form, sat, potreros, usaPotreros);
 
-  // Desestructurar via motorEfectivo (ver abajo — incluye fallback síncrono)
-  // Las variables individuales se declaran después de motorEfectivo
-  // tray: usar motor como fuente primaria
-  // Si motor aún no corrió (null), calcular tray directamente desde form
-  // Esto elimina el flash de "sin datos" al cargar la página
-  const tray = motor?.tray ?? (() => {
-    if (!form.distribucionCC?.length) return null;
-    try {
-      const cadenaCalc = form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null;
-      return calcTrayectoriaCC({
-        dist: form.distribucionCC,
-        cadena: cadenaCalc,
-        destTrad: form.destTrad, destAntic: form.destAntic, destHiper: form.destHiper,
-        supHa: form.supHa, vacasN: form.vacasN,
-        biotipo: form.biotipo, primerParto: form.primerParto,
-        provincia: form.provincia,
-        supl1: form.supl1||"", dosis1: form.dosis1||"0",
-        supl2: "", dosis2: "0",
-        supl3: form.supl3||"", dosis3: form.dosis3||"0",
-      });
-    } catch(e) { return null; }
-  })();
-  // motorEfectivo: si el hook aún no corrió (null), calcular síncronamente
-  // El motor es <5ms — el delay del useEffect es el problema de los "—"
-  const motorEfectivo = motor ?? (() => {
-    // Solo requiere vacasN y biotipo — provincia tiene fallback "Corrientes" en motor
-    if (!form.vacasN || !form.biotipo) return null;
-    try { return correrMotor(form, sat, potreros, usaPotreros); }
-    catch(e) { return null; }
-  })();
+  const tray = motor?.tray ?? null;
 
-  const dist           = motorEfectivo?.dist           ?? null;
-  const balanceMensual = motorEfectivo?.balanceMensual ?? [];
-  const toroDxn        = motorEfectivo?.toroDxn        ?? null;
-  const stockStatus    = motorEfectivo?.stockStatus    ?? {};
-  const alertasMotor   = motorEfectivo?.alertas        ?? [];
-  const scoreRiesgo    = motorEfectivo?.scoreRiesgo    ?? 0;
-  const nivelRiesgo    = motorEfectivo?.nivelRiesgo    ?? "—";
-  const colorRiesgo    = motorEfectivo?.colorRiesgo    ?? C.textDim;
-  const cargaEV_ha     = motorEfectivo?.cargaEV_ha     ?? null;
-  const impactoCola    = motorEfectivo?.impactoCola    ?? null;
-  const vaq1E          = motorEfectivo?.vaq1E          ?? null;
-  const vaq2E          = motorEfectivo?.vaq2E          ?? null;
-  const ccDesvio       = motorEfectivo?.ccDesvio       ?? null;
+  const dist           = motor?.dist           ?? null;
+  const balanceMensual = motor?.balanceMensual ?? [];
+  const toroDxn        = motor?.toroDxn        ?? null;
+  const stockStatus    = motor?.stockStatus    ?? {};
+  const alertasMotor   = motor?.alertas        ?? [];
+  const scoreRiesgo    = motor?.scoreRiesgo    ?? 0;
+  const nivelRiesgo    = motor?.nivelRiesgo    ?? "—";
+  const colorRiesgo    = motor?.colorRiesgo    ?? C.textDim;
+  const cargaEV_ha     = motor?.cargaEV_ha     ?? null;
+  const impactoCola    = motor?.impactoCola    ?? null;
+  const vaq1E          = motor?.vaq1E          ?? null;
+  const vaq2E          = motor?.vaq2E          ?? null;
+  const ccDesvio       = motor?.ccDesvio       ?? null;
 
   // Variables del motor faltantes — restauradas
-  const ccPondVal      = motorEfectivo?.ccPondVal      ?? 0;
-  const cadena         = motorEfectivo?.cadena         ?? calcCadena(form.iniServ, form.finServ);
-  const disponMS       = motorEfectivo?.disponMS       ?? null;
-  const ndviN          = motorEfectivo?.ndviN          ?? (sat?.ndvi || 0.45);
-  const tcSave         = motorEfectivo?.tcSave         ?? null;
-  const pvSalidaVaq1   = motorEfectivo?.pvSalidaVaq1   ?? 0;
-  const pvEntradaVaq2  = motorEfectivo?.pvEntradaVaq2  ?? null;
-  const evalAgua       = motorEfectivo?.evalAgua       ?? null;
-  const sanidad        = motorEfectivo?.sanidad        ?? null;
-  const baseParams     = motorEfectivo?.baseParams     ?? {};
-  const nVacas         = motorEfectivo?.nVacas         ?? (parseInt(form.vacasN) || 0);
-  const nToros         = motorEfectivo?.nToros         ?? (parseInt(form.torosN) || 0);
-  const nV2s           = motorEfectivo?.nV2s           ?? (parseInt(form.v2sN)   || 0);
-  const nVaq1          = motorEfectivo?.nVaq1          ?? 0;
-  const nVaq2          = motorEfectivo?.nVaq2          ?? 0;
-  const totalEV        = motorEfectivo?.totalEV        ?? 0;
-  const pvEntVaq1      = motorEfectivo?.pvEntVaq1      ?? 0;
-  const ofertaMensual  = motorEfectivo?.ofertaMensual  ?? [];
-  const verdeoAporteMcalMes = motorEfectivo?.verdeoAporteMcalMes ?? 0;
-  const verdeoMesInicio     = motorEfectivo?.verdeoMesInicio     ?? 7;
-  const suplRodeoMcalDia    = motorEfectivo?.suplRodeoMcalDia    ?? 0;
-  const demandaAlim    = motorEfectivo?.demandaAlim    ?? null;
-  const visitasCampo   = motorEfectivo?.visitasCampo   ?? [];
-  const factorAgua     = motorEfectivo?.factorAgua     ?? 1.0;
-  const factorCarga    = motorEfectivo?.factorCarga    ?? 1.0;
+  const ccPondVal      = motor?.ccPondVal      ?? 0;
+  const cadena         = motor?.cadena         ?? calcCadena(form.iniServ, form.finServ);
+  const disponMS       = motor?.disponMS       ?? null;
+  const ndviN          = motor?.ndviN          ?? (sat?.ndvi || 0.45);
+  const tcSave         = motor?.tcSave         ?? null;
+  const pvSalidaVaq1   = motor?.pvSalidaVaq1   ?? 0;
+  const pvEntradaVaq2  = motor?.pvEntradaVaq2  ?? null;
+  const evalAgua       = motor?.evalAgua       ?? null;
+  const sanidad        = motor?.sanidad        ?? null;
+  const baseParams     = motor?.baseParams     ?? {};
+  const nVacas         = motor?.nVacas         ?? (parseInt(form.vacasN) || 0);
+  const nToros         = motor?.nToros         ?? (parseInt(form.torosN) || 0);
+  const nV2s           = motor?.nV2s           ?? (parseInt(form.v2sN)   || 0);
+  const nVaq1          = motor?.nVaq1          ?? 0;
+  const nVaq2          = motor?.nVaq2          ?? 0;
+  const totalEV        = motor?.totalEV        ?? 0;
+  const pvEntVaq1      = motor?.pvEntVaq1      ?? 0;
+  const ofertaMensual  = motor?.ofertaMensual  ?? [];
+  const verdeoAporteMcalMes = motor?.verdeoAporteMcalMes ?? 0;
+  const verdeoMesInicio     = motor?.verdeoMesInicio     ?? 7;
+  const suplRodeoMcalDia    = motor?.suplRodeoMcalDia    ?? 0;
+  const demandaAlim    = motor?.demandaAlim    ?? null;
+  const visitasCampo   = motor?.visitasCampo   ?? [];
+  const factorAgua     = motor?.factorAgua     ?? 1.0;
+  const factorCarga    = motor?.factorCarga    ?? 1.0;
   const confianza      = React.useMemo(() =>
-    calcConfianzaDiagnostico(form, motorEfectivo), [form, motorEfectivo]);
+    calcConfianzaDiagnostico(form, motor), [form, motor]);
 
   const score          = React.useMemo(() =>
-    motorEfectivo ? calcScore(motorEfectivo, form, null) : null,
-  [motorEfectivo, form]);
+    motor ? calcScore(motor, form, null) : null,
+  [motor, form]);
   const dispar     = sat && form.provincia ? calcDisp(form.provincia, sat.ndvi, sat.temp) : null;
   const nVaqRepos  = motor?.nVaq1 ?? (Math.round((parseInt(form.vacasN) || 0)) * (parseFloat(form.pctReposicion)||20) / 100);
 
@@ -282,12 +253,10 @@ function CalfAIPro() {
   // Usa GPS si disponible; si no, usa centroide de la provincia seleccionada
   // → el clima llega siempre que el usuario haya elegido provincia
   useEffect(() => {
-    console.log("[fetchSat] trigger — provincia:", form.provincia, "coords:", coords);
     const refCoords = coords || (form.provincia ? COORDS_PROV[form.provincia] : null);
-    if (!refCoords) { console.log("[fetchSat] sin coords — abortando"); return; }
+    if (!refCoords) return;
     setSat(null);
     fetchSat(refCoords.lat, refCoords.lon, form.zona || "NEA", form.provincia, form.enso, (data) => {
-      console.log("[fetchSat] respuesta:", data);
       setSat(data);
     });
   }, [coords, form.enso, form.zona, form.provincia, form.localidad]);
@@ -340,9 +309,9 @@ function CalfAIPro() {
     const iv = setInterval(() => { setLoadMsg(MSGS[mi % MSGS.length]); mi++; }, 2200);
     try {
       // Guardar en historial antes de analizar
-      guardarEnHistorial(form, motorEfectivo, null);
-      const cerebroData = calcCerebro(motorEfectivo, form, sat);
-      const prompt = buildPromptFull(motorEfectivo, form, sat, cerebroData, potreros);
+      guardarEnHistorial(form, motor, null);
+      const cerebroData = calcCerebro(motor, form, sat);
+      const prompt = buildPromptFull(motor, form, sat, cerebroData, potreros);
       const res  = await fetch("/api/analyze", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -545,20 +514,20 @@ function CalfAIPro() {
       }
 
       // ── VAQUILLONA ────────────────────────────────────────────────────────
-      if (motorEfectivo?.vaq1E && !motorEfectivo.vaq1E.mensaje) {
+      if (motor?.vaq1E && !motor.vaq1E.mensaje) {
         chk(20);
         doc.setFillColor(30,80,50);
         doc.roundedRect(ML, y, AU, 7, 2, 2, "F");
         doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
         doc.text("VAQUILLONA", ML+4, y+5);
         salto(10);
-        const v1x=motorEfectivo.vaq1E; const pvAd=parseFloat(form.pvVacaAdulta)||380;
+        const v1x=motor.vaq1E; const pvAd=parseFloat(form.pvVacaAdulta)||380;
         const obj1x=Math.round(pvAd*0.40); const ok1x=(v1x.pvSal||0)>=obj1x;
         doc.setFontSize(7.5); doc.setFont("helvetica","normal");
         doc.setTextColor(ok1x?45:180,ok1x?140:60,ok1x?60:40);
-        doc.text("1°inv: PV entrada "+(motorEfectivo.pvEntVaq1||"ND")+"kg → GDP "+(v1x.gdpPasto||0)+"g/d → PV salida "+(v1x.pvSal||0)+"kg (obj "+obj1x+"kg) "+(ok1x?"✓":"⚠ no llega"), ML, y, {maxWidth:AU}); salto(5);
-        if(motorEfectivo?.vaq2E){
-          const v2x=motorEfectivo.vaq2E; const ok2x=v2x.llegas;
+        doc.text("1°inv: PV entrada "+(motor.pvEntVaq1||"ND")+"kg → GDP "+(v1x.gdpPasto||0)+"g/d → PV salida "+(v1x.pvSal||0)+"kg (obj "+obj1x+"kg) "+(ok1x?"✓":"⚠ no llega"), ML, y, {maxWidth:AU}); salto(5);
+        if(motor?.vaq2E){
+          const v2x=motor.vaq2E; const ok2x=v2x.llegas;
           doc.setTextColor(ok2x?45:180,ok2x?140:60,ok2x?60:40);
           doc.text("2°inv: PV entore "+(v2x.pvEntore||0)+"kg (mín "+(v2x.pvMinEntore||0)+"kg) "+(ok2x?"✓":"⚠ no llega")+" · Flushing 25d pre-serv.: siempre", ML, y, {maxWidth:AU}); salto(5);
         }
@@ -2667,7 +2636,7 @@ function CalfAIPro() {
   } = getPasoRenders({
     form, set, setDist: (k,v) => setForm(f=>({...f,[k]:v})),
     gpsClick,
-    step, setStep, motor, motorEfectivo, tray, balanceMensual, sat,
+    step, setStep, motor, motor, tray, balanceMensual, sat,
     coords, setCoords, ccPondVal, evalAgua, sanidad, nVaqRepos, score,
     result, setResult, loading, setLoading, loadMsg, setLoadMsg,
     setTab, tab, confianza, scoreRiesgo, nivelRiesgo, colorRiesgo,
@@ -2677,7 +2646,7 @@ function CalfAIPro() {
     potreros, setPotreros, runAnalysis,
     pvEntVaq1, pvSalidaVaq1, pvEntradaVaq2,
     nVacas, nToros, nV2s, nVaq1, nVaq2, cadena, disponMS, tcSave,
-    PASOS, C, cerebro: calcCerebro(motorEfectivo, form, sat),
+    PASOS, C, cerebro: calcCerebro(motor, form, sat),
   });
 
   // ── 6 pasos de planilla de carga ───────────────────────────────
@@ -2716,7 +2685,7 @@ function CalfAIPro() {
       <div className="diag-grid">
         <div className="diag-sticky">
           <DashboardEstablecimiento
-            motor={motorEfectivo} form={form} sat={sat} score={scoreD}
+            motor={motor} form={form} sat={sat} score={scoreD}
             confianza={confianza} onTab={(t) => t === "cerebro" && setStep(5)}
           />
         </div>
@@ -2730,7 +2699,7 @@ function CalfAIPro() {
     <div className="reco-grid">
       <div className="diag-sticky">
         {/* Cerebro estructurado (cálculo local) */}
-        <TabCerebro motor={motorEfectivo} form={form} sat={sat} />
+        <TabCerebro motor={motor} form={form} sat={sat} />
       </div>
 
       <div>
