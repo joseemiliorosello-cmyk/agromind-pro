@@ -2726,55 +2726,105 @@ function CalfAIPro() {
   // ══════════════════════════════════════════════════════════════
   if (!session) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
-      <div style={{ fontFamily:C.font, fontSize:28, color:C.green, marginBottom:8, letterSpacing:2 }}>🌾 CALF AI</div>
-      <div style={{ fontFamily:C.sans, fontSize:13, color:C.textDim, marginBottom:32 }}>Diagnóstico de cría bovina</div>
-      <button onClick={()=>signIn("google")} style={{ background:C.green, color:"#0b1a0c", padding:"14px 28px", borderRadius:12, border:"none", fontFamily:C.sans, fontSize:15, fontWeight:700, cursor:"pointer" }}>
-        Iniciar sesión con Google
-      </button>
+      <div style={{ marginBottom:48, textAlign:"center" }}>
+        <div style={{ fontFamily:C.font, fontSize:13, color:C.textFaint, letterSpacing:4, marginBottom:16, textTransform:"uppercase" }}>Diagnóstico bovino</div>
+        <div style={{ fontFamily:C.font, fontSize:42, color:C.green, letterSpacing:6, fontWeight:700, lineHeight:1 }}>CALF AI</div>
+        <div style={{ width:48, height:2, background:C.green+"44", margin:"16px auto 0" }} />
+      </div>
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:"32px 40px", textAlign:"center", boxShadow:C.sh.lg }}>
+        <div style={{ fontFamily:C.sans, fontSize:14, color:C.textDim, marginBottom:24, lineHeight:1.6 }}>
+          Ingresá con tu cuenta institucional para<br/>acceder al sistema de diagnóstico
+        </div>
+        <button onClick={()=>signIn("google")} style={{
+          background:C.green, color:C.card, padding:"13px 32px", borderRadius:10,
+          border:"none", fontFamily:C.sans, fontSize:14, fontWeight:700, cursor:"pointer",
+          letterSpacing:".3px", boxShadow:`0 4px 16px ${C.green}44`,
+        }}>
+          Iniciar sesión con Google
+        </button>
+        <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, marginTop:20 }}>
+          INTA · AgroMind Pro · v2025
+        </div>
+      </div>
     </div>
   );
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap');
-        * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-        select, input, button { outline:none; }
-        input[type=range]::-webkit-slider-thumb { width:18px; height:18px; }
-        details > summary::-webkit-details-marker { display:none; }
-        @keyframes pulse { 0%,100%{opacity:.4;transform:scale(1)} 50%{opacity:1;transform:scale(1.2)} }
-        .calfai-tabs::-webkit-scrollbar { display:none; }
-        .calfai-tabs { -ms-overflow-style:none; scrollbar-width:none; }
-        /* Hover/focus/transition states */
-        button { transition: opacity .15s, transform .12s, background .15s, box-shadow .15s; }
-        button:hover:not(:disabled) { opacity: .84; }
-        button:active:not(:disabled) { transform: scale(0.975); }
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+        *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html { color-scheme: dark; }
+
+        /* ── Inputs y selects — dark theme ─────────────────────────── */
+        select, input[type=text], input[type=number], input[type=date], textarea {
+          background: #1a2a16 !important;
+          color: #d6e8d0 !important;
+          border: 1px solid #253b1f !important;
+          border-radius: 8px;
+        }
+        select option { background: #1a2a16; color: #d6e8d0; }
         select:focus, input[type=text]:focus, input[type=number]:focus,
         input[type=date]:focus, textarea:focus {
-          outline: 2px solid #2e7818 !important;
+          outline: 2px solid #5cb83a !important;
           outline-offset: 1px;
+          border-color: #3c5c34 !important;
         }
-        /* Step content entrance animation */
+        select:hover, input[type=text]:hover, input[type=number]:hover,
+        input[type=date]:hover {
+          border-color: #3c5c34 !important;
+        }
+
+        /* ── Scrollbar ──────────────────────────────────────────────── */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0d1a0b; }
+        ::-webkit-scrollbar-thumb { background: #3c5c34; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #5cb83a; }
+        * { scrollbar-width: thin; scrollbar-color: #3c5c34 #0d1a0b; }
+
+        /* ── Botones ────────────────────────────────────────────────── */
+        button { transition: opacity .14s, transform .1s, background .14s, box-shadow .14s; }
+        button:hover:not(:disabled) { opacity: .88; }
+        button:active:not(:disabled) { transform: scale(0.97); }
+        button:disabled { opacity: .4; cursor: not-allowed; }
+
+        /* ── Range inputs ───────────────────────────────────────────── */
+        input[type=range] { accent-color: #5cb83a; }
+        input[type=range]::-webkit-slider-thumb { width: 18px; height: 18px; }
+
+        /* ── Details/summary ────────────────────────────────────────── */
+        details > summary::-webkit-details-marker { display: none; }
+        details > summary { cursor: pointer; }
+
+        /* ── Animaciones de step ────────────────────────────────────── */
         .calfai-step { animation: stepIn .18s ease-out; }
-        @keyframes stepIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-        /* Split layout — diagnóstico */
-        .diag-grid { display:grid; gap:0; }
-        @media (min-width:1200px) {
-          .diag-grid { grid-template-columns:420px 1fr; gap:28px; align-items:start; }
-          .diag-sticky { position:sticky; top:80px; max-height:calc(100vh - 100px); overflow-y:auto; scrollbar-width:thin; }
+        @keyframes stepIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ── Tabs scrollbar oculto ──────────────────────────────────── */
+        .calfai-tabs::-webkit-scrollbar { display: none; }
+        .calfai-tabs { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* ── Layout grids ───────────────────────────────────────────── */
+        .diag-grid { display: grid; gap: 0; }
+        @media (min-width: 1200px) {
+          .diag-grid { grid-template-columns: 440px 1fr; gap: 32px; align-items: start; }
+          .diag-sticky { position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto; scrollbar-width: thin; }
         }
-        /* Split layout — recomendaciones */
-        .reco-grid { display:grid; gap:0; }
-        @media (min-width:1200px) {
-          .reco-grid { grid-template-columns:1fr 1fr; gap:28px; align-items:start; }
+        .reco-grid { display: grid; gap: 0; }
+        @media (min-width: 1200px) {
+          .reco-grid { grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
         }
+
+        /* ── Checkbox ───────────────────────────────────────────────── */
+        input[type=checkbox] { accent-color: #5cb83a; width: 14px; height: 14px; }
       `}</style>
 
       {/* Header sticky */}
-      <div style={{ background:C.card, borderBottom:`1px solid ${C.border}`, position:"sticky", top:0, zIndex:50 }}>
-        <div style={{ maxWidth:1400, margin:"0 auto", padding:"10px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ fontFamily:C.font, fontSize:16, color:C.green, letterSpacing:2, fontWeight:700 }}>
-            CALF AI<span style={{ color:C.textDim, fontSize:10, marginLeft:6 }}>v1</span>
+      <div style={{ background:C.card, borderBottom:`1px solid ${C.border}`, position:"sticky", top:0, zIndex:50, boxShadow:C.sh.sm }}>
+        <div style={{ maxWidth:1400, margin:"0 auto", padding:"12px 28px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontFamily:C.font, fontSize:15, color:C.green, letterSpacing:3, fontWeight:700, display:"flex", alignItems:"center", gap:10 }}>
+            <span style={{ fontSize:18 }}>◈</span>
+            CALF AI<span style={{ color:C.textFaint, fontSize:10, marginLeft:8, letterSpacing:1, fontWeight:400 }}>diagnóstico bovino</span>
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
             {ccPondVal > 0 && <Pill color={smf(ccPondVal,4.5,5.5)}>CC {ccPondVal.toFixed(1)}</Pill>}
@@ -2796,7 +2846,7 @@ function CalfAIPro() {
         </div>
 
         {/* Tab nav horizontal */}
-        <div className="calfai-tabs" style={{ maxWidth:1400, margin:"0 auto", display:"flex", overflowX:"auto", borderTop:`1px solid ${C.border}` }}>
+        <div className="calfai-tabs" style={{ maxWidth:1400, margin:"0 auto", display:"flex", overflowX:"auto", borderTop:`1px solid ${C.border}`, padding:"0 20px" }}>
           {PASOS.map((p, i) => {
             const dotColor = (() => {
               const step_alerts = alertasMotor.filter(a => {
@@ -2812,14 +2862,15 @@ function CalfAIPro() {
             const active = step === i;
             return (
               <button key={i} onClick={()=>setStep(i)} style={{
-                flex:"0 0 auto", padding:"10px 20px",
-                background:"none", border:"none",
+                flex:"0 0 auto", padding:"13px 22px",
+                background: active ? C.green+"16" : "none", border:"none",
                 borderBottom: active ? `2px solid ${C.green}` : "2px solid transparent",
                 color: active ? C.green : C.textDim,
                 fontFamily:C.font, fontSize:13,
-                fontWeight: active ? 700 : 400,
+                fontWeight: active ? 600 : 400,
                 cursor:"pointer", whiteSpace:"nowrap",
-                position:"relative",
+                position:"relative", letterSpacing: active ? ".3px" : 0,
+                transition:"background .15s, color .15s",
               }}>
                 {p.label}
                 {dotColor && !active && (
@@ -2882,7 +2933,7 @@ function CalfAIPro() {
       )}
 
       {/* Contenido del paso */}
-      <div style={{ maxWidth:1400, margin:"0 auto", padding:"24px 20px 48px" }}>
+      <div style={{ maxWidth:1400, margin:"0 auto", padding:"32px 28px 64px" }}>
         <div key={step} className="calfai-step">
           {RENDERS[step]?.()}
         </div>

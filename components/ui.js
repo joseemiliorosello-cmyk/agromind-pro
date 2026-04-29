@@ -12,7 +12,7 @@ import { T, SUPLEMENTOS } from "../lib/constantes";
 const C = T;
 
 // --- HELPERS DE COLOR ---------------------------------------------
-const smf      = (v, bajo, alto) => v >= alto ? "#7ec850" : v >= bajo ? "#e8a030" : "#e05530";
+const smf      = (v, bajo, alto) => v >= alto ? T.green : v >= bajo ? T.amber : T.red;
 const smf2 = (v, ok, warn) => v >= ok ? C.green : v >= warn ? C.amber : C.red;
 const mcalKgAdj = (t, fenol) => {
   const base = t>=25?2.10 : t>=20?1.90 : t>=15?1.50 : t>=10?1.00 : 0.65;

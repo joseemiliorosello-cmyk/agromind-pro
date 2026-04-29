@@ -5,25 +5,9 @@
 import React, { useState, useMemo, useRef } from "react";
 import { balancePorCategoria, calcTrayectoriaCC, calcCadena } from "../lib/motor";
 import { calcCerebro } from "../lib/cerebro";
+import { T as C } from "../lib/constantes";
 
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-
-const C = {
-  bg: "#f0f5ee",
-  card: "#ffffff",
-  card2: "#f5faf3",
-  border: "#cce0c4",
-  text: "#182c12",
-  textDim: "#486840",
-  textFaint: "#7aa070",
-  green: "#2e7818",
-  greenDark: "#1e5810",
-  blue: "#1e68a8",
-  orange: "#a06810",
-  red: "#b82810",
-  amber: "#a06810",
-  font: "'IBM Plex Mono', monospace",
-};
 
 function aplicarRecomendaciones(form) {
   const f = { ...form };
@@ -117,9 +101,9 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 180 
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}
         onMouseLeave={() => setTooltip(null)}>
         {[4, 5, 6].map(i => (
-          <rect key={i} x={pad + i * colW} y={2} width={colW} height={H - 14} fill={C.amber + "08"} />
+          <rect key={i} x={pad + i * colW} y={2} width={colW} height={H - 14} fill={C.amber + "1c"} />
         ))}
-        <rect x={pad + mesHoy * colW} y={2} width={colW} height={H - 14} fill={C.green + "10"} rx={2} />
+        <rect x={pad + mesHoy * colW} y={2} width={colW} height={H - 14} fill={C.green + "1e"} rx={2} />
         <line x1={pad} y1={midY} x2={W - pad} y2={midY} stroke={C.textFaint} strokeWidth="0.6" strokeDasharray="2,3" />
 
         {datos.map((d, i) => {
@@ -231,9 +215,9 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}
         onMouseLeave={() => setTooltip(null)}>
         {[4,5,6].map(i => (
-          <rect key={i} x={pad + i * colW} y={10} width={colW} height={midY - 10} fill={C.amber + "08"} />
+          <rect key={i} x={pad + i * colW} y={10} width={colW} height={midY - 10} fill={C.amber + "1c"} />
         ))}
-        <rect x={pad + mesHoy * colW} y={10} width={colW} height={midY - 10} fill={C.green + "10"} rx={2} />
+        <rect x={pad + mesHoy * colW} y={10} width={colW} height={midY - 10} fill={C.green + "1e"} rx={2} />
 
         {/* línea cero */}
         <line x1={pad} y1={y0} x2={W - pad} y2={y0} stroke={C.textFaint} strokeWidth="0.5" strokeDasharray="1,2" opacity={0.6} />
@@ -413,10 +397,10 @@ function TrayectoriaCC({ form, motor }) {
         onMouseLeave={() => setTooltip(null)}>
 
         {/* Threshold bands */}
-        <rect x={PL} y={PT}  width={drawW} height={y40 - PT}  fill={C.green + "05"} />
-        <rect x={PL} y={y50} width={drawW} height={y45 - y50} fill={C.green + "08"} />
-        <rect x={PL} y={y45} width={drawW} height={y40 - y45} fill={C.amber + "0b"} />
-        <rect x={PL} y={y40} width={drawW} height={PT + drawH - y40} fill={C.red + "08"} />
+        <rect x={PL} y={PT}  width={drawW} height={y40 - PT}  fill={C.green + "1e"} />
+        <rect x={PL} y={y50} width={drawW} height={y45 - y50} fill={C.green + "16"} />
+        <rect x={PL} y={y45} width={drawW} height={y40 - y45} fill={C.amber + "1e"} />
+        <rect x={PL} y={y40} width={drawW} height={PT + drawH - y40} fill={C.red + "18"} />
 
         {/* Month tints */}
         {[4,5,6].map(i => <rect key={i} x={PL + i*colW} y={PT} width={colW} height={drawH} fill={C.amber+"06"} />)}
@@ -534,7 +518,7 @@ function CronogramaAnual({ motor, form, sat }) {
         {cronograma.map((m, i) => {
           const x0 = PL + i * colW;
           const cx = x0 + colW / 2;
-          const bgFill = m.esInv ? C.amber + "09" : m.esActual ? C.green + "14" : "transparent";
+          const bgFill = m.esInv ? C.amber + "1a" : m.esActual ? C.green + "26" : "transparent";
           const barH = Math.max(2, Math.abs(m.bal) * barScale);
           const barY = m.bal >= 0 ? zeroY - barH : zeroY;
           const barColor = m.bal >= 0 ? C.green : m.bal > -30 ? C.amber : C.red;
@@ -657,13 +641,13 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
       </div>
 
       {sinPotreros && (
-        <div style={{ background: C.amber + "15", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.amber }}>
+        <div style={{ background: C.amber + "28", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.amber }}>
           Estimacion sin asignacion de potreros a categorias — carga los potreros en el paso "El campo" para balance preciso.
         </div>
       )}
 
       {conReco && (
-        <div style={{ background: C.green + "10", border: `1px solid ${C.green}30`, borderRadius: 8, padding: "6px 10px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.green }}>
+        <div style={{ background: C.green + "1e", border: `1px solid ${C.green}30`, borderRadius: 8, padding: "6px 10px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.green }}>
           Proyeccion con ajustes estandar: suplementacion proteica vaq1 y vaq2 en invierno + verdeo orientado a recria.
         </div>
       )}
@@ -714,11 +698,11 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
           return (
             <>
               {llegaEntore ? (
-                <div style={{ background: C.green + "18", border: `1px solid ${C.green}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 6, fontFamily: C.font, fontSize: 9, color: C.green }}>
+                <div style={{ background: C.green + "2c", border: `1px solid ${C.green}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 6, fontFamily: C.font, fontSize: 9, color: C.green }}>
                   Llega al entore con peso proyectado ({vaq2E.pvEntore} kg / min {vaq2E.pvMinEntore} kg)
                 </div>
               ) : vaq2E ? (
-                <div style={{ background: C.amber + "18", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 6, fontFamily: C.font, fontSize: 9, color: C.amber }}>
+                <div style={{ background: C.amber + "2c", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 6, fontFamily: C.font, fontSize: 9, color: C.amber }}>
                   No llega al entore — falta {vaq2E.pvMinEntore - vaq2E.pvEntore} kg · necesita &ge; {gdpMinNecesario} g/d promedio
                 </div>
               ) : null}
