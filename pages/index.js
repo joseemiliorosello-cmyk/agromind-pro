@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signOut, signIn, SessionProvider } from "next-auth/react";
 import { T as C, FORM_DEF, MESES_NOM, CALIDAD_C4_CALIBRADA, cc5, SUPLEMENTOS } from "../lib/constantes";
-import { correrMotor, useMotor, calcCadena, calcConsumoAgua, calcDisp,
+import { correrMotor, calcCadena, calcConsumoAgua, calcDisp,
          calcScore, calcGEI, calcTrayectoriaCC, calcDisponibilidadMS,
          calcSupervivencia, calcV2S, mcalSuplemento, fetchSat,
          fmtFecha, dZona, dProv, smf, diagnosticarSistema,
@@ -11,6 +11,7 @@ import { correrMotor, useMotor, calcCadena, calcConsumoAgua, calcDisp,
          getBiotipo, FENOLOGIAS } from "../lib/motor";
 import { calcCerebro, buildPromptFull, SYS_FULL,
          interpretarSistemaCompleto } from "../lib/cerebro";
+import { useMotor } from "../lib/useMotor";
 import { usePersistencia, PanelHistorial } from "../lib/persistencia";
 import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
          MetricCard, SelectF, Slider, Toggle, SuplSelector } from "../components/ui";
