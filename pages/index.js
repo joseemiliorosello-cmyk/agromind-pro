@@ -12,7 +12,7 @@ import { correrMotor, calcCadena, calcConsumoAgua, calcDisp,
 import { calcCerebro, buildPromptFull, SYS_FULL,
          interpretarSistemaCompleto } from "../lib/cerebro";
 import { useMotor } from "../lib/useMotor";
-import { usePersistencia, PanelHistorial } from "../lib/persistencia";
+import { usePersistencia, PanelHistorial, calcConfianzaDiagnostico } from "../lib/persistencia";
 import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
          MetricCard, SelectF, Slider, Toggle, SuplSelector } from "../components/ui";
 import { DashboardEstablecimiento } from "../components/dashboard";
@@ -45,40 +45,6 @@ const PASOS = [
   { id:"recomendaciones", label:"Recomendaciones"  },
 ];
 
-
-function calcConfianzaDiagnostico(form, motor) {
-  const checks = [
-    // Datos críticos — peso 3
-    { campo:"vacasN",      peso:3, label:"N° vacas",       ok: !!form.vacasN && parseFloat(form.vacasN) > 0 },
-    { campo:"distribucionCC", peso:3, label:"CC del rodeo", ok: (form.distribucionCC||[]).some(d => parseFloat(d.pct)>0) },
-    { campo:"iniServ",     peso:3, label:"Fechas servicio", ok: !!form.iniServ && !!form.finServ },
-    { campo:"biotipo",     peso:2, label:"Biotipo",         ok: !!form.biotipo },
-    // Datos importantes — peso 2
-    { campo:"supHa",       peso:2, label:"Hectáreas",       ok: !!form.supHa && parseFloat(form.supHa) > 0 },
-    { campo:"fenologia",   peso:2, label:"Fenología pasto", ok: !!form.fenologia },
-    { campo:"destTrad",    peso:2, label:"Modalidad destete", ok: (parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0) === 100 },
-    { campo:"pvVacaAdulta",peso:2, label:"PV vaca",         ok: !!form.pvVacaAdulta && parseFloat(form.pvVacaAdulta) > 0 },
-    // Datos útiles — peso 1
-    { campo:"sanVacunas",  peso:1, label:"Sanidad",         ok: !!form.sanVacunas },
-    { campo:"aguaTDS",     peso:1, label:"Calidad agua",    ok: !!form.aguaTDS && parseFloat(form.aguaTDS) > 0 },
-    { campo:"torosCC",     peso:1, label:"CC toros",        ok: !!form.torosCC && parseFloat(form.torosCC) > 0 },
-    { campo:"vegetacion",  peso:1, label:"Tipo vegetación", ok: !!form.vegetacion },
-    { campo:"enso",        peso:1, label:"ENSO/Clima",      ok: !!form.enso },
-    { campo:"prenez",      peso:1, label:"Preñez histórica",ok: !!form.prenez && parseFloat(form.prenez) > 0 },
-  ];
-
-  const total    = checks.reduce((s,c) => s + c.peso, 0);
-  const cargados = checks.reduce((s,c) => s + (c.ok ? c.peso : 0), 0);
-  const score    = Math.round(cargados / total * 100);
-
-  const faltantes = checks.filter(c => !c.ok && c.peso >= 2).map(c => c.label);
-
-  const nivel = score >= 85 ? "alto" : score >= 60 ? "medio" : "bajo";
-  const color = score >= 85 ? "#639922" : score >= 60 ? "#BA7517" : "#A32D2D";
-  const label = score >= 85 ? "Alta confianza" : score >= 60 ? "Confianza media" : "Datos incompletos";
-
-  return { score, nivel, color, label, faltantes, checks };
-}
 
 
 export default function Page() {
