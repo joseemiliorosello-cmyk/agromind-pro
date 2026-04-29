@@ -764,7 +764,7 @@ function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
 }
 
 // ─── Componente principal ───
-export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
+export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPotreros, potreros }) {
   const [conReco, setConReco] = useState(false);
 
   const formActivo = useMemo(() => conReco ? aplicarRecomendaciones(form) : form, [form, conReco]);
@@ -783,15 +783,16 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
     };
   }, [motor, formActivo, sat]);
 
-  if (!datos) {
+  const todosNull = datos && !datos.general && !datos.vacas_v2s && !datos.vaq1 && !datos.vaq2;
+  if (!datos || todosNull) {
     return (
       <div style={{ padding: 20, textAlign: "center", fontFamily: C.font, fontSize: 10, color: C.textDim }}>
-        Cargando balance por categoria...
+        No hay datos suficientes para el balance. Completá el rodeo y los potreros.
       </div>
     );
   }
 
-  const sinPotreros = !form.usaPotreros || !(form.potreros || []).length;
+  const sinPotreros = !usaPotreros || !(potreros || []).length;
 
   return (
     <div>

@@ -155,6 +155,12 @@ function CalfAIPro() {
   const vaq2E          = motor?.vaq2E          ?? null;
   const ccDesvio       = motor?.ccDesvio       ?? null;
 
+  // Preñez: usar dato real si el técnico lo ingresó; estimar solo como fallback
+  const prenezReal     = form.prenez ? parseFloat(form.prenez) : null;
+  const prenezEst      = tray?.pr ?? null;
+  const prenezDisplay  = prenezReal ?? prenezEst ?? null;
+  const prenezFuente   = prenezReal !== null ? "hist." : "est.";
+
   // Variables del motor faltantes — restauradas
   const ccPondVal      = motor?.ccPondVal      ?? 0;
   const cadena         = motor?.cadena         ?? calcCadena(form.iniServ, form.finServ);
@@ -277,8 +283,15 @@ function CalfAIPro() {
     try {
       // Guardar en historial antes de analizar
       guardarEnHistorial(form, motor, null);
-      const cerebroData = calcCerebro(motor, form, sat);
-      const prompt = buildPromptFull(motor, form, sat, cerebroData, potreros);
+      let cerebroData, prompt;
+      try {
+        cerebroData = calcCerebro(motor, form, sat);
+        prompt = buildPromptFull(motor, form, sat, cerebroData, potreros);
+      } catch (buildErr) {
+        console.error("Error generando el análisis:", buildErr);
+        setResult("❌ Error generando el análisis: " + buildErr.message);
+        return;
+      }
       const res  = await fetch("/api/analyze", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -299,7 +312,7 @@ function CalfAIPro() {
           vacas:        form.vacasN,
           ccPond:       ccPondVal?.toFixed(2),
           ccServ:       tray?.ccServ,
-          prenezEst:    (tray?.pr || "—") + "%",
+          prenezEst:    (prenezDisplay !== null ? prenezDisplay : "—") + "% (" + prenezFuente + ")",
           condForr:     sat?.condForr,
           aguaTDS:      form.aguaTDS || "ND",
           resumenInforme: (data.result || "").slice(0, 600),
@@ -341,7 +354,7 @@ function CalfAIPro() {
       const kpis = [
         ["CC hoy",      ccPondVal > 0 ? ccPondVal.toFixed(1) : "sin dato"],
         ["CC serv.",    tray?.ccServ  || "—"],
-        ["Preñez est.", (tray?.pr     || "—") + "%"],
+        ["Preñez " + prenezFuente, (prenezDisplay !== null ? prenezDisplay : "—") + "%"],
         ["Anestro",     (tray?.anestro?.dias || "—") + "d"],
         ["Agua",        form.aguaTDS ? (form.aguaTDS + "mg/L") : "ND"],
       ];
@@ -2120,6 +2133,11 @@ function CalfAIPro() {
           <div style={{ fontFamily:C.font, fontSize:10, color:C.green, letterSpacing:1, marginBottom:4 }}>
             🐄 MANEJO DE LACTANCIA — HERRAMIENTA PRINCIPAL DEL SISTEMA
           </div>
+          <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:8, fontFamily:C.font, fontSize:8, color:C.textDim }}>
+            <span><span style={{ color:C.red }}>⚡</span> Hiperprecoz — CC &lt;4.0 · crítico</span>
+            <span><span style={{ color:C.amber }}>🔶</span> Anticipado — CC 4.0–4.9 · borderline</span>
+            <span><span style={{ color:C.green }}>🟢</span> Tradicional — CC ≥5.0 · óptimo</span>
+          </div>
           <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, lineHeight:1.5, marginBottom:12 }}>
             El ternero al pie consume <strong style={{color:C.text}}>6–8 Mcal/día</strong> = más que cualquier suplemento posible.
             La herramienta para mejorar CC de la vaca es <strong style={{color:C.green}}>controlar cuándo y cómo se retira ese costo</strong>.
@@ -2657,7 +2675,7 @@ function CalfAIPro() {
           />
         </div>
         <div>
-          {motor && <GraficosBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />}
+          {motor && <GraficosBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} usaPotreros={usaPotreros} potreros={potreros} />}
         </div>
       </div>
     );
