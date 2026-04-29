@@ -97,7 +97,7 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 180 
     const pixY = svgY / scaleY;
     const bal  = d.balance;
     const lines = [
-      `${MESES[i]}${[5,6,7].includes(i) ? " ❄" : ""}`,
+      `${MESES[i]}${[4,5,6].includes(i) ? " ❄" : ""}`,
       `Oferta:  ${d.oferta.total?.toFixed(1)} Mcal/d`,
       `  Pasto: ${d.oferta.pasto?.toFixed(1)}  Supl: ${(d.oferta.suplemento||0).toFixed(1)}`,
       d.oferta.verdeo > 0 ? `  Verdeo: ${d.oferta.verdeo.toFixed(1)}` : null,
@@ -116,7 +116,7 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 180 
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}
         onMouseLeave={() => setTooltip(null)}>
-        {[5, 6, 7].map(i => (
+        {[4, 5, 6].map(i => (
           <rect key={i} x={pad + i * colW} y={2} width={colW} height={H - 14} fill={C.amber + "08"} />
         ))}
         <rect x={pad + mesHoy * colW} y={2} width={colW} height={H - 14} fill={C.green + "10"} rx={2} />
@@ -157,8 +157,8 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 180 
               )}
               <text x={x + barW / 2} y={H - 2} textAnchor="middle"
                 style={{ fontFamily: C.font, fontSize: "6.5px",
-                  fill: i === mesHoy ? C.green : [5,6,7].includes(i) ? C.amber : C.textFaint,
-                  fontWeight: i === mesHoy || [5,6,7].includes(i) ? 700 : 400 }}>
+                  fill: i === mesHoy ? C.green : [4,5,6].includes(i) ? C.amber : C.textFaint,
+                  fontWeight: i === mesHoy || [4,5,6].includes(i) ? 700 : 400 }}>
                 {MESES[i]}
               </text>
             </g>
@@ -201,6 +201,7 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
   const rango = maxG - minG;
   const midY  = H - 30;
   const dual  = objetivoVerano !== undefined;
+  const y0    = midY - ((0 - minG) / rango) * (midY - 15);
 
   const handleEnter = (e, i, d) => {
     if (!svgRef.current || !containerRef.current) return;
@@ -213,7 +214,7 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
     const obj = objMes(i, objetivoVerano, objetivoInvierno, objetivoGDP);
     const cumple = gdp >= obj;
     const lines = [
-      `${MESES[i]}${[5,6,7].includes(i) ? " ❄" : ""}`,
+      `${MESES[i]}${[4,5,6].includes(i) ? " ❄" : ""}`,
       `GDP:      ${gdp} g/d`,
       `Objetivo: ${obj} g/d`,
       cumple ? "Estado:   cumple ✓" : `Estado:   deficit (${gdp - obj} g/d)`,
@@ -229,10 +230,15 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}
         onMouseLeave={() => setTooltip(null)}>
-        {[5,6,7].map(i => (
+        {[4,5,6].map(i => (
           <rect key={i} x={pad + i * colW} y={10} width={colW} height={midY - 10} fill={C.amber + "08"} />
         ))}
         <rect x={pad + mesHoy * colW} y={10} width={colW} height={midY - 10} fill={C.green + "10"} rx={2} />
+
+        {/* línea cero */}
+        <line x1={pad} y1={y0} x2={W - pad} y2={y0} stroke={C.textFaint} strokeWidth="0.5" strokeDasharray="1,2" opacity={0.6} />
+        <text x={pad - 2} y={y0 + 3} textAnchor="end"
+          style={{ fontFamily: C.font, fontSize: "6px", fill: C.textFaint }}>0</text>
 
         {/* líneas objetivo */}
         {dual ? (() => {
@@ -272,26 +278,28 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
         {datos.map((d, i) => {
           const gdp = d.gdp || 0;
           const obj = objMes(i, objetivoVerano, objetivoInvierno, objetivoGDP);
-          const y0  = midY - ((0   - minG) / rango) * (midY - 15);
           const yG  = midY - ((gdp - minG) / rango) * (midY - 15);
           const col = gdp >= obj ? C.green : gdp >= 0 ? C.amber : C.red;
           const x   = pad + i * colW + 1.5;
           const bW  = colW - 3;
+          const barTop = Math.min(y0, yG);
+          const barH  = Math.abs(yG - y0);
           return (
             <g key={i} style={{ cursor: "crosshair" }}
               onMouseEnter={e => handleEnter(e, i, d)}
             >
               <rect x={x - 1} y={10} width={bW + 2} height={midY - 10} fill="transparent" />
-              <rect x={x} y={Math.min(y0, yG)} width={bW} height={Math.abs(yG - y0)} fill={col} opacity={0.85} rx={1} />
+              <rect x={x} y={barTop} width={bW} height={Math.max(1, barH)} fill={col} opacity={0.85} rx={1} />
               {bW > 14 && (
-                <text x={x + bW / 2} y={yG - 3} textAnchor="middle"
+                <text x={x + bW / 2} y={gdp >= 0 ? barTop - 2 : barTop + barH + 8}
+                  textAnchor="middle"
                   style={{ fontFamily: C.font, fontSize: "6.5px", fill: col, fontWeight: 700 }}>
                   {gdp}
                 </text>
               )}
               <text x={x + bW / 2} y={H - 2} textAnchor="middle"
                 style={{ fontFamily: C.font, fontSize: "6.5px",
-                  fill: i === mesHoy ? C.green : [5,6,7].includes(i) ? C.amber : C.textFaint }}>
+                  fill: i === mesHoy ? C.green : [4,5,6].includes(i) ? C.amber : C.textFaint }}>
                 {MESES[i]}
               </text>
             </g>
@@ -301,8 +309,8 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
       <Tooltip tip={tooltip} />
       <div style={{ fontFamily: C.font, fontSize: 8, color: C.textDim, marginTop: 4 }}>
         {dual
-          ? "GDP proyectada mes a mes. Verde = cumple obj. verano (500 g/d) · Ambar = cumple obj. invierno (200 g/d) · Rojo = deficit."
-          : "GDP proyectada mes a mes. Linea punteada = objetivo. Barras verdes = cumple, amarillas = parcial, rojas = deficit."}
+          ? "GDP proyectada · verde: cumple obj. estacional · ámbar: positivo pero bajo obj. · rojo: pérdida de peso · Obj. verano (ago–abr): 500 g/d · Obj. invierno (may–jul): 200 g/d"
+          : "GDP proyectada · línea = objetivo · verde: cumple · ámbar: positivo bajo obj. · rojo: pérdida de peso"}
       </div>
     </div>
   );
@@ -381,7 +389,7 @@ function TrayectoriaCC({ form, motor }) {
       x: Math.min(e.clientX - rect.left + 8, rect.width - 150),
       y: Math.max(4, e.clientY - rect.top - 64),
       lines: [
-        MESES[i] + ([5,6,7].includes(i) ? " ❄" : ""),
+        MESES[i] + ([4,5,6].includes(i) ? " ❄" : ""),
         `CC: ${lineActual[i].toFixed(2)}`,
         i === mesParto  ? "Parto"   : null,
         i === mesDestN  ? "Destete" : null,
@@ -411,7 +419,7 @@ function TrayectoriaCC({ form, motor }) {
         <rect x={PL} y={y40} width={drawW} height={PT + drawH - y40} fill={C.red + "08"} />
 
         {/* Month tints */}
-        {[5,6,7].map(i => <rect key={i} x={PL + i*colW} y={PT} width={colW} height={drawH} fill={C.amber+"06"} />)}
+        {[4,5,6].map(i => <rect key={i} x={PL + i*colW} y={PT} width={colW} height={drawH} fill={C.amber+"06"} />)}
         <rect x={PL + mesHoy*colW} y={PT} width={colW} height={drawH} fill={C.green+"12"} />
 
         {/* Threshold lines */}
@@ -464,8 +472,8 @@ function TrayectoriaCC({ form, motor }) {
         {MESES.map((mes, i) => (
           <text key={i} x={xMes(i)} y={H-2} textAnchor="middle"
             style={{ fontFamily:C.font, fontSize:"6.5px",
-              fill: i === mesHoy ? C.green : [5,6,7].includes(i) ? C.amber : C.textFaint,
-              fontWeight: i === mesHoy || [5,6,7].includes(i) ? "700" : "400" }}>
+              fill: i === mesHoy ? C.green : [4,5,6].includes(i) ? C.amber : C.textFaint,
+              fontWeight: i === mesHoy || [4,5,6].includes(i) ? "700" : "400" }}>
             {MESES[i]}
           </text>
         ))}
@@ -684,8 +692,8 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
         datos.vaq1.nAnimales > 0 ? (
           <GraficoGDP
             datos={datos.vaq1.meses}
-            titulo={`Vaquillona 1 inv · ${datos.vaq1.nAnimales} cabezas`}
-            subTitulo={`${datos.vaq1.pv} kg PV · objetivo llegar al entore`}
+            titulo={`Vaquillona 1° invierno · ${datos.vaq1.nAnimales} cabezas`}
+            subTitulo={`${datos.vaq1.pv} kg PV · recría hacia entore`}
             objetivoVerano={500}
             objetivoInvierno={200}
           />
@@ -716,8 +724,8 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor }) {
               ) : null}
               <GraficoGDP
                 datos={datos.vaq2.meses}
-                titulo={`Vaquillona 2 inv · ${datos.vaq2.nAnimales} cabezas`}
-                subTitulo={`${datos.vaq2.pv} kg PV · min entore ${vaq2E?.pvMinEntore ?? "—"} kg`}
+                titulo={`Vaquillona 2° invierno · ${datos.vaq2.nAnimales} cabezas`}
+                subTitulo={`${datos.vaq2.pv} kg PV · mín entore ${vaq2E?.pvMinEntore ?? "—"} kg`}
                 objetivoGDP={llegaEntore ? 400 : gdpMinNecesario}
               />
             </>
