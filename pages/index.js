@@ -474,9 +474,9 @@ function CalfAIPro() {
         const nV2p = parseInt(form.vacasN)||0;
         const iP2 = ccAPrenez;
         const escs2 = [
-          { l:"Sin cambios", cc:+ccS2.toFixed(1), pr:prB2, col:[180,60,40] },
-          { l:"Anticipado 90d", cc:+Math.min(9,ccS2+0.4).toFixed(1), pr:iP2(ccS2+0.4), col:[200,140,20] },
-          { l:"Hiperprecoz 50d", cc:+Math.min(9,ccS2+0.7).toFixed(1), pr:iP2(ccS2+0.7), col:[45,140,60] },
+          { l:"Sin cambios",    cc:+ccS2.toFixed(1), pr:prB2, col:[180,60,40] },
+          { l:"Anticipado 90d", cc:+(tray?.ccServAntic ?? Math.min(9,ccS2+0.4)).toFixed(1), pr:tray?.prAntic ?? iP2(tray?.ccServAntic ?? ccS2+0.4), col:[200,140,20] },
+          { l:"Hiperprecoz 50d",cc:+(tray?.ccServHiper ?? Math.min(9,ccS2+0.7)).toFixed(1), pr:tray?.prHiper ?? iP2(tray?.ccServHiper ?? ccS2+0.7), col:[45,140,60] },
         ];
         const eW2 = AU/3-2;
         escs2.forEach((e,i) => {
@@ -491,6 +491,92 @@ function CalfAIPro() {
           if(diff2>0&&nV2p>0){doc.setTextColor(...e.col); doc.text("+"+diff2+"pp = +"+Math.round(nV2p*diff2/100*.95)+" tern.", ex2+eW2/2, y+24, {align:"center"});}
         });
         salto(30);
+      }
+
+      // ── MANEJO DEL SERVICIO Y LA VACA DE CRÍA ────────────────────────────
+      if (cadena || tray) {
+        chk(20);
+        doc.setFillColor(30,80,50);
+        doc.roundedRect(ML, y, AU, 7, 2, 2, "F");
+        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+        doc.text("MANEJO DEL SERVICIO Y LA VACA DE CRÍA", ML+4, y+5);
+        salto(10);
+
+        // 1. Duración del servicio
+        const dS = cadena?.diasServ || 0;
+        if (dS > 0) {
+          const [dLab, dCol] = dS <= 90  ? ["Óptimo",                                [45,140,60]]
+                             : dS <= 120 ? ["Aceptable — acortar al próximo ciclo",   [200,140,20]]
+                             : dS <= 179 ? ["Excesivo — acortar con urgencia",         [200,80,20]]
+                             :             ["Servicio continuo — sin concentración de partos", [180,40,20]];
+          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(60,60,60);
+          doc.text("1. Duración del servicio", ML, y); salto(4);
+          doc.setFont("helvetica","normal"); doc.setTextColor(60,60,60);
+          doc.text(`   ${dS} días`, ML, y);
+          doc.setTextColor(...dCol);
+          doc.text(`→ ${dLab}`, ML+22, y); salto(4);
+          if (dS > 90) {
+            doc.setTextColor(100,100,100); doc.setFontSize(6.5);
+            const recTxt = dS >= 180
+              ? "   Sin estacionar. Meta intermedia: 120 días → objetivo final 90 días. Habilita el manejo diferenciado por categorías."
+              : dS > 120
+              ? "   Acortar a 90 días concentra los partos y sincroniza la demanda forrajera con la oferta estival."
+              : "   Acortar a 90 días al próximo ciclo para reducir la cola de preñez.";
+            doc.text(recTxt, ML, y, {maxWidth: AU}); salto(7);
+          } else {
+            salto(3);
+          }
+        }
+
+        // 2. CC de la vaca y destete recomendado
+        if (tray) {
+          chk(16);
+          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(60,60,60);
+          doc.text("2. CC de la vaca y manejo de destete", ML, y); salto(4);
+          doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(80,80,80);
+          doc.text(
+            `   CC tacto: ${(tray.ccHoy||0).toFixed(1)}  →  parto: ${(tray.ccParto||0).toFixed(1)}  →  mín. lact.: ${(tray.ccMinLact||0).toFixed(1)}  →  al servicio: ${(tray.ccServ||0).toFixed(1)}`,
+            ML, y, {maxWidth: AU}
+          ); salto(4);
+          const recD = tray.recDestete || "tradicional";
+          const [dLabel, dLCol] = recD === "hiperprecoz" ? ["Hiperprecoz (50d) — urgente",        [180,40,20]]
+                                : recD === "anticipado"  ? ["Anticipado (90d) — recomendado",      [200,140,20]]
+                                :                          ["Tradicional (180d) — CC adecuada",    [45,140,60]];
+          doc.setFont("helvetica","bold"); doc.setTextColor(...dLCol);
+          doc.text(`   Destete recomendado: ${dLabel}`, ML, y); salto(6);
+
+          // 3. Proyección CC al próximo servicio (manejo actual vs recomendado)
+          chk(16);
+          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(60,60,60);
+          doc.text("3. Proyección CC al próximo servicio", ML, y); salto(4);
+          doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(80,80,80);
+          const prActual = tray.pr || 0;
+          const ccRecD   = recD === "hiperprecoz" ? (tray.ccServHiper||0)
+                         : recD === "anticipado"  ? (tray.ccServAntic||0)
+                         :                          (tray.ccServTrad||0);
+          const prRecD   = recD === "hiperprecoz" ? (tray.prHiper || ccAPrenez(ccRecD))
+                         : recD === "anticipado"  ? (tray.prAntic || ccAPrenez(ccRecD))
+                         :                          ccAPrenez(ccRecD);
+          const deltapr  = prRecD - prActual;
+          const nVacasPDF = parseInt(form.vacasN)||0;
+          doc.text(`   Manejo actual:            CC ${(tray.ccServ||0).toFixed(1)} → preñez ${prActual}%`, ML, y); salto(4);
+          doc.setTextColor(...dLCol);
+          doc.text(`   ${dLabel}:  CC ${ccRecD.toFixed(1)} → preñez ${prRecD}%${deltapr>0?`  (+${deltapr} pp${nVacasPDF>0?` = +${Math.round(nVacasPDF*deltapr/100*.95)} terneros`:""})` : ""}`, ML, y, {maxWidth: AU}); salto(6);
+
+          // 4. Impacto en balance forrajero
+          chk(14);
+          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(60,60,60);
+          doc.text("4. Impacto en balance forrajero", ML, y); salto(4);
+          doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(100,100,100);
+          const mL = parseFloat(tray.mesesLact)||6;
+          const impacto = recD === "hiperprecoz"
+            ? `   Adelantar a 50d acorta la lactación ~${Math.round((mL-1.7)*30)} días. Reduce la demanda energética en el invierno.`
+            : recD === "anticipado"
+            ? `   Destete a 90d recorta ~${Math.round((mL-3)*30)} días de lactación. Libera CC para recuperar antes del servicio.`
+            : `   Destete tradicional adecuado. Verificar que el balance invernal sea positivo en los meses de lactancia.`;
+          doc.text(impacto, ML, y, {maxWidth: AU}); salto(8);
+        }
+        salto(2);
       }
 
       // ── VAQUILLONA ────────────────────────────────────────────────────────
