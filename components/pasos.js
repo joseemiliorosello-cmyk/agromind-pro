@@ -1532,7 +1532,7 @@ const renderUbicacion = () => {
 
         {/* ── Potreros ── */}
         <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:10 }}>
-          🗺´©Å POTREROS — cargá cada potrero o lote
+          🗺 POTREROS — cargá cada potrero o lote
         </div>
 
         {potreros.map((p, i) => {
