@@ -298,10 +298,11 @@ function Input({ label, value, onChange, placeholder, type = "text", sub, warn, 
       {label && <div style={{ fontFamily:C.font, fontSize:12, color:C.textDim, letterSpacing:.8, marginBottom:5 }}>{label}</div>}
       <input
         id={id} type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        style={{ width:"100%", background:C.card2, border:`1px solid ${warn ? "rgba(160,104,16,.5)" : C.border}`, borderRadius:10, color:C.text, padding:"12px 14px", fontFamily:C.sans, fontSize:14, boxSizing:"border-box" }}
+        aria-label={label || placeholder}
+        style={{ width:"100%", background:C.card2, border:`1px solid ${warn ? "rgba(160,104,16,.5)" : C.border}`, borderRadius:10, color:C.text, padding:"12px 14px", fontFamily:C.fontSans, fontSize:14, boxSizing:"border-box" }}
       />
-      {sub  && <div style={{ fontFamily:C.sans, fontSize:11, color:C.textFaint, marginTop:4 }}>{sub}</div>}
-      {warn && <div style={{ fontFamily:C.sans, fontSize:11, color:C.amber,    marginTop:4 }}>⚠ {warn}</div>}
+      {sub  && <div style={{ fontFamily:C.fontSans, fontSize:11, color:C.textFaint, marginTop:4 }}>{sub}</div>}
+      {warn && <div style={{ fontFamily:C.fontSans, fontSize:11, color:C.amber,    marginTop:4 }}>⚠ {warn}</div>}
     </div>
   );
 }
@@ -384,8 +385,41 @@ const Toggle = ({ label, value, onChange }) => (
 );
 
 
+// --- TOAST ---
+function Toast({ toasts }) {
+  if (!toasts?.length) return null;
+  const cfg = {
+    ok:    { color:T.green, icon:"✓" },
+    warn:  { color:T.amber, icon:"⚠" },
+    error: { color:T.red,   icon:"✕" },
+    info:  { color:T.blue,  icon:"ℹ" },
+  };
+  return (
+    <div style={{ position:"fixed", bottom:24, right:24, zIndex:9999,
+      display:"flex", flexDirection:"column-reverse", gap:8, pointerEvents:"none",
+      maxWidth:320 }}>
+      {toasts.map(t => {
+        const s = cfg[t.tipo] || cfg.info;
+        return (
+          <div key={t.id} style={{
+            background:T.card, border:`1px solid ${s.color}50`,
+            color:s.color, padding:"11px 16px", borderRadius:10,
+            fontFamily:T.fontSans, fontSize:13, lineHeight:1.4,
+            boxShadow:`0 4px 20px rgba(0,0,0,0.45), 0 0 0 1px ${s.color}18`,
+            display:"flex", alignItems:"flex-start", gap:10,
+            pointerEvents:"auto", animation:"toastIn .2s ease-out",
+          }}>
+            <span style={{ fontWeight:700, flexShrink:0, marginTop:1 }}>{s.icon}</span>
+            <span>{t.msg}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export {
   Pill, Button, Card, Section,
   Alerta, Slider, DistCC, LoadingPanel, Input, SelectF, SuplSelector,
-  smf, smf2, mcalKgAdj, pbPasto, fAprovFenol, MetricCard, Toggle,
+  smf, smf2, mcalKgAdj, pbPasto, fAprovFenol, MetricCard, Toggle, Toast,
 };

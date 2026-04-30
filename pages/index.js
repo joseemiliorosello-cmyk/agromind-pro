@@ -13,7 +13,7 @@ import { calcCerebro, buildPromptFull, SYS_FULL } from "../lib/cerebro";
 import { useMotor } from "../lib/useMotor";
 import { usePersistencia, PanelHistorial, calcConfianzaDiagnostico } from "../lib/persistencia";
 import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
-         MetricCard, SelectF, Slider, Toggle, SuplSelector } from "../components/ui";
+         MetricCard, SelectF, Slider, Toggle, SuplSelector, Toast } from "../components/ui";
 import { DashboardEstablecimiento } from "../components/dashboard";
 import { getPasoRenders, GraficoCCEscenarios, PanelAgua, PanelGEI, PanelFaseCiclo } from "../components/pasos"
 import GraficosBalance from "../components/GraficosBalance";
@@ -73,6 +73,12 @@ function CalfAIPro() {
   const [bannerProductor, setBannerProductor] = useState(null); // datos autocargados del productor
   const [showHistorial,   setShowHistorial]   = React.useState(false);
   const [borradorRecuperado, setBorradorRecuperado] = React.useState(false);
+  const [toasts, setToasts] = React.useState([]);
+  const showToast = React.useCallback((msg, tipo = "ok", duration = 3400) => {
+    const id = Date.now() + Math.random();
+    setToasts(t => [...t, { id, msg, tipo }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), duration);
+  }, []);
 
   // ── Hook de persistencia ─────────────────────────────────────
   const { guardarBorrador, restaurarBorrador, guardarEnHistorial,
@@ -733,7 +739,8 @@ function CalfAIPro() {
       }
 
       doc.save(`calfai_${(form.nombreProductor||"informe").replace(/\s/g,"_")}_${new Date().toISOString().slice(0,10)}.pdf`);
-    } catch(pdfErr) { console.error("PDF error:", pdfErr); alert("Error generando PDF. Intentá de nuevo."); }
+      showToast("PDF generado y descargado ✓", "ok");
+    } catch(pdfErr) { console.error("PDF error:", pdfErr); showToast("Error al generar el PDF. Intentá de nuevo.", "error", 5000); }
     };
 
     if (window.jspdf?.jsPDF) {
@@ -1047,6 +1054,7 @@ function CalfAIPro() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaRepro), "Servicio y Reprod");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja5), "Recomendaciones");
     XLSX.writeFile(wb, `calfai_${(form.nombreProductor||"datos").replace(/\s/g,"_")}_${isoDate}.xlsx`);
+    showToast("Excel generado y descargado ✓", "ok");
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -2887,21 +2895,57 @@ function CalfAIPro() {
   const renderDiagnostico  = () => {
     const scoreD = motor ? calcScore(motor, form, calcFaseCiclo(motor?.cadena ?? calcCadena(form.iniServ, form.finServ), form)) : null;
     if (!form.vacasN && !motor) return (
-      <div style={{ padding:40, textAlign:"center", fontFamily:C.font, fontSize:11, color:C.textDim }}>
-        Completá los pasos anteriores para ver el diagnóstico.
+      <div style={{ padding:"60px 24px", textAlign:"center", maxWidth:440, margin:"0 auto" }}>
+        <div style={{ fontSize:36, marginBottom:16, opacity:0.4 }}>◈</div>
+        <div style={{ fontFamily:C.font, fontSize:14, color:C.textDim, marginBottom:8, letterSpacing:.5 }}>
+          Todavía no hay datos para diagnosticar
+        </div>
+        <div style={{ fontFamily:C.fontSans, fontSize:12, color:C.textFaint, lineHeight:1.7, marginBottom:24 }}>
+          Completá al menos los pasos <strong style={{ color:C.textDim }}>Rodeo y CC</strong> y <strong style={{ color:C.textDim }}>Potreros</strong> para que el motor calcule el balance y la cadena reproductiva.
+        </div>
+        <button onClick={() => { setStep(1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          style={{ padding:"10px 22px", borderRadius:8, cursor:"pointer",
+            background:C.green+"18", border:`1px solid ${C.green}40`,
+            fontFamily:C.font, fontSize:12, color:C.green }}>
+          Ir a Rodeo y CC →
+        </button>
       </div>
     );
     return (
-      <div className="diag-grid">
-        <div className="diag-sticky">
-          <DashboardEstablecimiento
-            motor={motor} form={form} sat={sat} score={scoreD}
-            confianza={confianza} onTab={(t) => t === "cerebro" && setStep(5)}
-          />
+      <div>
+        <div className="diag-grid">
+          <div className="diag-sticky">
+            <DashboardEstablecimiento
+              motor={motor} form={form} sat={sat} score={scoreD}
+              confianza={confianza} onTab={(t) => t === "cerebro" && setStep(5)}
+            />
+          </div>
+          <div>
+            {motor && <GraficosBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} usaPotreros={usaPotreros} potreros={potreros} />}
+          </div>
         </div>
-        <div>
-          {motor && <GraficosBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} usaPotreros={usaPotreros} potreros={potreros} />}
-        </div>
+        {motor && (
+          <div style={{ marginTop:32, padding:"18px 20px",
+            background:C.green+"0E", border:`1px solid ${C.green}30`,
+            borderRadius:12, display:"flex", alignItems:"center",
+            justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
+            <div>
+              <div style={{ fontFamily:C.font, fontSize:12, color:C.green, fontWeight:600, marginBottom:3 }}>
+                ¿Querés el informe completo con recomendaciones?
+              </div>
+              <div style={{ fontFamily:C.fontSans, fontSize:11, color:C.textDim, lineHeight:1.5 }}>
+                El paso siguiente genera el análisis IA con planes de acción, dosis y cronograma.
+              </div>
+            </div>
+            <button onClick={() => { setStep(5); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              style={{ padding:"10px 22px", borderRadius:8, cursor:"pointer",
+                background:C.green, border:"none",
+                fontFamily:C.font, fontSize:12, fontWeight:700, color:"#fff",
+                flexShrink:0 }}>
+              Ver Recomendaciones →
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -2928,7 +2972,22 @@ function CalfAIPro() {
           </button>
         )}
         {loading && <LoadingPanel msg={loadMsg} />}
-        {result && (
+        {result && result.startsWith("❌") && (
+          <div style={{ background:C.red+"10", border:`1px solid ${C.red}40`,
+            borderRadius:10, padding:"16px 18px", textAlign:"center" }}>
+            <div style={{ fontFamily:C.fontSans, fontSize:13, color:C.red, marginBottom:12, lineHeight:1.5 }}>
+              {result.replace("❌ ", "")}
+            </div>
+            <button onClick={runAnalysis} style={{
+              padding:"9px 20px", borderRadius:8, cursor:"pointer",
+              background:C.green, border:"none",
+              fontFamily:C.font, fontSize:12, fontWeight:700, color:"#fff",
+            }}>
+              Reintentar
+            </button>
+          </div>
+        )}
+        {result && !result.startsWith("❌") && (
           <>
             <RenderInforme texto={result} />
             <details style={{ marginTop:12 }}>
@@ -3043,6 +3102,9 @@ function CalfAIPro() {
         .calfai-step { animation: stepIn .18s ease-out; }
         @keyframes stepIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
+        /* ── Toast ─────────────────────────────────────────────────── */
+        @keyframes toastIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+
         /* ── Tabs scrollbar oculto ──────────────────────────────────── */
         .calfai-tabs::-webkit-scrollbar { display: none; }
         .calfai-tabs { -ms-overflow-style: none; scrollbar-width: none; }
@@ -3104,7 +3166,7 @@ function CalfAIPro() {
             })();
             const active = step === i;
             return (
-              <button key={i} onClick={()=>setStep(i)} style={{
+              <button key={i} onClick={() => { setStep(i); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{
                 flex:"0 0 auto", padding:"13px 22px",
                 background: active ? C.green+"16" : "none", border:"none",
                 borderBottom: active ? `2px solid ${C.green}` : "2px solid transparent",
@@ -3115,6 +3177,7 @@ function CalfAIPro() {
                 position:"relative", letterSpacing: active ? ".3px" : 0,
                 transition:"background .15s, color .15s",
               }}>
+                <span style={{ opacity:0.45, fontSize:10, marginRight:5, fontWeight:400 }}>{i+1}</span>
                 {p.label}
                 {dotColor && !active && (
                   <span style={{ position:"absolute", top:6, right:8,
@@ -3181,6 +3244,9 @@ function CalfAIPro() {
           {RENDERS[step]?.()}
         </div>
       </div>
+
+      {/* Toast notifications */}
+      <Toast toasts={toasts} />
     </div>
   );
 }

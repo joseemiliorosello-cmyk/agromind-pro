@@ -881,8 +881,15 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
   const todosNull = datos && !datos.general && !datos.vacas_v2s && !datos.vaq1 && !datos.vaq2;
   if (!datos || todosNull) {
     return (
-      <div style={{ padding: 20, textAlign: "center", fontFamily: C.font, fontSize: 10, color: C.textDim }}>
-        No hay datos suficientes para el balance. Completá el rodeo y los potreros.
+      <div style={{ padding:"48px 24px", textAlign:"center",
+        background:C.card2, borderRadius:12, border:`1px solid ${C.border}` }}>
+        <div style={{ fontSize:28, opacity:0.3, marginBottom:12 }}>📊</div>
+        <div style={{ fontFamily:C.font, fontSize:12, color:C.textDim, marginBottom:6, letterSpacing:.4 }}>
+          Sin datos de balance
+        </div>
+        <div style={{ fontFamily:C.fontSans, fontSize:11, color:C.textFaint, lineHeight:1.6, maxWidth:260, margin:"0 auto" }}>
+          Completá el rodeo (número de vacas y CC) y los potreros para ver el balance oferta/demanda.
+        </div>
       </div>
     );
   }
