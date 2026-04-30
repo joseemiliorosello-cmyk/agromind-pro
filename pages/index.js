@@ -1202,6 +1202,7 @@ function CalfAIPro() {
               </div>
             ))}
           </div>
+          {cadena.esContinuo && <Alerta tipo="error" style={{ marginTop:8 }}>🔄 Servicio continuo ({cadena.diasServ}d) — sin concentración de partos ni períodos secos. Primera mejora: estacionar a 120 días.</Alerta>}
           {cadena.terneroOtono && <Alerta tipo="error" style={{ marginTop:8 }}>⚠️ Ternero al pie en otoño — destete anticipado URGENTE</Alerta>}
         </div>
       )}
