@@ -8,7 +8,7 @@ import { correrMotor, calcCadena, calcConsumoAgua, calcDisp,
          calcSupervivencia, calcV2S, mcalSuplemento, fetchSat,
          fmtFecha, dZona, dProv, smf, diagnosticarSistema,
          calcImpactoCola, calcFaseCiclo, calcConsumoPasto,
-         getBiotipo, FENOLOGIAS } from "../lib/motor";
+         getBiotipo, FENOLOGIAS, ccAPrenez } from "../lib/motor";
 import { calcCerebro, buildPromptFull, SYS_FULL,
          interpretarSistemaCompleto } from "../lib/cerebro";
 import { useMotor } from "../lib/useMotor";
@@ -472,7 +472,7 @@ function CalfAIPro() {
         const ccS2 = tray?.ccServ || 0;
         const prB2 = tray?.pr || 0;
         const nV2p = parseInt(form.vacasN)||0;
-        const iP2 = (cc) => { const CPR2=[{cc:5.5,pr:93},{cc:5,pr:88},{cc:4.5,pr:80},{cc:4,pr:70},{cc:3.5,pr:50},{cc:3,pr:28}]; const c=Math.min(9,Math.max(1,cc)); if(c>=CPR2[0].cc)return CPR2[0].pr; if(c<=CPR2[CPR2.length-1].cc)return CPR2[CPR2.length-1].pr; for(let i=0;i<CPR2.length-1;i++){if(c<=CPR2[i].cc&&c>=CPR2[i+1].cc){const r=(c-CPR2[i+1].cc)/(CPR2[i].cc-CPR2[i+1].cc);return Math.round(CPR2[i+1].pr+r*(CPR2[i].pr-CPR2[i+1].pr));}} return 20; };
+        const iP2 = ccAPrenez;
         const escs2 = [
           { l:"Sin cambios", cc:+ccS2.toFixed(1), pr:prB2, col:[180,60,40] },
           { l:"Anticipado 90d", cc:+Math.min(9,ccS2+0.4).toFixed(1), pr:iP2(ccS2+0.4), col:[200,140,20] },
@@ -835,7 +835,7 @@ function CalfAIPro() {
           </div>
           <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, lineHeight:1.6 }}>
             El análisis usa datos climáticos históricos por provincia (temperatura, precipitación, estacionalidad).
-            El GPS es opcional: solo agrega temperatura y NDVI del satélite en tiempo real.
+            El GPS agrega temperatura real (Open-Meteo) y un NDVI estimado por zona/lluvia/ENSO (no MODIS).
           </div>
           <button onClick={gpsClick} style={{
             marginTop:8, padding:"6px 12px", borderRadius:8,
@@ -855,7 +855,7 @@ function CalfAIPro() {
       {sat && !sat.error && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, margin:"10px 0" }}>
           <MetricCard label="TEMPERATURA" value={sat.temp+"°C"}  color={C.amber} />
-          <MetricCard label="NDVI"        value={sat.ndvi}        color={C.green} sub={sat.condForr} />
+          <MetricCard label="NDVI (estimado)" value={sat.ndvi} color={C.green} sub={(sat.condForr || "") + " · proxy p30+zona"} />
           <MetricCard label="LLUVIA 30D"  value={sat.p30+"mm"}   color={C.blue} />
           <MetricCard label="BALANCE"     value={(sat.deficit>0?"+":"")+sat.deficit+"mm"} color={sat.deficit>0?C.green:C.red} />
         </div>
@@ -2170,14 +2170,7 @@ function CalfAIPro() {
                       ccRecup: 0 };
 
                 const ccProyServ = Math.min(7, cc + herramienta.ccRecup - (herramienta.tipo==="tradicional"?0.8:0.3));
-                const prenezProy = (() => {
-                  if (ccProyServ>=5.5) return 93;
-                  if (ccProyServ>=5.0) return 88;
-                  if (ccProyServ>=4.5) return 80;
-                  if (ccProyServ>=4.0) return 70;
-                  if (ccProyServ>=3.5) return 50;
-                  return 28;
-                })();
+                const prenezProy = ccAPrenez(ccProyServ);
 
                 return (
                   <div key={i} style={{
