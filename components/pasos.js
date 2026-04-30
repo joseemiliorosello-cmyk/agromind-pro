@@ -994,8 +994,12 @@ const renderUbicacion = () => {
 
         const cadenaCalc = form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null;
         const diasServ   = cadenaCalc?.diasServ;
-        const warnServ   = diasServ != null && (diasServ < 60 || diasServ > 95)
-          ? (diasServ < 60 ? "Servicio muy corto (" + diasServ + "d) — pocas vacas preñadas en la cabeza" : "Servicio largo (" + diasServ + "d) — cola de preñez pesada, terneros más livianos")
+        const warnServ = diasServ != null
+          ? diasServ < 60  ? "Servicio muy corto (" + diasServ + "d) — pocas vacas preñadas en la cabeza"
+          : diasServ <= 90 ? null
+          : diasServ <= 120 ? "Servicio de " + diasServ + "d — acortar a 90d al próximo ciclo para reducir cola de preñez"
+          : diasServ <= 179 ? "Servicio de " + diasServ + "d — parición muy extendida, acortar con urgencia a 90d"
+          :                   "Servicio de " + diasServ + "d — continuo (sin estacionar). Meta: 120d → objetivo final 90d"
           : null;
 
         return (
@@ -2507,7 +2511,7 @@ const renderUbicacion = () => {
                       ["Meses lactación",  tray?.mesesLact ? tray.mesesLact + " meses" : "—", null, ""],
                       ["Ini. servicio",    form.iniServ ? new Date(form.iniServ+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}) : "—", null, ""],
                       ["Fin servicio",     form.finServ ? new Date(form.finServ+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}) : "—", null, ""],
-                      ["Duración servicio", cadena?.diasServ ? cadena.diasServ + " días" : "—", cadena?.diasServ ? (cadena.diasServ >= 75 && cadena.diasServ <= 90 ? C.green : C.amber) : null, cadena?.diasServ > 90 ? "Servicio largo → cola de preñez pesada" : ""],
+                      ["Duración servicio", cadena?.diasServ ? cadena.diasServ + " días" : "—", cadena?.diasServ ? (cadena.diasServ <= 90 ? C.green : cadena.diasServ <= 120 ? C.amber : C.red) : null, cadena?.diasServ >= 180 ? "Servicio continuo — implementar estacionamiento. Meta: 120d → 90d" : cadena?.diasServ > 120 ? "Excesivo — acortar con urgencia a 90d" : cadena?.diasServ > 90 ? "Aceptable — acortar a 90d al próximo ciclo" : ""],
                       ["Cabeza de parición", impactoCola ? impactoCola.cabeza + "%" : "—", impactoCola ? (impactoCola.cabeza >= 55 ? C.green : impactoCola.cabeza >= 40 ? C.amber : C.red) : null, impactoCola && impactoCola.cabeza < 55 ? "Subir al 60% → +" + impactoCola.kgDifPorTernero + " kg/ternero" : ""],
                       ["Peso dest. estimado", impactoCola ? impactoCola.pvPromDestete + " kg" : "—", null, impactoCola && impactoCola.kgDifPorTernero > 0 ? "Con 60% cabeza: " + impactoCola.pvPromObj + " kg (+"+impactoCola.kgDifPorTernero+" kg)" : ""],
                       ["Kg totales destete", impactoCola ? Math.round(impactoCola.pvPromDestete * impactoCola.terneros) + " kg" : "—", null, impactoCola && impactoCola.kgDifTotal > 0 ? "Potencial sin capturar: +" + impactoCola.kgDifTotal + " kg" : ""],
