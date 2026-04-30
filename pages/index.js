@@ -9,8 +9,7 @@ import { correrMotor, calcCadena, calcConsumoAgua, calcDisp,
          fmtFecha, dZona, dProv, smf, diagnosticarSistema,
          calcImpactoCola, calcFaseCiclo, calcConsumoPasto,
          getBiotipo, FENOLOGIAS, ccAPrenez } from "../lib/motor";
-import { calcCerebro, buildPromptFull, SYS_FULL,
-         interpretarSistemaCompleto } from "../lib/cerebro";
+import { calcCerebro, buildPromptFull, SYS_FULL } from "../lib/cerebro";
 import { useMotor } from "../lib/useMotor";
 import { usePersistencia, PanelHistorial, calcConfianzaDiagnostico } from "../lib/persistencia";
 import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
