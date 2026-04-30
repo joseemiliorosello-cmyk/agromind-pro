@@ -478,18 +478,27 @@ function CalfAIPro() {
 
       // ── NDVI Y CAMPO ─────────────────────────────────────────────────────
       if (sat?.ndvi || sat?.temp || sat?.p30) {
-        chk(20);
+        chk(26);
         doc.setFillColor(30,80,50);
         doc.roundedRect(ML, y, AU, 7, 2, 2, "F");
         doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
         doc.text("CAMPO HOY — NDVI Y CLIMA", ML+4, y+5);
         salto(10);
-        const ndviCol = (sat.ndvi||0) < 0.35 ? [200,60,40] : (sat.ndvi||0) < 0.50 ? [200,140,20] : [45,140,60];
+        const ndviVal = parseFloat(sat.ndvi||0);
+        const ndviCol = ndviVal < 0.35 ? [200,60,40] : ndviVal < 0.50 ? [200,140,20] : [45,140,60];
         doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(...ndviCol);
         doc.text("NDVI: "+(sat.ndvi||"—")+" ("+(sat.condForr||"—")+")  |  Temp: "+(sat.temp||"—")+"°C  |  Lluvia 30d: "+(sat.p30||"—")+"mm", ML, y); salto(5);
+        // Comparación NDVI vs histórico
+        if (sat.ndviHist !== undefined) {
+          const deltaVal = sat.ndviDelta || 0;
+          const deltaCol = deltaVal > 0 ? [45,106,31] : deltaVal > -0.08 ? [180,120,20] : [180,40,40];
+          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(...deltaCol);
+          const deltaStr = deltaVal >= 0 ? "+" + deltaVal.toFixed(2) : deltaVal.toFixed(2);
+          doc.text(`NDVI vs historico (${sat.ndviHist}): ${deltaStr} — ${sat.ndviCateg||""}`, ML, y); salto(5);
+        }
         doc.setTextColor(60,60,60);
         const fenNom = {menor_10:"Rebrote",["10_25"]:"Crecimiento","25_50":"Maduración",mayor_50:"Encañado"}[form.fenologia]||form.fenologia||"—";
-        doc.text("Vegetación: "+(form.vegetacion||"—")+"  |  Fenología: "+fenNom, ML, y); salto(8);
+        doc.text("Vegetacion: "+(form.vegetacion||"—")+"  |  Fenologia: "+fenNom+"  |  Lluvia 90d: "+(sat.p90||"—")+"mm", ML, y); salto(8);
       }
 
       // ── ESCENARIOS ────────────────────────────────────────────────────────
@@ -831,6 +840,9 @@ function CalfAIPro() {
       ["Lluvia 90d (mm)",    sat?.p90  || ""],
       ["Balance hidrico (mm)", sat?.deficit || ""],
       ["NDVI",               sat?.ndvi || ""],
+      ["NDVI historico referencia", sat?.ndviHist ?? ""],
+      ["NDVI delta vs historico",   sat?.ndviDelta ?? ""],
+      ["NDVI categoria",            sat?.ndviCateg || ""],
       ["Condicion forrajera", sat?.condForr || ""],
       ["Lluvia prox 7d (mm)", sat?.lluviaProx7 ?? ""],
       ["Temp media prox 7d (C)", sat?.tempMediaProx7 ?? ""],
@@ -1072,7 +1084,9 @@ function CalfAIPro() {
       {sat && !sat.error && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, margin:"10px 0" }}>
           <MetricCard label="TEMPERATURA" value={sat.temp+"°C"}  color={C.amber} />
-          <MetricCard label="NDVI (estimado)" value={sat.ndvi} color={C.green} sub={(sat.condForr || "") + " · proxy p30+zona"} />
+          <MetricCard label="NDVI (estimado)" value={sat.ndvi}
+            color={sat.ndviDelta > 0 ? C.green : sat.ndviDelta > -0.08 ? C.amber : C.red}
+            sub={`${sat.condForr||""} · ref ${sat.ndviHist ?? "—"} · ${sat.ndviCateg ?? "proxy"}`} />
           <MetricCard label="LLUVIA 30D"  value={sat.p30+"mm"}   color={C.blue} />
           <MetricCard label="BALANCE"     value={(sat.deficit>0?"+":"")+sat.deficit+"mm"} color={sat.deficit>0?C.green:C.red} />
         </div>
