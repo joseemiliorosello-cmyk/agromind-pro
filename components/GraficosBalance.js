@@ -52,9 +52,10 @@ function Tooltip({ tip }) {
 }
 
 // ─── Grafico Mcal oferta/demanda/balance ───
-function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 180 }) {
+function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 }) {
   const mesHoy = new Date().getMonth();
   const pad = 22;
+  const STRIP_H = 10; // franja de balance en la base
   const colW = (W - pad * 2) / 12;
   const barW = colW - 3;
   const svgRef = useRef(null);
@@ -65,7 +66,7 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 180 
   const maxUp   = Math.max(1, ...vals.map(v => v.up));
   const maxDown = Math.max(1, ...vals.map(v => v.down));
   const maxAbs  = Math.max(maxUp, maxDown);
-  const midY    = H / 2;
+  const midY    = (H - STRIP_H - 14) / 2 + 4;
   const escala  = (midY - 20) / maxAbs;
 
   const handleEnter = (e, i, d) => {
@@ -121,24 +122,40 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 180 
           if (mostrarMovCC && hCC > 0) { yCursor -= hCC; segments.push({ y: yCursor, h: hCC, color: C.orange }); }
           const hDem = (d.demanda || 0) * escala;
           const bal  = d.balance;
-          const balCol = bal >= 0 ? C.green : C.red;
+          const balCol = bal >= 0 ? C.green : bal > -30 ? C.amber : C.red;
           const totalUp = hPasto + hSupl + hVerdeo + (mostrarMovCC ? hCC : 0);
+          const stripY = H - STRIP_H - 14;
+          const stripCol = bal >= 0 ? C.green : bal > -30 ? C.amber : C.red;
 
           return (
             <g key={i} style={{ cursor: "crosshair" }}
               onMouseEnter={e => handleEnter(e, i, d)}
             >
-              {/* zona hover invisible que cubre toda la columna */}
+              {/* fondo de déficit por columna */}
+              {bal < 0 && (
+                <rect x={x - 1} y={2} width={barW + 2} height={stripY - 4}
+                  fill={bal < -30 ? C.red + "18" : C.amber + "14"} />
+              )}
+              {/* zona hover invisible */}
               <rect x={x - 1} y={2} width={barW + 2} height={H - 14} fill="transparent" />
               {segments.map((s, idx) => (
                 <rect key={idx} x={x} y={s.y} width={barW} height={Math.max(1, s.h)} fill={s.color} opacity={0.85} rx={1} />
               ))}
               <rect x={x} y={midY} width={barW} height={Math.max(1, hDem)} fill={C.red} opacity={0.6} rx={1} />
+              {/* franja balance en la base */}
+              <rect x={x} y={stripY} width={barW} height={STRIP_H}
+                fill={stripCol} opacity={0.70} rx={1} />
               {barW > 14 && (
-                <text x={x + barW / 2} y={bal >= 0 ? midY - totalUp - 3 : midY + hDem + 9}
-                  textAnchor="middle" style={{ fontFamily: C.font, fontSize: "6.5px", fill: balCol, fontWeight: 700 }}>
-                  {bal >= 0 ? "+" : ""}{Math.round(bal)}
-                </text>
+                <>
+                  {/* fondo pill para el número */}
+                  <rect x={x + barW/2 - 13} y={bal >= 0 ? midY - totalUp - 10 : midY + hDem + 1}
+                    width={26} height={10} rx={3}
+                    fill={balCol + "28"} />
+                  <text x={x + barW / 2} y={bal >= 0 ? midY - totalUp - 2 : midY + hDem + 9}
+                    textAnchor="middle" style={{ fontFamily: C.font, fontSize: "7.5px", fill: balCol, fontWeight: 700 }}>
+                    {bal >= 0 ? "+" : ""}{Math.round(bal)}
+                  </text>
+                </>
               )}
               <text x={x + barW / 2} y={H - 2} textAnchor="middle"
                 style={{ fontFamily: C.font, fontSize: "6.5px",
@@ -157,6 +174,12 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 180 
         <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.greenDark, marginRight: 3 }} />Verdeo</span>
         {mostrarMovCC && <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.orange, marginRight: 3 }} />Movilizacion CC</span>}
         <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.red,       marginRight: 3 }} />Demanda</span>
+        <span style={{ marginLeft:"auto", color:C.textFaint }}>
+          Oferta ↑ · Demanda ↓ · Franja base = balance:
+          <span style={{ color:C.green }}> verde superávit</span> ·
+          <span style={{ color:C.amber }}> ámbar déficit leve</span> ·
+          <span style={{ color:C.red }}> rojo déficit grave</span>
+        </span>
       </div>
     </div>
   );
@@ -896,12 +919,26 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
 
   const sinPotreros = !usaPotreros || !(potreros || []).length;
 
+  // Calcular diferencia entre actual y con recomendaciones para el badge
+  const diffReco = useMemo(() => {
+    if (!motor || !datos?.general) return null;
+    try {
+      const formReco = aplicarRecomendaciones(form);
+      const datosReco = balancePorCategoria(motor, formReco, sat, "general");
+      const balActual = datos.general.meses.reduce((s, m) => s + (m.balance || 0), 0);
+      const balReco   = datosReco.meses.reduce((s, m) => s + (m.balance || 0), 0);
+      const diff = Math.round(balReco - balActual);
+      const mesesMejoran = datosReco.meses.filter((m, i) => m.balance > datos.general.meses[i].balance).length;
+      return { diff, mesesMejoran };
+    } catch(e) { return null; }
+  }, [motor, datos, form, sat]);
+
   return (
     <div>
       {/* Toggle antes/despues */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "stretch" }}>
         <button onClick={() => setConReco(false)} style={{
-          flex: 1, padding: "7px 10px", borderRadius: 8, cursor: "pointer",
+          flex: 1, padding: "8px 10px", borderRadius: 8, cursor: "pointer",
           background: !conReco ? C.textDim + "25" : "transparent",
           border: `1px solid ${!conReco ? C.textDim : C.border}`,
           color: !conReco ? C.text : C.textDim,
@@ -910,13 +947,19 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
           Situacion actual
         </button>
         <button onClick={() => setConReco(true)} style={{
-          flex: 1, padding: "7px 10px", borderRadius: 8, cursor: "pointer",
+          flex: 1, padding: "8px 10px", borderRadius: 8, cursor: "pointer",
           background: conReco ? C.green + "25" : "transparent",
           border: `1px solid ${conReco ? C.green : C.border}`,
           color: conReco ? C.green : C.textDim,
           fontFamily: C.font, fontSize: 10, fontWeight: conReco ? 700 : 400,
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
         }}>
-          Con recomendaciones aplicadas
+          <span>Con recomendaciones</span>
+          {diffReco && !conReco && diffReco.diff !== 0 && (
+            <span style={{ fontSize: 8, color: diffReco.diff > 0 ? C.green : C.amber, fontWeight: 600 }}>
+              {diffReco.diff > 0 ? "+" : ""}{diffReco.diff} Mcal/d · {diffReco.mesesMejoran} meses mejoran
+            </span>
+          )}
         </button>
       </div>
 

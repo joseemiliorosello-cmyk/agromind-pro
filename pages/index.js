@@ -3014,6 +3014,35 @@ function CalfAIPro() {
           </>
         )}
       </div>
+      {/* ── Sección de descarga ── */}
+      {motor && (
+        <div style={{ marginTop:20, background:C.card2, border:`1px solid ${C.border}`,
+          borderRadius:12, padding:"16px 18px" }}>
+          <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:12 }}>
+            EXPORTAR INFORME
+          </div>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+            <button onClick={descargarPDF} style={{
+              flex:1, minWidth:140, padding:"12px 16px", borderRadius:10, cursor:"pointer",
+              background:C.green+"18", border:`1px solid ${C.green}40`,
+              fontFamily:C.font, fontSize:12, color:C.green, fontWeight:600,
+              display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+            }}>
+              📄 Descargar PDF
+              <span style={{ fontFamily:C.fontSans, fontSize:10, color:C.textDim, fontWeight:400 }}>informe técnico A4</span>
+            </button>
+            <button onClick={descargarExcel} style={{
+              flex:1, minWidth:140, padding:"12px 16px", borderRadius:10, cursor:"pointer",
+              background:C.blue+"18", border:`1px solid ${C.blue}40`,
+              fontFamily:C.font, fontSize:12, color:C.blue, fontWeight:600,
+              display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+            }}>
+              📊 Descargar Excel
+              <span style={{ fontFamily:C.fontSans, fontSize:10, color:C.textDim, fontWeight:400 }}>5 hojas de datos</span>
+            </button>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
@@ -3140,6 +3169,24 @@ function CalfAIPro() {
               Salir
             </button>
             <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, border:`1px solid ${C.border}60`, padding:"2px 7px", borderRadius:4, letterSpacing:.4 }}>← → 1-6</span>
+            {motor && (
+              <>
+                <button onClick={descargarExcel}
+                  title="Descargar Excel con todos los datos"
+                  style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:8,
+                    padding:"6px 11px", fontFamily:C.font, fontSize:10, cursor:"pointer",
+                    color:C.textDim, display:"flex", alignItems:"center", gap:4 }}>
+                  📊 Excel
+                </button>
+                <button onClick={descargarPDF}
+                  title="Descargar informe PDF"
+                  style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:8,
+                    padding:"6px 11px", fontFamily:C.font, fontSize:10, cursor:"pointer",
+                    color:C.textDim, display:"flex", alignItems:"center", gap:4 }}>
+                  📄 PDF
+                </button>
+              </>
+            )}
             <button
               onClick={() => setShowHistorial(true)}
               style={{ background:C.green+"15", border:"1px solid "+C.green+"30", borderRadius:8,
