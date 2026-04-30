@@ -1047,12 +1047,20 @@ function CalfAIPro() {
       });
     }
 
+    const SEP = [["","","","","","","","","",""]];
+    const hojaUnica = [
+      ...hoja1,
+      ...SEP,
+      ...hoja2,
+      ...SEP,
+      ...hoja3,
+      ...SEP,
+      ...hojaRepro,
+      ...SEP,
+      ...hoja5,
+    ];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja1), "Establecimiento");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja2), "Balance mensual");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja3), "Diagnostico");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaRepro), "Servicio y Reprod");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja5), "Recomendaciones");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaUnica), "Informe");
     XLSX.writeFile(wb, `calfai_${(form.nombreProductor||"datos").replace(/\s/g,"_")}_${isoDate}.xlsx`);
     showToast("Excel generado y descargado ✓", "ok");
   }

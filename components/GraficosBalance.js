@@ -705,49 +705,81 @@ function CronogramaAnual({ motor, form, sat }) {
 }
 
 // ─── Trayectoria PV Vaquillona ───
-// Shows CON vs SIN supplementation weight trajectory from May yr1 to Nov yr2.
-// X axis: 5 proportional key dates (real days). Y axis: PV (kg).
-function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
+// Muestra trayectoria CON vs SIN suplemento desde mayo año 1 hasta entore.
+// El objetivo de entore es DINÁMICO: 75% del PV adulto de la vaca del rodeo.
+function GraficoTrayectoriaVaq({ vaq1E, vaq2E, pvVacaAdulta = 320 }) {
   if (!vaq1E || !vaq2E || !vaq1E.pvEntrada || !vaq2E.pvMayo2Inv) return null;
 
-  // ── Build key points ──────────────────────────────────────────
+  // ── Períodos (días desde mayo año 1) ─────────────────────────
   const DIAS_INV1 = 122;  // may → sep
   const DIAS_VER  = 270;  // sep yr1 → may yr2
   const DIAS_INV2 = 90;   // may → ago
-  const DIAS_ENT  = 90;   // ago → nov (primavera hacia entore)
+  const DIAS_ENT  = 90;   // ago → nov
   const TOTAL     = DIAS_INV1 + DIAS_VER + DIAS_INV2 + DIAS_ENT; // 572
 
-  const pvIni   = vaq1E.pvEntrada;
-  const pvMin   = vaq2E.pvMinEntore;
+  const pvIni = vaq1E.pvEntrada;
+  // Objetivo dinámico: 75% del PV adulto
+  const pvMin = Math.round((pvVacaAdulta || 320) * 0.75);
 
   // CON supl
-  const pvSepCon  = vaq1E.pvSal;
-  const pvMayCon  = vaq2E.pvMayo2Inv;
-  const pvAgoCon  = vaq2E.pvV2Agosto;
-  const pvNovCon  = vaq2E.pvEntore;
+  const pvSepCon = vaq1E.pvSal;
+  const pvMayCon = vaq2E.pvMayo2Inv;
+  const pvAgoCon = vaq2E.pvV2Agosto;
+  const pvNovCon = vaq2E.pvEntore;
 
-  // SIN supl — derived from motor exports
-  const gdpP1     = vaq1E.gdpPasto || 0;
-  const gdpP2     = vaq2E.gdpPastoInv || 0;
-  const gdpP3     = 280; // primavera sin supl (matches calcVaq2 constant)
-  const pvSepSin  = Math.round(pvIni + gdpP1 * DIAS_INV1 / 1000);
-  // calcPvEntradaVaq2 adds a fixed ~92 kg regardless of start PV
-  const ganVer    = pvMayCon - pvSepCon; // same summer gain for both paths
-  const pvMaySin  = Math.round(pvSepSin + ganVer);
-  const pvAgoSin  = Math.round(pvMaySin + gdpP2 * DIAS_INV2 / 1000);
-  const pvNovSin  = Math.round(pvAgoSin + gdpP3 * DIAS_ENT  / 1000);
+  // SIN supl
+  const gdpP1    = vaq1E.gdpPasto || 0;
+  const gdpP2    = vaq2E.gdpPastoInv || 0;
+  const gdpP3    = 280;
+  const pvSepSin = Math.round(pvIni + gdpP1 * DIAS_INV1 / 1000);
+  const ganVer   = pvMayCon - pvSepCon;
+  const pvMaySin = Math.round(pvSepSin + ganVer);
+  const pvAgoSin = Math.round(pvMaySin + gdpP2 * DIAS_INV2 / 1000);
+  const pvNovSin = Math.round(pvAgoSin + gdpP3 * DIAS_ENT  / 1000);
+
+  const pvCon  = [pvIni, pvSepCon, pvMayCon, pvAgoCon, pvNovCon];
+  const pvSin  = [pvIni, pvSepSin, pvMaySin, pvAgoSin, pvNovSin];
+  const xDays  = [0, DIAS_INV1, DIAS_INV1 + DIAS_VER, DIAS_INV1 + DIAS_VER + DIAS_INV2, TOTAL];
+
+  // ── Encuentra el punto donde la línea cruza pvMin ─────────────
+  function findCrossing(pvLine) {
+    for (let i = 0; i < pvLine.length - 1; i++) {
+      const p0 = pvLine[i], p1 = pvLine[i + 1];
+      if (p0 < pvMin && p1 >= pvMin) {
+        const t = (pvMin - p0) / (p1 - p0);
+        return { idx: i, t, days: xDays[i] + t * (xDays[i + 1] - xDays[i]) };
+      }
+    }
+    return null;
+  }
+
+  function daysToLabel(days) {
+    if (days === null || days === undefined) return null;
+    if (days < DIAS_INV1)  return "1° invierno (antes de sep año 1)";
+    if (days < DIAS_INV1 + DIAS_VER) return "verano año 1–2";
+    const d2 = days - (DIAS_INV1 + DIAS_VER);
+    if (d2 < 30) return "jun año 2 (2° inv)";
+    if (d2 < 60) return "jul año 2 (2° inv)";
+    if (d2 < DIAS_INV2) return "ago año 2 (2° inv)";
+    const d3 = d2 - DIAS_INV2;
+    if (d3 < 30) return "sep año 2 (primavera)";
+    if (d3 < 60) return "oct año 2";
+    return "nov año 2";
+  }
+
+  const cruzaCon = findCrossing(pvCon);
+  const cruzaSin = findCrossing(pvSin);
+  const llegaCon = pvNovCon >= pvMin;
+  const llegaSin = pvNovSin >= pvMin;
 
   // ── SVG coords ───────────────────────────────────────────────
-  const W = 680, H = 150;
-  const PL = 36, PR = 60, PT = 10, PB = 30;
+  const W = 680, H = 160;
+  const PL = 36, PR = 70, PT = 10, PB = 30;
   const dW = W - PL - PR, dH = H - PT - PB;
 
-  const xDays = [0, DIAS_INV1, DIAS_INV1 + DIAS_VER, DIAS_INV1 + DIAS_VER + DIAS_INV2, TOTAL];
-  const xPct  = xDays.map(d => d / TOTAL);
-  const xPos  = xPct.map(p => PL + p * dW);
+  const xPct = xDays.map(d => d / TOTAL);
+  const xPos = xPct.map(p => PL + p * dW);
 
-  const pvCon = [pvIni, pvSepCon, pvMayCon, pvAgoCon, pvNovCon];
-  const pvSin = [pvIni, pvSepSin, pvMaySin, pvAgoSin, pvNovSin];
   const allPv = [...pvCon, ...pvSin, pvMin];
   const pvLo  = Math.floor(Math.min(...allPv) / 10) * 10 - 10;
   const pvHi  = Math.ceil( Math.max(...allPv) / 10) * 10 + 10;
@@ -757,40 +789,46 @@ function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
   const ptsCon = pvCon.map((v, i) => `${xPos[i].toFixed(1)},${yPV(v).toFixed(1)}`).join(" ");
   const ptsSin = pvSin.map((v, i) => `${xPos[i].toFixed(1)},${yPV(v).toFixed(1)}`).join(" ");
 
-  const HITOS = [
-    { label: "May Año 1", sub: "destete" },
-    { label: "Sep", sub: "fin 1° inv" },
-    { label: "May Año 2", sub: "ini 2° inv" },
-    { label: "Ago", sub: "fin 2° inv" },
-    { label: "Nov", sub: "entore" },
-  ];
-
-  // Y-axis ticks
   const pvRange = pvHi - pvLo;
   const step    = pvRange <= 80 ? 20 : pvRange <= 160 ? 40 : 60;
   const yTicks  = [];
   for (let v = Math.ceil(pvLo / step) * step; v <= pvHi; v += step) yTicks.push(v);
 
-  const llegaCon  = pvNovCon >= pvMin;
-  const llegaSin  = pvNovSin >= pvMin;
+  // Posición X del cruce interpolada en px
+  function crossXpx(cruz) {
+    if (!cruz) return null;
+    return xPos[cruz.idx] + cruz.t * (xPos[cruz.idx + 1] - xPos[cruz.idx]);
+  }
+  const xCruzCon = crossXpx(cruzaCon);
+  const xCruzSin = crossXpx(cruzaSin);
+
+  const HITOS = [
+    { label: "May Año 1", sub: "destete"    },
+    { label: "Sep",       sub: "fin 1° inv" },
+    { label: "May Año 2", sub: "ini 2° inv" },
+    { label: "Ago",       sub: "fin 2° inv" },
+    { label: "Nov",       sub: "entore obj" },
+  ];
 
   return (
     <div style={{ position: "relative", marginBottom: 12, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 10px 6px" }}>
-      <div style={{ fontFamily: C.font, fontSize: 9, color: C.textDim, letterSpacing: 1, marginBottom: 4 }}>
-        TRAYECTORIA PESO VIVO — RECRÍA VAQUILLONA (1° y 2° INVIERNO)
+      {/* Header con objetivo dinámico */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+        <div style={{ fontFamily: C.font, fontSize: 9, color: C.textDim, letterSpacing: 1 }}>
+          TRAYECTORIA PESO VIVO — RECRÍA VAQUILLONA (1° y 2° INVIERNO)
+        </div>
+        <div style={{ fontFamily: C.font, fontSize: 8, color: C.amber }}>
+          Obj. entore: <strong>{pvMin} kg</strong> = 75% de {pvVacaAdulta} kg adulta
+        </div>
       </div>
       <div style={{ position: "relative", overflowX: "auto" }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", maxWidth: W }}>
-          {/* invierno backgrounds */}
-          {[
-            [xPos[0], xPos[1]],
-            [xPos[2], xPos[3]],
-          ].map(([x1, x2], i) => (
-            <rect key={i} x={x1} y={PT} width={x2 - x1} height={dH}
-              fill={C.amber + "14"} />
+          {/* fondos invierno */}
+          {[[xPos[0], xPos[1]], [xPos[2], xPos[3]]].map(([x1, x2], i) => (
+            <rect key={i} x={x1} y={PT} width={x2 - x1} height={dH} fill={C.amber + "14"} />
           ))}
 
-          {/* y-axis ticks + grid */}
+          {/* grid Y */}
           {yTicks.map(v => {
             const y = yPV(v);
             return (
@@ -802,25 +840,22 @@ function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
             );
           })}
 
-          {/* pvMinEntore reference */}
+          {/* línea objetivo dinámico */}
           <line x1={PL} x2={W - PR} y1={yMin} y2={yMin}
-            stroke={C.amber} strokeWidth={1} strokeDasharray="4,3" />
+            stroke={C.amber} strokeWidth={1.2} strokeDasharray="5,3" />
           <text x={W - PR + 3} y={yMin + 3}
-            style={{ fontFamily: C.font, fontSize: "7px", fill: C.amber }}>
+            style={{ fontFamily: C.font, fontSize: "7.5px", fill: C.amber, fontWeight: "700" }}>
             {pvMin} kg
           </text>
-          <text x={W - PR + 3} y={yMin + 10}
+          <text x={W - PR + 3} y={yMin + 11}
             style={{ fontFamily: C.font, fontSize: "6px", fill: C.amber + "cc" }}>
-            mín
+            75% adulta
           </text>
 
-          {/* SIN supl — red dashed */}
-          <polyline points={ptsSin} fill="none"
-            stroke={C.red} strokeWidth={1.5} strokeDasharray="5,3" />
-
-          {/* CON supl — green solid */}
-          <polyline points={ptsCon} fill="none"
-            stroke={C.green} strokeWidth={2} />
+          {/* SIN supl — rojo discontinuo */}
+          <polyline points={ptsSin} fill="none" stroke={C.red} strokeWidth={1.5} strokeDasharray="5,3" />
+          {/* CON supl — verde sólido */}
+          <polyline points={ptsCon} fill="none" stroke={C.green} strokeWidth={2} />
 
           {/* Dots CON */}
           {pvCon.map((v, i) => (
@@ -832,50 +867,78 @@ function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
               stroke={C.red} strokeWidth={1.2} />
           ))}
 
-          {/* PV labels at end (Nov) */}
+          {/* ◆ Marcador de cruce CON supl */}
+          {xCruzCon && (
+            <g>
+              <polygon
+                points={`${xCruzCon},${yMin - 6} ${xCruzCon + 5},${yMin} ${xCruzCon},${yMin + 6} ${xCruzCon - 5},${yMin}`}
+                fill={C.green} stroke={C.card2} strokeWidth={1} />
+              <text x={xCruzCon} y={yMin - 9} textAnchor="middle"
+                style={{ fontFamily: C.font, fontSize: "6px", fill: C.green, fontWeight: "700" }}>
+                ◆ C
+              </text>
+            </g>
+          )}
+          {/* ◆ Marcador de cruce SIN supl */}
+          {xCruzSin && (
+            <g>
+              <polygon
+                points={`${xCruzSin},${yMin - 5} ${xCruzSin + 4},${yMin} ${xCruzSin},${yMin + 5} ${xCruzSin - 4},${yMin}`}
+                fill="none" stroke={C.red} strokeWidth={1.2} />
+              <text x={xCruzSin} y={yMin + 16} textAnchor="middle"
+                style={{ fontFamily: C.font, fontSize: "6px", fill: C.red }}>
+                ◆ S
+              </text>
+            </g>
+          )}
+
+          {/* Etiquetas PV finales (Nov) */}
           <text x={xPos[4] + 3} y={yPV(pvNovCon) + 3}
-            style={{ fontFamily: C.font, fontSize: "7.5px", fill: llegaCon ? C.green : C.amber, fontWeight: "700" }}>
+            style={{ fontFamily: C.font, fontSize: "7.5px",
+              fill: llegaCon ? C.green : C.amber, fontWeight: "700" }}>
             {pvNovCon}
           </text>
           <text x={xPos[4] + 3} y={yPV(pvNovSin) + 3}
-            style={{ fontFamily: C.font, fontSize: "7.5px", fill: llegaSin ? C.green : C.red + "dd" }}>
+            style={{ fontFamily: C.font, fontSize: "7.5px",
+              fill: llegaSin ? C.green : C.red + "dd" }}>
             {pvNovSin}
           </text>
 
-          {/* X-axis hitos */}
+          {/* Hitos eje X */}
           {HITOS.map((h, i) => (
             <g key={i}>
               <line x1={xPos[i]} x2={xPos[i]} y1={PT} y2={PT + dH}
                 stroke={C.border} strokeWidth={0.6} strokeDasharray={i > 0 ? "2,3" : "none"} />
               <text x={xPos[i]} y={H - PB + 11} textAnchor="middle"
-                style={{ fontFamily: C.font, fontSize: "7px", fill: C.textDim }}>
-                {h.label}
-              </text>
+                style={{ fontFamily: C.font, fontSize: "7px", fill: C.textDim }}>{h.label}</text>
               <text x={xPos[i]} y={H - PB + 20} textAnchor="middle"
-                style={{ fontFamily: C.font, fontSize: "6px", fill: C.textFaint }}>
-                {h.sub}
-              </text>
+                style={{ fontFamily: C.font, fontSize: "6px", fill: C.textFaint }}>{h.sub}</text>
             </g>
           ))}
         </svg>
       </div>
-      {/* Legend */}
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontFamily: C.font, fontSize: 8, color: C.textDim, marginTop: 3 }}>
+
+      {/* Leyenda con resultado dinámico */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontFamily: C.font, fontSize: 8, color: C.textDim, marginTop: 5 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <svg width={18} height={8}><line x1={0} y1={4} x2={18} y2={4} stroke={C.green} strokeWidth={2} /></svg>
-          Con suplementación · {pvNovCon} kg
+          <strong style={{ color: C.green }}>Con supl · {pvNovCon} kg</strong>
           {llegaCon
-            ? <span style={{ color: C.green }}> ✓ llega al entore</span>
-            : <span style={{ color: C.amber }}> ⚠ falta {pvMin - pvNovCon} kg</span>}
+            ? <span style={{ color: C.green }}> ✓ llega
+                {cruzaCon ? ` (alcanza objetivo en ${daysToLabel(cruzaCon.days)})` : ""}</span>
+            : <span style={{ color: C.amber }}> ⚠ falta {pvMin - pvNovCon} kg al entore</span>}
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <svg width={18} height={8}><line x1={0} y1={4} x2={18} y2={4} stroke={C.red} strokeWidth={1.5} strokeDasharray="4,2" /></svg>
-          Sin suplementación · {pvNovSin} kg
+          <strong style={{ color: C.red }}>Sin supl · {pvNovSin} kg</strong>
           {llegaSin
-            ? <span style={{ color: C.green }}> ✓ llega</span>
-            : <span style={{ color: C.red }}> ✗ no llega ({pvMin - pvNovSin} kg)</span>}
+            ? <span style={{ color: C.green }}> ✓ llega
+                {cruzaSin ? ` (${daysToLabel(cruzaSin.days)})` : ""}</span>
+            : <span style={{ color: C.red }}> ✗ no llega — falta {pvMin - pvNovSin} kg</span>}
         </span>
-        <span style={{ color: C.textFaint }}>Fondo ámbar = invierno · línea ámbar = peso mínimo entore ({pvMin} kg)</span>
+        <span style={{ color: C.textFaint, marginLeft: "auto" }}>
+          ◆ = punto donde cruza el objetivo · fondo ámbar = invierno
+        </span>
       </div>
     </div>
   );
@@ -995,7 +1058,7 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
         />
       )}
 
-      <GraficoTrayectoriaVaq vaq1E={motor?.vaq1E} vaq2E={motor?.vaq2E} />
+      <GraficoTrayectoriaVaq vaq1E={motor?.vaq1E} vaq2E={motor?.vaq2E} pvVacaAdulta={parseFloat(form?.pvVacaAdulta) || 320} />
 
       {datos.vaq1 ? (
         datos.vaq1.nAnimales > 0 ? (
