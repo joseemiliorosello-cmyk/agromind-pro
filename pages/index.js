@@ -349,6 +349,29 @@ function CalfAIPro() {
       doc.setDrawColor(45,106,31); doc.setLineWidth(0.5); doc.line(ML, y, ML+AU, y);
       salto(7);
 
+      // ── CONTEXTO — MOMENTO DEL CICLO ────────────────────────────────────
+      const faseCicloPDF = (motor?.cadena || (form.iniServ && form.finServ))
+        ? (() => { try { return calcFaseCiclo(
+            motor?.cadena ?? calcCadena(form.iniServ, form.finServ), form, {
+              ccServ: parseFloat(tray?.ccServ || 0),
+              mesesDeficit: (motor?.balanceMensual ?? []).filter(m=>[5,6,7].includes(m.i)&&m.balance<0).length,
+            }); } catch(e) { return null; } })()
+        : null;
+      if (faseCicloPDF && faseCicloPDF.fase !== "SIN_FECHA") {
+        chk(14);
+        const [fcR,fcG,fcB] = (faseCicloPDF.color||"#888888").match(/[\da-fA-F]{2}/g)?.map(h=>parseInt(h,16)) ?? [80,130,80];
+        doc.setFillColor(fcR+Math.round((255-fcR)*0.82), fcG+Math.round((255-fcG)*0.82), fcB+Math.round((255-fcB)*0.82));
+        doc.roundedRect(ML, y, AU, 9, 2, 2, "F");
+        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(fcR,fcG,fcB);
+        const sigTxt = faseCicloPDF.siguiente ? `  |  prox: ${faseCicloPDF.siguiente.label} en ${faseCicloPDF.siguiente.diasFaltan}d` : "";
+        doc.text(`MOMENTO DEL CICLO: ${(faseCicloPDF.label||"").toUpperCase()}${sigTxt}`, ML+3, y+5.5, {maxWidth:AU-6});
+        salto(12);
+        if (faseCicloPDF.descripcion) {
+          doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(70,70,70);
+          doc.text(faseCicloPDF.descripcion.split(".")[0] + ".", ML, y, {maxWidth:AU}); salto(6);
+        }
+      }
+
       // KPIs
       const kpis = [
         ["CC hoy",      ccPondVal > 0 ? ccPondVal.toFixed(1) : "sin dato"],
@@ -420,28 +443,37 @@ function CalfAIPro() {
         salto(3);
       }
 
-      // ── BALANCE INVERNAL ─────────────────────────────────────────────
+      // ── BALANCE ANUAL — 12 MESES ────────────────────────────────────────
       if (motor && motor.balanceMensual) {
-        chk(20);
+        chk(30);
         doc.setFillColor(230,248,230);
         doc.roundedRect(ML, y, AU, 8, 2, 2, "F");
         doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(45,106,31);
-        doc.text("BALANCE INVERNAL (Jun–Jul–Ago)", ML+4, y+5.5);
+        doc.text("BALANCE FORRAJERO — 12 MESES (Mcal/d)", ML+4, y+5.5);
         salto(11);
-        const MESES_PDF2 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-        [5,6,7].forEach((mi, ci) => {
-          const bm = motor.balanceMensual.find(m => m.i === mi);
-          const bv = bm ? Math.round(bm.balance) : null;
-          const bx = ML + ci * (AU/3);
-          const col = bv === null ? [180,180,180] : bv >= 0 ? [45,106,31] : [200,60,40];
-          doc.setFillColor(245,250,245);
-          doc.roundedRect(bx, y, AU/3-3, 12, 1, 1, "F");
-          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
-          doc.text(MESES_PDF2[mi], bx + (AU/3-3)/2, y+4.5, { align:"center" });
-          doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(col[0],col[1],col[2]);
-          doc.text(bv !== null ? (bv >= 0 ? "+" : "") + bv + " Mcal" : "—", bx + (AU/3-3)/2, y+10, { align:"center" });
+        const MESES_PDF12 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+        const colW12 = AU / 6;
+        [[0,1,2,3,4,5],[6,7,8,9,10,11]].forEach(fila => {
+          fila.forEach((mi, ci) => {
+            const bm = motor.balanceMensual.find(m => m.i === mi);
+            const bv = bm ? Math.round(bm.balance) : null;
+            const bx = ML + ci * colW12;
+            const esInv = [5,6,7].includes(mi);
+            const col = bv === null ? [180,180,180] : bv >= 0 ? [45,106,31] : [200,60,40];
+            doc.setFillColor(esInv ? 255 : 245, esInv ? 248 : 250, esInv ? 235 : 245);
+            doc.roundedRect(bx, y, colW12-2, 12, 1, 1, "F");
+            if (esInv) { doc.setDrawColor(200,140,20); doc.setLineWidth(0.3); doc.roundedRect(bx, y, colW12-2, 12, 1, 1, "S"); }
+            doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
+            doc.text(MESES_PDF12[mi], bx + (colW12-2)/2, y+4, { align:"center" });
+            doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(col[0],col[1],col[2]);
+            doc.text(bv !== null ? (bv >= 0 ? "+" : "") + bv : "—", bx + (colW12-2)/2, y+10, { align:"center" });
+          });
+          salto(15);
         });
-        salto(16);
+        const mDef = motor.balanceMensual.filter(m=>[5,6,7].includes(m.i)&&m.balance<0).length;
+        doc.setFontSize(6.5); doc.setFont("helvetica","normal");
+        doc.setTextColor(mDef>0?180:80, mDef>0?60:130, mDef>0?40:60);
+        doc.text(`Invierno: ${mDef===0?"sin deficit":mDef+" mes"+(mDef>1?"es":"")+" en deficit"} · fondo ambar = meses invernales`, ML, y); salto(7);
       }
 
       // ── NDVI Y CAMPO ─────────────────────────────────────────────────────
@@ -715,6 +747,26 @@ function CalfAIPro() {
     const cb      = calcCerebro(motor, form, sat);
     const sc      = calcScore(motor, form, null);
 
+    // Datos derivados reutilizables
+    const cadenaXL = motor?.cadena ?? (form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null);
+    const diasServXL = cadenaXL?.diasServ || 0;
+    const diagDurXL = diasServXL <= 0 ? "Sin fechas"
+                    : diasServXL <= 90 ? "Optimo (<=90d)"
+                    : diasServXL <= 120 ? "Aceptable (91-120d)"
+                    : diasServXL <= 179 ? "Excesivo (121-179d)"
+                    : "Servicio continuo (>=180d)";
+    const nVacasXL = parseInt(form.vacasN) || 0;
+    const nTorosXL = parseInt(form.torosN) || 0;
+    const relToro  = nVacasXL > 0 && nTorosXL > 0 ? +(nVacasXL / nTorosXL).toFixed(1) : "";
+    // Autonomia forrajera: dias disponibles con la oferta actual
+    const mesHoyXL = new Date().getMonth();
+    const demHoyMcal = motor?.balanceMensual?.find(m => m.i === mesHoyXL)?.demanda || 0;
+    const supGanXL = (parseFloat(form.supHa)||0) * (1 - ((parseFloat(form.pctMonte)||0) + (parseFloat(form.pctNGan)||0)) / 100);
+    const dispMSTotalXL = (dispMS?.msHa || 0) * supGanXL; // kg MS total disponible hoy
+    const EM_MEDIA = 2.2; // Mcal/kg MS media pastizal NEA
+    const demKgMSDia = demHoyMcal / EM_MEDIA;
+    const autonomiaDiasXL = demKgMSDia > 0 && dispMSTotalXL > 0 ? Math.round(dispMSTotalXL / demKgMSDia) : null;
+
     // Hoja 1: Datos del establecimiento
     const hoja1 = [
       ["CONSULTA TECNICA - CALFAI", "", "", ""],
@@ -767,6 +819,8 @@ function CalfAIPro() {
       ["Tipo pasto",         form.tipoPasto || ""],
       ["Disponibilidad MS (kg/ha)", dispMS?.msHa || ""],
       ["Nivel disponibilidad", dispMS?.nivel || ""],
+      ["Autonomia forrajera (dias)", autonomiaDiasXL ?? ""],
+      ["Relacion toro:vaca", relToro],
       ["", "", "", ""],
       ["CLIMA SATELITAL", "", "", ""],
       ["Temperatura actual (C)", sat?.temp || ""],
@@ -774,6 +828,7 @@ function CalfAIPro() {
       ["Temp min (C)",       sat?.tMin || ""],
       ["Lluvia 7d (mm)",     sat?.p7   || ""],
       ["Lluvia 30d (mm)",    sat?.p30  || ""],
+      ["Lluvia 90d (mm)",    sat?.p90  || ""],
       ["Balance hidrico (mm)", sat?.deficit || ""],
       ["NDVI",               sat?.ndvi || ""],
       ["Condicion forrajera", sat?.condForr || ""],
@@ -820,15 +875,22 @@ function CalfAIPro() {
       ["% Reposicion",       form.pctReposicion || "20"],
       ["Edad en mayo (meses)", form.edadVaqMayo || ""],
       ["Tipo destete vaq",   form.tipoDesteteVaq || ""],
-      ["PV entrada vaq1 (kg)", form.vaq1PV || tcSave?.pvMayoPond || ""],
-      ["PV salida vaq1 (kg)", vaq1E?.pvSal || ""],
-      ["GDP vaq1 (g/d)",     vaq1E?.gdpReal || ""],
+      ["PV entrada vaq1 (kg)",   form.vaq1PV || tcSave?.pvMayoPond || ""],
+      ["PV salida vaq1 (kg)",   vaq1E?.pvSal || ""],
+      ["GDP vaq1 con supl (g/d)", vaq1E?.gdpReal || ""],
+      ["GDP vaq1 sin supl (g/d)", vaq1E?.gdpPasto || ""],
+      ["PV objetivo entore vaq1 (kg)", motor?.pvEntVaq1 ? Math.round(parseFloat(form.pvVacaAdulta||380)*0.40) : ""],
+      ["Llega objetivo vaq1",   vaq1E ? (vaq1E.pvSal >= Math.round(parseFloat(form.pvVacaAdulta||380)*0.40) ? "Si" : "No") : ""],
       ["", "", "", ""],
       ["VAQUILLONA 2 INVIERNO", "", "", ""],
-      ["Vaq2 (cab)",         form.vaq2N || ""],
-      ["PV entrada vaq2 (kg)", pvEntradaVaq2 || ""],
-      ["PV al entore (kg)",  vaq2E?.pvEntore || ""],
+      ["Vaq2 (cab)",            form.vaq2N || ""],
+      ["PV entrada vaq2 mayo (kg)", pvEntradaVaq2 || ""],
+      ["PV vaq2 agosto (kg)",   vaq2E?.pvV2Agosto || ""],
+      ["PV al entore (kg)",     vaq2E?.pvEntore || ""],
+      ["PV minimo entore (kg)", vaq2E?.pvMinEntore || ""],
       ["Llega objetivo entore", vaq2E?.llegas ? "Si" : vaq2E ? "No" : ""],
+      ["Deficit PV entore (kg)", vaq2E && !vaq2E.llegas ? (vaq2E.pvMinEntore||0)-(vaq2E.pvEntore||0) : 0],
+      ["Lluvia 90d (mm)",        sat?.p90 || ""],
       ["", "", "", ""],
       ["V2S", "", "", ""],
       ["V2S (cab)",          form.v2sN || ""],
@@ -848,10 +910,12 @@ function CalfAIPro() {
       ["BALANCE ENERGETICO MENSUAL", form.nombreProductor || "Establecimiento", "", "", "", "", ""],
       ["Fecha consulta:", fecha, "", "", "", "", ""],
       ["", "", "", "", "", "", ""],
-      ["Mes","Oferta (Mcal/d)","Demanda (Mcal/d)","Balance (Mcal/d)","Deficit","% Cobertura","Carga ajustada"],
+      ["Mes","Oferta (Mcal/d)","Demanda (Mcal/d)","Balance (Mcal/d)","Deficit","% Cobertura","Carga ajustada","Terneros (Mcal/d)","Demanda (kg MS/d)","Balance (kg MS/d)"],
     ];
     if (motor?.balanceMensual) {
       motor.balanceMensual.forEach(m => {
+        const demKgMS = m.demanda != null ? +(m.demanda / EM_MEDIA).toFixed(1) : "";
+        const balKgMS = m.balance != null ? +(m.balance / EM_MEDIA).toFixed(1) : "";
         hoja2.push([
           MESES_XL[m.i] || m.i,
           m.oferta  != null ? +m.oferta.toFixed(1)  : "",
@@ -860,6 +924,9 @@ function CalfAIPro() {
           m.deficit ? "SI" : "No",
           m.cobertura != null ? +(m.cobertura * 100).toFixed(0) : "",
           m.cargaAjustada != null ? +m.cargaAjustada.toFixed(2) : "",
+          m.dTerneros != null ? +m.dTerneros.toFixed(1) : "",
+          demKgMS,
+          balKgMS,
         ]);
       });
     }
@@ -905,10 +972,68 @@ function CalfAIPro() {
       hoja3.push([result.replace(/\n/g, " | "), "", ""]);
     }
 
+    // Hoja 4: Servicio y Reproducción
+    const hojaRepro = [
+      ["SERVICIO Y REPRODUCCION — CALFAI", "", ""],
+      ["Fecha consulta:", fecha, ""],
+      ["", "", ""],
+      ["SERVICIO", "", ""],
+      ["Inicio servicio",           form.iniServ || ""],
+      ["Fin servicio",              form.finServ || ""],
+      ["Duracion (dias)",           diasServXL || ""],
+      ["Diagnostico duracion",      diagDurXL],
+      ["Fecha parto temprano",      cadenaXL?.partoTemp ? new Date(cadenaXL.partoTemp).toLocaleDateString("es-AR") : ""],
+      ["Fecha parto tardio",        cadenaXL?.partoTard ? new Date(cadenaXL.partoTard).toLocaleDateString("es-AR") : ""],
+      ["Servicio continuo",         cadenaXL?.esContinuo ? "Si" : diasServXL > 0 ? "No" : ""],
+      ["", "", ""],
+      ["REPRODUCCION", "", ""],
+      ["Prenez cargada (%)",        form.prenez || ""],
+      ["Prenez estimada (%)",       tray?.pr || ""],
+      ["Prenez usada (%)",          prenezDisplay ?? ""],
+      ["Fuente prenez",             prenezFuente],
+      ["Tasa senalada hist. (%)",   form.pctDestete || ""],
+      ["Dias de anestro (prom)",    tray?.anestro?.dias || ""],
+      ["Meses de lactacion",        tray?.mesesLact || ""],
+      ["", "", ""],
+      ["DESTETE", "", ""],
+      ["Destete recomendado",       tray?.recDestete || ""],
+      ["Destete tardias (>120d)",   tray?.recDesteTardio?.tipo || ""],
+      ["% Trad 180d",               form.destTrad  || "0"],
+      ["% Anticipado 90d",          form.destAntic || "0"],
+      ["% Hiperprecoz 50d",         form.destHiper || "0"],
+      ["CC al servicio trad",       tray?.ccServTrad?.toFixed(2) || ""],
+      ["CC al servicio anticipado", tray?.ccServAntic?.toFixed(2) || ""],
+      ["CC al servicio hiperprecoz",tray?.ccServHiper?.toFixed(2) || ""],
+      ["Prenez con trad (%)",       tray?.pr || ""],
+      ["Prenez con anticipado (%)", tray?.prAntic || ""],
+      ["Prenez con hiperprecoz (%)",tray?.prHiper || ""],
+    ];
+
+    // Hoja 5: Recomendaciones
+    const hoja5 = [
+      ["RECOMENDACIONES — CALFAI", "", "", "", ""],
+      ["Fecha consulta:", fecha, "", "", ""],
+      ["", "", "", "", ""],
+      ["Prioridad", "Area", "Accion", "Descripcion / Que hacer", "Cuando"],
+    ];
+    if (cb?.tarjetas) {
+      cb.tarjetas.filter(t => ["P1","P2","URGENTE"].includes(t.prioridad)).forEach(t => {
+        hoja5.push([
+          t.prioridad  || "",
+          t.area       || "",
+          t.titulo     || "",
+          t.que        || t.descripcion || "",
+          t.cuando     || t.fecha      || "",
+        ]);
+      });
+    }
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja1), "Establecimiento");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja2), "Balance mensual");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja3), "Diagnostico");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaRepro), "Servicio y Reprod");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja5), "Recomendaciones");
     XLSX.writeFile(wb, `calfai_${(form.nombreProductor||"datos").replace(/\s/g,"_")}_${isoDate}.xlsx`);
   }
 

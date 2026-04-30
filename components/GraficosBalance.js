@@ -87,6 +87,7 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 180 
       d.oferta.verdeo > 0 ? `  Verdeo: ${d.oferta.verdeo.toFixed(1)}` : null,
       mostrarMovCC && d.oferta.movilizacionCC > 0 ? `  Mov.CC: ${d.oferta.movilizacionCC.toFixed(1)}` : null,
       `Demanda: ${d.demanda?.toFixed(1)} Mcal/d`,
+      d.dTerneros > 0 ? `  Terneros: ${d.dTerneros?.toFixed(1)} Mcal/d` : null,
       `Balance: ${bal >= 0 ? "+" : ""}${bal?.toFixed(1)} Mcal/d`,
     ].filter(Boolean);
     setTooltip({ x: pixX + 8, y: pixY, lines, containerW: contRect.width });
@@ -478,6 +479,100 @@ function TrayectoriaCC({ form, motor }) {
         {ccServAntic && <span style={{ color:C.blue }}>● Anticipado 90d: {ccServAntic?.toFixed(1)}</span>}
         {ccServHiper && <span style={{ color:C.purple }}>● Hiperprecoz 50d: {ccServHiper?.toFixed(1)}</span>}
         <span style={{ marginLeft:"auto", color:C.textFaint }}>Bandas: ≥5.0 óptimo · ≥4.5 aceptable · &lt;4.0 crítico</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Distribución de partos: actual vs servicio recomendado 90d ───
+function GraficoDistribucionPartos({ cadena }) {
+  if (!cadena?.partoTemp || !cadena?.partoTard || !cadena?.diasServ) return null;
+
+  const diasServ = cadena.diasServ;
+  const W = 680, H = 130;
+  const PL = 30, PR = 8, PT = 14, PB = 22;
+  const drawW = W - PL - PR;
+  const drawH = H - PT - PB;
+  const colW = drawW / 12;
+
+  // Distribución actual: partos uniformes en [mesPartoTemprano, mesPartoTardio]
+  const mesInicio = new Date(cadena.partoTemp).getMonth();
+  const mesFin    = new Date(cadena.partoTard).getMonth();
+  const mesesParto = diasServ > 0 ? Math.ceil(diasServ / 30) : 3;
+
+  const dist = Array(12).fill(0);
+  for (let k = 0; k < mesesParto; k++) {
+    dist[(mesInicio + k) % 12] += 1 / mesesParto;
+  }
+
+  // Distribución recomendada: 90 días desde el mismo inicio de partos
+  const mesesRec = 3;
+  const distRec = Array(12).fill(0);
+  for (let k = 0; k < mesesRec; k++) {
+    distRec[(mesInicio + k) % 12] += 1 / mesesRec;
+  }
+
+  const maxVal = Math.max(...dist, ...distRec, 0.01);
+  const yVal = (v) => PT + drawH - (v / maxVal) * drawH;
+  const xMes = (i) => PL + i * colW;
+  const barW = colW * 0.38;
+  const mesHoy = new Date().getMonth();
+
+  const diagDur = diasServ <= 90 ? "Optimo" : diasServ <= 120 ? "Aceptable" : diasServ <= 179 ? "Excesivo" : "Continuo";
+  const diagCol = diasServ <= 90 ? C.green : diasServ <= 120 ? C.amber : C.red;
+
+  return (
+    <div style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+        <div style={{ fontFamily: C.font, fontSize: 11, color: C.text, fontWeight: 700 }}>
+          Distribución de partos — actual vs recomendado 90d
+        </div>
+        <div style={{ fontFamily: C.font, fontSize: 8, color: diagCol, fontWeight: 700 }}>
+          Servicio actual: {diasServ}d — {diagDur}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+        {/* mes actual highlight */}
+        <rect x={xMes(mesHoy)} y={PT} width={colW} height={drawH} fill={C.green + "1a"} />
+
+        {Array.from({ length: 12 }, (_, i) => {
+          const hAct = drawH * (dist[i] / maxVal);
+          const hRec = drawH * (distRec[i] / maxVal);
+          const xAct = xMes(i) + colW * 0.08;
+          const xRec = xMes(i) + colW * 0.54;
+          return (
+            <g key={i}>
+              {/* Barra actual */}
+              {dist[i] > 0 && (
+                <rect x={xAct} y={yVal(dist[i])} width={barW} height={Math.max(1, hAct)}
+                  fill={diagCol} opacity={0.75} rx={1} />
+              )}
+              {/* Barra recomendada */}
+              {distRec[i] > 0 && (
+                <rect x={xRec} y={yVal(distRec[i])} width={barW} height={Math.max(1, hRec)}
+                  fill={C.blue} opacity={0.60} rx={1} />
+              )}
+              <text x={xMes(i) + colW / 2} y={H - 6} textAnchor="middle"
+                style={{ fontFamily: C.font, fontSize: "6.5px",
+                  fill: i === mesHoy ? C.green : C.textFaint,
+                  fontWeight: i === mesHoy ? "700" : "400" }}>
+                {MESES[i]}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Línea base */}
+        <line x1={PL} y1={PT + drawH} x2={W - PR} y2={PT + drawH} stroke={C.textFaint} strokeWidth={0.5} />
+      </svg>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 4, fontFamily: C.font, fontSize: 8, color: C.textDim }}>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: diagCol, marginRight: 3, opacity: 0.75 }} />Actual ({diasServ}d)</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.blue, marginRight: 3, opacity: 0.60 }} />Recomendado (90d)</span>
+        {diasServ > 90 && (
+          <span style={{ marginLeft: "auto", color: C.amber }}>
+            Acortar a 90d concentra partos en {mesesRec} meses: +sincronia pasto · +preñez en la vaca de cola
+          </span>
+        )}
       </div>
     </div>
   );
@@ -900,6 +995,8 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
           </div>
         )
       ) : null}
+
+      <GraficoDistribucionPartos cadena={cadena} />
 
       <CronogramaAnual motor={motor} form={form} sat={sat} />
 
