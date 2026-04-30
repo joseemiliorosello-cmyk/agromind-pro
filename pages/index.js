@@ -542,7 +542,14 @@ function CalfAIPro() {
                                 : recD === "anticipado"  ? ["Anticipado (90d) — recomendado",      [200,140,20]]
                                 :                          ["Tradicional (180d) — CC adecuada",    [45,140,60]];
           doc.setFont("helvetica","bold"); doc.setTextColor(...dLCol);
-          doc.text(`   Destete recomendado: ${dLabel}`, ML, y); salto(6);
+          doc.text(`   Destete recomendado: ${dLabel}`, ML, y); salto(4);
+          if (tray.recDesteTardio && tray.recDesteTardio.tipo !== recD) {
+            const [tLab, tCol] = tray.recDesteTardio.tipo === "hiperprecoz" ? ["Vacas tardías: Hiperprecoz (50d)", [180,40,20]]
+                               : tray.recDesteTardio.tipo === "anticipado"  ? ["Vacas tardías: Anticipado (90d)", [200,140,20]]
+                               :                                              ["Vacas tardías: Tradicional OK",   [45,140,60]];
+            doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(...tCol);
+            doc.text(`   ⚠ ${tLab} (servicio largo: ${cadena?.diasServ}d)`, ML, y, {maxWidth: AU}); salto(5);
+          } else { salto(2); }
 
           // 3. Proyección CC al próximo servicio (manejo actual vs recomendado)
           chk(16);
