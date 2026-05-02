@@ -497,7 +497,29 @@ function CalfAIPro() {
         const mDef = motor.balanceMensual.filter(m=>[5,6,7].includes(m.i)&&m.balance<0).length;
         doc.setFontSize(6.5); doc.setFont("helvetica","normal");
         doc.setTextColor(mDef>0?180:80, mDef>0?60:130, mDef>0?40:60);
-        doc.text(`Invierno: ${mDef===0?"sin deficit":mDef+" mes"+(mDef>1?"es":"")+" en deficit"} · fondo ambar = meses invernales`, ML, y); salto(7);
+        doc.text(`Invierno: ${mDef===0?"sin deficit":mDef+" mes"+(mDef>1?"es":"")+" en deficit"} · fondo ambar = meses invernales`, ML, y); salto(5);
+
+        // ── GRÁFICO DE BARRAS — balance visual ──
+        chk(30);
+        const bals12 = motor.balanceMensual.map(m => m.balance || 0);
+        const maxBalAbs = Math.max(10, ...bals12.map(Math.abs));
+        const bChH = 20;
+        const bBarW = AU / 12 - 1;
+        const bZeroY = y + bChH / 2;
+        const bScale = (bChH / 2 - 1.5) / maxBalAbs;
+        doc.setDrawColor(180,180,180); doc.setLineWidth(0.2);
+        doc.line(ML, bZeroY, ML + AU, bZeroY);
+        bals12.forEach((bal, mi) => {
+          const bx = ML + mi * (AU / 12);
+          const barH = Math.max(0.4, Math.abs(bal) * bScale);
+          const barY = bal >= 0 ? bZeroY - barH : bZeroY;
+          if ([5,6,7].includes(mi)) { doc.setFillColor(255,248,225); doc.rect(bx, y, AU/12, bChH, "F"); }
+          const [br,bg,bb] = bal >= 0 ? [29,158,117] : [226,75,74];
+          doc.setFillColor(br,bg,bb); doc.rect(bx+0.5, barY, bBarW, barH, "F");
+          doc.setFontSize(4.5); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
+          doc.text(["E","F","M","A","M","J","J","A","S","O","N","D"][mi], bx+bBarW/2+0.5, y+bChH+3, {align:"center"});
+        });
+        salto(bChH + 6);
       }
 
       // ── NDVI Y CAMPO ─────────────────────────────────────────────────────
@@ -2946,7 +2968,7 @@ function CalfAIPro() {
               display:"flex", alignItems:"center", justifyContent:"center", gap:8,
             }}>
               📊 Descargar Excel
-              <span style={{ fontFamily:C.fontSans, fontSize:10, color:C.textDim, fontWeight:400 }}>5 hojas de datos</span>
+              <span style={{ fontFamily:C.fontSans, fontSize:10, color:C.textDim, fontWeight:400 }}>hoja única consolidada</span>
             </button>
           </div>
         </div>
