@@ -62,6 +62,7 @@ function CalfAIPro() {
   const [step,        setStep]        = useState(0);
   const [sat,         setSat]         = useState(null);
   const [coords,      setCoords]      = useState(null);
+  const [gpsLoading,  setGpsLoading]  = useState(false);
   const [loading,     setLoading]     = useState(false);
   const [loadMsg,     setLoadMsg]     = useState("");
   const [result,      setResult]      = useState("");
@@ -255,7 +256,11 @@ function CalfAIPro() {
 
   // ── GPS ───────────────────────────────────────────────────────
   async function gpsClick() {
-    if (!navigator.geolocation) { setSat({ error:"GPS no disponible" }); return; }
+    if (!navigator.geolocation) {
+      showToast("GPS no disponible en este navegador", "error");
+      return;
+    }
+    setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const la = +pos.coords.latitude.toFixed(5);
@@ -263,17 +268,30 @@ function CalfAIPro() {
         setCoords({ lat:la, lon:lo });
         set("zona",      dZona(la, lo));
         set("provincia", dProv(la, lo));
-        // Reverse geocoding para obtener localidad automáticamente
+        // Reverse geocoding para obtener localidad
         try {
           const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json&accept-language=es`);
           const d = await r.json();
           const addr = d.address || {};
-          // Prioridad: city > town > village > county > municipality
           const loc = addr.city || addr.town || addr.village || addr.county || addr.municipality || addr.state_district || "";
-          if (loc) set("localidad", loc);
-        } catch(e) { /* silencioso — el usuario puede escribir la localidad */ }
+          if (loc) {
+            set("localidad", loc);
+            showToast(`📍 GPS: ${loc} (${la.toFixed(3)}°, ${lo.toFixed(3)}°)`, "ok");
+          } else {
+            showToast(`📍 GPS activo: ${la.toFixed(3)}°, ${lo.toFixed(3)}°`, "ok");
+          }
+        } catch(e) {
+          showToast(`📍 GPS activo: ${la.toFixed(3)}°, ${lo.toFixed(3)}°`, "ok");
+        }
+        setGpsLoading(false);
       },
-      () => setSat({ error:"No se pudo obtener ubicación" }),
+      (err) => {
+        setGpsLoading(false);
+        const msg = err.code === 1 ? "Permiso GPS denegado — activalo en el navegador"
+                  : err.code === 3 ? "GPS tardó demasiado — intentá de nuevo"
+                  : "No se pudo obtener la ubicación";
+        showToast(msg, "error", 5000);
+      },
       { timeout:8000 }
     );
   }
@@ -1082,12 +1100,13 @@ function CalfAIPro() {
             El análisis usa datos climáticos históricos por provincia (temperatura, precipitación, estacionalidad).
             El GPS agrega temperatura real (Open-Meteo) y un NDVI estimado por zona/lluvia/ENSO (no MODIS).
           </div>
-          <button onClick={gpsClick} style={{
+          <button onClick={gpsClick} disabled={gpsLoading} style={{
             marginTop:8, padding:"6px 12px", borderRadius:8,
             background:"transparent", border:`1px solid ${C.green}40`,
-            fontFamily:C.font, fontSize:11, color:C.green, cursor:"pointer"
+            fontFamily:C.font, fontSize:11, color:C.green, cursor:"pointer",
+            opacity: gpsLoading ? 0.6 : 1,
           }}>
-            📍 Activar GPS igual (para datos satelitales en tiempo real)
+            {gpsLoading ? "📍 Obteniendo ubicación…" : "📍 Activar GPS (datos satelitales en tiempo real)"}
           </button>
         </div>
       )}
@@ -1513,6 +1532,38 @@ function CalfAIPro() {
         {(parseFloat(form.destHiper)||0) > 30 && (
           <Alerta tipo="warn">Hiperprecoz {">"} 30% — planificar suplementación proteica inmediata post-destete (ternero {"<"} 60 kg).</Alerta>
         )}
+        {/* Impacto inmediato del mix de destete en preñez */}
+        {tray && (parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0) === 100 && (
+          <div style={{ marginTop:10, padding:"10px 12px", borderRadius:10,
+            background: tray.pr >= 60 ? `${C.green}12` : tray.pr >= 45 ? `${C.amber}12` : `${C.red}12`,
+            border: `1px solid ${tray.pr >= 60 ? C.green : tray.pr >= 45 ? C.amber : C.red}30` }}>
+            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:4, letterSpacing:.5 }}>
+              IMPACTO EN PREÑEZ — con este mix de destete
+            </div>
+            <div style={{ display:"flex", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+              <div>
+                <span style={{ fontFamily:C.font, fontSize:22, fontWeight:700,
+                  color: tray.pr >= 60 ? C.green : tray.pr >= 45 ? C.amber : C.red }}>
+                  {tray.pr}%
+                </span>
+                <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginLeft:4 }}>preñez estimada</span>
+              </div>
+              {tray.prHiper && tray.prHiper > tray.pr && (
+                <div style={{ fontFamily:C.font, fontSize:10, color:C.amber }}>
+                  Con hiperprecoz 50d → <strong style={{color:C.green}}>{tray.prHiper}%</strong>
+                  {parseInt(form.vacasN) > 0 && (
+                    <span style={{color:C.textFaint}}> (+{Math.round(parseInt(form.vacasN)*(tray.prHiper-tray.pr)/100*.95)} terneros)</span>
+                  )}
+                </div>
+              )}
+              {tray.prAntic && tray.prAntic > tray.pr && !tray.prHiper && (
+                <div style={{ fontFamily:C.font, fontSize:10, color:C.amber }}>
+                  Con anticipado 90d → <strong style={{color:C.green}}>{tray.prAntic}%</strong>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {tray && (
@@ -1547,26 +1598,6 @@ function CalfAIPro() {
               <Pill color={C.textDim}>📉 Caída lact. −{tray.caidaLact} CC</Pill>
               <Pill color={C.blue}>🍼 {tray.mesesLact}m lactación</Pill>
             </div>
-          </div>
-
-          {/* Cards individuales con contexto */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
-            <MetricCard label="CC TACTO = CC PARTO"
-              value={tray.ccParto}
-              color={smf(parseFloat(tray.ccParto),4.5,5.0)}
-              sub={parseFloat(tray.ccParto)<4.5?"⚠ Riesgo anestro prolongado":parseFloat(tray.ccParto)>=5.0?"✓ Óptimo (escala 1-9)":"Aceptable"} />
-            <MetricCard label="CC MÍN. EN LACTACIÓN"
-              value={tray.ccMinLact}
-              color={smf(parseFloat(tray.ccMinLact),3.5,4.0)}
-              sub={`Piso al que cae en lactación (−${tray.caidaLact} CC)`} />
-            <MetricCard label="CC AL SERVICIO"
-              value={tray.ccServ}
-              color={smf(parseFloat(tray.ccServ),4.5,5.0)}
-              sub={parseFloat(tray.ccServ)>=5.0?"→ Preñez ≥88%":parseFloat(tray.ccServ)>=4.5?"→ Preñez 80–87%":parseFloat(tray.ccServ)>=4.0?"→ Preñez ~70%":parseFloat(tray.ccServ)>=3.5?"→ Preñez ~50% ⚠":""+"→ Preñez <30% 🔴"} />
-            <MetricCard label="PREÑEZ RODEO (CC PROM.)"
-              value={tray.pr+"%"}
-              color={smf(tray.pr,35,55)}
-              sub={dist?.grupos?.length > 1 ? "CC promedio — preñez real por grupo ↓" : `Anestro posparto: ${tray.anestro?.dias}d`} />
           </div>
 
           {/* Alerta anestro */}
@@ -2213,7 +2244,7 @@ function CalfAIPro() {
         {/* ── Verdeos de invierno ── */}
         <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <div style={{ fontFamily:C.font, fontSize:11, color:C.green, letterSpacing:1 }}>🌾 VERDEOS DE INVIERNO</div>
+            <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1 }}>🌾 VERDEOS DE INVIERNO</div>
             <div style={{ display:"flex", gap:6 }}>
               {[["no","No tengo"],["si","Tengo"]].map(([v,l]) => (
                 <button key={v} onClick={()=>set("tieneVerdeo",v)} style={{
@@ -2794,7 +2825,72 @@ function CalfAIPro() {
 
 
 
-      </div>
+      {/* ── Resultado vaquillona con esta suplementación ── */}
+      {motor && (vaq1E || vaq2E) && (
+        <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginTop:14 }}>
+          <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:10 }}>
+            RESULTADO VAQUILLONA — con la suplementación cargada
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            {vaq1E && (
+              <div style={{ background:C.card, borderRadius:10, padding:"10px 12px",
+                border:`1px solid ${vaq1E.pvSal >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40) ? C.green+"40" : C.amber+"40"}` }}>
+                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:4 }}>VAQ 1° INVIERNO</div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                  <span style={{ fontFamily:C.font, fontSize:10, color:C.textDim }}>Sin suplemento</span>
+                  <span style={{ fontFamily:C.font, fontSize:11, color:C.red, fontWeight:600 }}>{vaq1E.gdpPasto} g/d</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+                  <span style={{ fontFamily:C.font, fontSize:10, color:C.textDim }}>Con suplemento</span>
+                  <span style={{ fontFamily:C.font, fontSize:11, color:C.green, fontWeight:700 }}>{vaq1E.gdpReal} g/d</span>
+                </div>
+                <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:6 }}>
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+                    PV entrada: <strong style={{color:C.text}}>{vaq1E.pvEntrada} kg</strong>
+                    {" → "}PV septiembre: <strong style={{
+                      color: vaq1E.pvSal >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40) ? C.green : C.amber
+                    }}>{vaq1E.pvSal} kg</strong>
+                  </div>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>
+                    Obj. 40% adulta: {Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40)} kg
+                    {vaq1E.pvSal >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40)
+                      ? <span style={{color:C.green}}> ✓</span>
+                      : <span style={{color:C.amber}}> — falta {Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40) - vaq1E.pvSal} kg</span>}
+                  </div>
+                </div>
+              </div>
+            )}
+            {vaq2E && (
+              <div style={{ background:C.card, borderRadius:10, padding:"10px 12px",
+                border:`1px solid ${vaq2E.llegas ? C.green+"40" : C.amber+"40"}` }}>
+                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:4 }}>VAQ 2° INVIERNO</div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                  <span style={{ fontFamily:C.font, fontSize:10, color:C.textDim }}>Sin suplemento</span>
+                  <span style={{ fontFamily:C.font, fontSize:11, color:C.red, fontWeight:600 }}>{vaq2E.gdpPastoInv || "—"} g/d</span>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+                  <span style={{ fontFamily:C.font, fontSize:10, color:C.textDim }}>Con suplemento</span>
+                  <span style={{ fontFamily:C.font, fontSize:11, color:C.green, fontWeight:700 }}>{vaq2E.gdpRealInv || "—"} g/d</span>
+                </div>
+                <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:6 }}>
+                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+                    PV al entore: <strong style={{
+                      color: vaq2E.llegas ? C.green : C.amber
+                    }}>{vaq2E.pvEntore} kg</strong>
+                    {" / mín "}
+                    <strong style={{color:C.text}}>{vaq2E.pvMinEntore} kg</strong>
+                  </div>
+                  <div style={{ fontFamily:C.font, fontSize:8, marginTop:2,
+                    color: vaq2E.llegas ? C.green : C.amber }}>
+                    {vaq2E.llegas ? "✓ Llega al entore" : `⚠ Falta ${vaq2E.pvMinEntore - vaq2E.pvEntore} kg para entore`}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
     );
   };
 
