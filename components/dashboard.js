@@ -169,22 +169,23 @@ function GraficoBalanceRodeo({ motor, form }) {
           ⚠ Déficit invernal en {defInv.map(i=>MN[i]).join("+")} — {Math.round(Math.abs(Math.min(...defInv.map(i=>bm[i].balance))))} Mcal/día peor mes
         </div>
       )}
-      <ResponsiveContainer width="100%" height={180}>
-        <ComposedChart data={datos} margin={{top:4,right:4,left:-20,bottom:0}}>
+      <ResponsiveContainer width="100%" height={200}>
+        <ComposedChart data={datos} margin={{top:8,right:16,left:8,bottom:0}}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.04)" />
           <XAxis dataKey="mes" tick={{fill:C.textFaint,fontSize:9,fontFamily:T.font}} />
-          <YAxis tick={{fill:C.textFaint,fontSize:9,fontFamily:T.font}} />
+          <YAxis tick={{fill:C.textFaint,fontSize:9,fontFamily:T.font}}
+            label={{ value:"Mcal/d", angle:-90, position:"insideLeft", fill:C.textFaint, fontSize:8, fontFamily:T.font, offset:8 }} />
           <Tooltip contentStyle={{background:C.card,border:"1px solid "+C.border,borderRadius:8,fontFamily:T.font,fontSize:10}}
-            formatter={(v,n)=>[Math.round(v)+" Mcal",n]} />
-          <Bar dataKey="pasto"  name="Pasto"      stackId="of" fill="#378ADD" fillOpacity={0.8} />
-          <Bar dataKey="cc"     name="CC mob."    stackId="of" fill={C.green} fillOpacity={0.7} />
-          <Bar dataKey="supl"   name="Suplemento" stackId="of" fill="#97C459" fillOpacity={0.9} />
+            formatter={(v,n)=>[Math.round(v)+" Mcal/d",n]} />
+          <Bar dataKey="pasto"  name="Pasto"      stackId="of" fill="#5BA85F" fillOpacity={0.85} />
+          <Bar dataKey="cc"     name="CC mob."    stackId="of" fill="#4A9FD4" fillOpacity={0.8} />
+          <Bar dataKey="supl"   name="Suplemento" stackId="of" fill="#E8A030" fillOpacity={0.9} />
           <Bar dataKey="verdeo" name="Verdeo"     stackId="of" fill="#1D9E75" fillOpacity={0.9} />
-          <Line dataKey="demanda" name="Demanda" type="monotone" stroke={C.red} strokeWidth={2} strokeDasharray="5 3" dot={false} />
+          <Line dataKey="demanda" name="Demanda" type="monotone" stroke="#E24B4A" strokeWidth={2} strokeDasharray="5 3" dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:4,justifyContent:"center"}}>
-        {[["Pasto","#378ADD"],["CC mob.",C.green],["Supl","#97C459"],["Verdeo","#1D9E75"],["Demanda",C.red]].map(([l,c])=>(
+        {[["Pasto","#5BA85F"],["CC mob.","#4A9FD4"],["Supl","#E8A030"],["Verdeo","#1D9E75"],["Demanda","#E24B4A"]].map(([l,c])=>(
           <div key={l} style={{display:"flex",alignItems:"center",gap:3,fontFamily:T.font,fontSize:8,color:T.textFaint}}>
             <div style={{width:8,height:8,borderRadius:2,background:c}} />{l}
           </div>
@@ -194,120 +195,50 @@ function GraficoBalanceRodeo({ motor, form }) {
   );
 }
 
-// ─── GRÁFICO 2: VACA ADULTA — CC Y DESTETE ──────────────────────────────────
-// Muestra la trayectoria CC mes a mes
-// Líneas: actual / con anticipado / con hiperprecoz
-// Marcadores: parto, destete, servicio
-// Regla: CC parto mínima 5.5, CC servicio mínima 4.5
+// ─── GRÁFICO 2: VACA ADULTA — CC PUNTOS CLAVE ────────────────────────────────
 function GraficoVacaCC({ motor, form, tray }) {
-  if (!tray || !motor?.balanceMensual) return null;
-  const MN = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-  const bm = motor.balanceMensual;
-
-  // Reconstruir trayectoria CC mes a mes
-  const mesHoy = new Date().getMonth();
-  const mesParto = bm.findIndex(m => m.esParto) ?? -1;
-  const mesServ  = bm.findIndex(m => m.esServIni) ?? -1;
-  const ccHoy = tray.ccHoy || 0;
-  const ccParto = tray.ccParto || 0;
+  if (!tray) return null;
+  const ccParto   = tray.ccParto   || 0;
   const ccMinLact = tray.ccMinLact || 0;
-  const ccServ = tray.ccServ || 0;
-
-  // Simplificar: puntos clave de la trayectoria
-  const puntos = bm.map((m,i) => {
-    const mDP = (i - (mesParto >= 0 ? mesParto : 9) + 12) % 12;
-    let ccEst;
-    if (i === mesHoy) ccEst = ccHoy;
-    else if (mesParto >= 0 && i === mesParto) ccEst = ccParto;
-    else if (mesParto >= 0 && mDP === 3) ccEst = ccMinLact;
-    else if (mesServ >= 0 && i === mesServ) ccEst = ccServ;
-    else ccEst = null;
-
-    // Con destete anticipado
-    const ccAnt = ccServ + 0.4;
-    // Con hiperprecoz
-    const ccHip = ccServ + 0.7;
-
-    return {
-      mes: MN[i],
-      ccActual: ccEst,
-      // Líneas referenciales de mínimos
-      minParto: 5.5,
-      minServ: 4.5,
-      esParto: m.esParto,
-      esServ:  m.esServIni,
-      esDestete: m.esDestete,
-    };
-  });
-
-  // Datos simplificados — solo los puntos clave
-  const datosTray = [
-    { punto: "Hoy",       cc: ccHoy,    minRef: null },
-    { punto: "Al parto",  cc: ccParto,  minRef: 5.5, ok: ccParto >= 5.5 },
-    { punto: "Min. lact", cc: ccMinLact,minRef: 3.5, ok: ccMinLact >= 3.5 },
-    { punto: "Al serv.",  cc: ccServ,   minRef: 4.5, ok: ccServ >= 4.5 },
-    { punto: "+Anticip.", cc: Math.min(9,ccServ+0.4), minRef: 4.5, ok: true },
-    { punto: "+Hiper.",   cc: Math.min(9,ccServ+0.7), minRef: 4.5, ok: true },
+  const ccServ    = tray.ccServ    || 0;
+  const MAX = 9;
+  const metrics = [
+    { label:"CC al parto",    val: ccParto,   min: 5.0 },
+    { label:"CC mín. lact.",  val: ccMinLact, min: 3.5 },
+    { label:"CC al servicio", val: ccServ,    min: 4.5 },
   ];
-
-  const maxCC = 7;
-
   return (
     <div style={{ marginBottom:16 }}>
-      <div style={{ fontFamily:T.font, fontSize:10, color:T.textFaint, letterSpacing:1, marginBottom:6 }}>
-        TRAYECTORIA CC — VACAS ADULTAS
+      <div style={{ fontFamily:T.font, fontSize:10, color:T.textFaint, letterSpacing:1, marginBottom:8 }}>
+        CONDICIÓN CORPORAL — VACAS ADULTAS
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:4, marginBottom:8 }}>
-        {datosTray.map((d,i) => {
-          const col = d.minRef && d.cc < d.minRef ? C.red : d.minRef && d.cc >= d.minRef ? C.green : C.amber;
-          const pct = Math.round(d.cc/maxCC*100);
-          return (
-            <div key={i} style={{ background:C.card2, borderRadius:6, padding:"6px 4px", textAlign:"center",
-              border:"1px solid "+(d.minRef && d.cc < d.minRef ? C.red+"40" : C.border) }}>
-              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:3 }}>{d.punto}</div>
-              <div style={{ fontFamily:T.font, fontSize:15, fontWeight:700, color:col, lineHeight:1 }}>{d.cc.toFixed(1)}</div>
-              {d.minRef && (
-                <div style={{ fontFamily:T.font, fontSize:7, color:d.ok?C.green:C.red, marginTop:2 }}>
-                  {d.ok ? "✓" : "< "+d.minRef}
-                </div>
-              )}
-              <div style={{ height:3, background:C.card, borderRadius:2, marginTop:4 }}>
-                <div style={{ height:"100%", width:pct+"%", background:col, borderRadius:2 }} />
-              </div>
+      {metrics.map(({ label, val, min }) => {
+        const ok  = val >= min;
+        const col = ok ? "#1D9E75" : "#E24B4A";
+        const pct = Math.round((val / MAX) * 100);
+        return (
+          <div key={label} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:7 }}>
+            <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, width:110, flexShrink:0 }}>
+              {label}
             </div>
-          );
-        })}
-      </div>
-      <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:4 }}>
-        Impacto del destete en preñez — Peruchena INTA 2003
-      </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
-        {[
-          { l:"Sin cambios", cc:ccServ,              pr:tray.pr||0, col:ccServ<4.5?C.red:C.amber },
-          { l:"Anticipado 90d", cc:+(Math.min(9,ccServ+0.4)).toFixed(1), pr:tray.prAntic||0, col:C.amber },
-          { l:"Hiperprecoz 50d",cc:+(Math.min(9,ccServ+0.7)).toFixed(1), pr:tray.prHiper||0, col:C.green },
-        ].map((e,i) => {
-          const nV = parseInt(form?.vacasN)||0;
-          const diff = e.pr - (tray.pr||0);
-          return (
-            <div key={i} style={{ background:C.card2, borderRadius:6, padding:"8px 6px", textAlign:"center",
-              border:"1px solid "+(i===2?C.green+"40":C.border) }}>
-              <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginBottom:4 }}>{e.l}</div>
-              <div style={{ fontFamily:T.font, fontSize:18, fontWeight:700, color:e.col }}>{e.pr}%</div>
-              <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint }}>CC {e.cc}</div>
-              {diff > 0 && nV > 0 && (
-                <div style={{ fontFamily:T.font, fontSize:8, color:C.green, marginTop:2 }}>
-                  +{diff}pp · +{Math.round(nV*diff/100*0.95)} terneros
-                </div>
-              )}
+            <div style={{ flex:1, height:8, background:C.card, borderRadius:4, overflow:"hidden" }}>
+              <div style={{ height:"100%", width:pct+"%", background:col, borderRadius:4, transition:"width .3s" }} />
             </div>
-          );
-        })}
+            <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:col, width:30, textAlign:"right" }}>
+              {val.toFixed(1)}
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:9, width:16, color:col, textAlign:"center" }}>
+              {ok ? "✓" : "⚠"}
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ fontFamily:T.font, fontSize:8, color:T.textFaint, marginTop:4 }}>
+        Mín. parto 5.0 · mín. lact. 3.5 · mín. servicio 4.5 (escala 1–9)
       </div>
     </div>
   );
 }
-
 // ─── GRÁFICO 3: VAQUILLONA 1° Y 2° INVIERNO ─────────────────────────────────
 // GDP mensual vs objetivo 400g/día (1°inv) y 300g/día (2°inv)
 // Peso acumulado y proyección al entore
@@ -447,143 +378,6 @@ function GraficoBalance({ form, sat, cadena, tray, motor }) {
 }
 
 
-// ─── TRAYECTORIAVAQUILLONA ───────────────────────────────────────────────────
-function TrayectoriaVaquillona({ motor, form }) {
-  if (!motor) return null;
-  const { vaq1E, vaq2E, pvEntVaq1, pvEntradaVaq2 } = motor;
-  if (!vaq1E && !vaq2E) return null;
-
-  const pvVaca    = parseFloat(form.pvVacaAdulta) || 320;
-  const pvV1ent   = pvEntVaq1 || Math.round(pvVaca * 0.40);
-  const diasInv1  = 90; // mayo → agosto
-  const diasInv2  = 90;
-
-  // Vaq1: sin suplemento = GDP pasto solo (gdpPasto), con suplemento = gdpReal
-  const gdpV1sinSupl = vaq1E?.gdpPasto || 50;   // pasto solo invierno NEA
-  const gdpV1conSupl = vaq1E ? (vaq1E.sinSupl ? gdpV1sinSupl : (vaq1E.gdpReal || gdpV1sinSupl)) : gdpV1sinSupl;
-  const pvV1sal_sin  = Math.round(pvV1ent + gdpV1sinSupl * diasInv1 / 1000);
-  const pvV1sal_con  = Math.round(pvV1ent + gdpV1conSupl * diasInv1 / 1000);
-  // +60d primavera a 280g/d hasta entrada 2°inv
-  const pvV2ent_sin  = Math.round(pvV1sal_sin + 280 * 60 / 1000);
-  const pvV2ent_con  = parseFloat(pvEntradaVaq2) || Math.round(pvV1sal_con + 280 * 60 / 1000);
-
-  // Vaq2: sin suplemento = gdpPastoInv, con suplemento = gdpInv real
-  const gdpV2sinSupl = vaq2E?.gdpPastoInv || 50;
-  const gdpV2conSupl = vaq2E ? (vaq2E.sinSupl ? gdpV2sinSupl : (vaq2E.gdpInv || gdpV2sinSupl)) : gdpV2sinSupl;
-  const gdpPrimV_sin = 280; // g/d primavera sin suplemento previo — limitado por estado
-  const gdpPrimV_con = vaq2E?.gdpPrimavera || 350;
-  const pvV2inv_sin  = Math.round(pvV2ent_sin + gdpV2sinSupl * diasInv2 / 1000);
-  const pvV2inv_con  = vaq2E?.pvV2Agosto || Math.round(pvV2ent_con + gdpV2conSupl * diasInv2 / 1000);
-  const pvEntore_sin = Math.round(pvV2inv_sin + gdpPrimV_sin * 90 / 1000);
-  const pvEntore_con = vaq2E?.pvEntore    || Math.round(pvV2inv_con + gdpPrimV_con * 90 / 1000);
-  const pvMinEntore  = vaq2E?.pvMinEntore || Math.round(pvVaca * 0.75);
-
-  const etapas    = ["Destete", "Mayo\n(1° inv.)", "Agosto\n(sal.1°)", "Mayo\n(2° inv.)", "Agosto\n(sal.2°)", "Entore"];
-  const pvSinSupl = [pvV1ent, pvV1ent, pvV1sal_sin, pvV2ent_sin, pvV2inv_sin, pvEntore_sin];
-  const pvConSupl = [pvV1ent, pvV1ent, pvV1sal_con, pvV2ent_con, pvV2inv_con, pvEntore_con];
-
-  // Si sin suplemento = con suplemento en todos los puntos → no mostrar línea duplicada
-  const tieneSupl = pvSinSupl.some((v, i) => Math.abs(v - pvConSupl[i]) >= 5);
-
-  const pvMin = Math.min(...pvSinSupl, ...pvConSupl, pvMinEntore) - 15;
-  const pvMax = Math.max(...pvSinSupl, ...pvConSupl, pvMinEntore) + 15;
-  const W = 320, H = 160, padL = 38, padR = 12, padT = 14, padB = 38;
-  const gW = W - padL - padR;
-  const gH = H - padT - padB;
-  const n  = etapas.length;
-  const xOf = (i) => padL + (i / (n-1)) * gW;
-  const yOf = (pv) => padT + (1 - (pv - pvMin) / (pvMax - pvMin)) * gH;
-
-  const pathSin = pvSinSupl.map((v,i) => `${i===0?"M":"L"}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(" ");
-  const pathCon = pvConSupl.map((v,i) => `${i===0?"M":"L"}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(" ");
-  const yEntore = yOf(pvMinEntore);
-
-  return (
-    <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
-      <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1, marginBottom:8 }}>
-        📈 TRAYECTORIA VAQUILLONA — DESTETE → ENTORE
-      </div>
-      <svg width={W} height={H} style={{ display:"block", overflow:"visible" }}>
-        {/* Grilla horizontal */}
-        {[0,0.25,0.5,0.75,1].map(f => {
-          const pv = pvMin + f*(pvMax-pvMin);
-          const y  = yOf(pv);
-          return (
-            <g key={f}>
-              <line x1={padL} y1={y} x2={W-padR} y2={y} stroke={C.border} strokeWidth={0.5} />
-              <text x={padL-4} y={y+3} textAnchor="end" fontSize={7} fill={C.textDim} fontFamily="monospace">
-                {Math.round(pv)}
-              </text>
-            </g>
-          );
-        })}
-        {/* Línea objetivo entore */}
-        <line x1={padL} y1={yEntore} x2={W-padR} y2={yEntore}
-          stroke="#e8a030" strokeWidth={1} strokeDasharray="4,3" />
-        <text x={W-padR+2} y={yEntore+3} fontSize={7} fill="#e8a030" fontFamily="monospace">{pvMinEntore}kg</text>
-        {/* Zonas invierno */}
-        <rect x={xOf(1)} y={padT} width={xOf(2)-xOf(1)} height={gH} fill={C.blue} fillOpacity={0.04} />
-        <rect x={xOf(3)} y={padT} width={xOf(4)-xOf(3)} height={gH} fill={C.blue} fillOpacity={0.04} />
-        <text x={(xOf(1)+xOf(2))/2} y={padT+7} textAnchor="middle" fontSize={6.5} fill={C.blue} fillOpacity={0.5} fontFamily="monospace">INV 1</text>
-        <text x={(xOf(3)+xOf(4))/2} y={padT+7} textAnchor="middle" fontSize={6.5} fill={C.blue} fillOpacity={0.5} fontFamily="monospace">INV 2</text>
-        {/* Línea SIN suplemento — solo si hay diferencia real */}
-        {tieneSupl && (
-          <path d={pathSin} fill="none" stroke={C.red} strokeWidth={1.5} strokeDasharray="5,3" />
-        )}
-        {/* Línea CON suplemento */}
-        <path d={pathCon} fill="none" stroke={C.green} strokeWidth={2} />
-        {/* Puntos CON suplemento */}
-        {pvConSupl.map((v,i) => (
-          <circle key={i} cx={xOf(i)} cy={yOf(v)} r={3}
-            fill={i===n-1 && v>=pvMinEntore ? C.green : C.card2}
-            stroke={C.green} strokeWidth={1.5} />
-        ))}
-        {/* Etiquetas eje X */}
-        {etapas.map((et, i) => {
-          const lines = et.split("\n");
-          return (
-            <g key={i}>
-              {lines.map((ln, j) => (
-                <text key={j} x={xOf(i)} y={H - padB + 12 + j*9}
-                  textAnchor="middle" fontSize={7} fill={C.textDim} fontFamily="monospace">
-                  {ln}
-                </text>
-              ))}
-            </g>
-          );
-        })}
-        {/* Etiqueta PV en entore */}
-        {(() => {
-          const pvFin = pvConSupl[n-1];
-          const ok    = pvFin >= pvMinEntore;
-          return (
-            <text x={xOf(n-1)} y={yOf(pvFin)-8} textAnchor="middle"
-              fontSize={8} fill={ok ? C.green : C.red} fontFamily="monospace" fontWeight="bold">
-              {pvFin}kg {ok ? "✓" : "✗"}
-            </text>
-          );
-        })()}
-      </svg>
-      {/* Leyenda sin costos — limpia */}
-      <div style={{ display:"flex", gap:14, marginTop:4 }}>
-        {tieneSupl && (
-          <div style={{ display:"flex", alignItems:"center", gap:4, fontFamily:"monospace", fontSize:8, color:C.red }}>
-            <svg width={20} height={6}><line x1={0} y1={3} x2={20} y2={3} stroke={C.red} strokeWidth={1.5} strokeDasharray="4,2"/></svg>
-            Sin suplemento
-          </div>
-        )}
-        <div style={{ display:"flex", alignItems:"center", gap:4, fontFamily:"monospace", fontSize:8, color:C.green }}>
-          <svg width={20} height={6}><line x1={0} y1={3} x2={20} y2={3} stroke={C.green} strokeWidth={2}/></svg>
-          Con suplemento
-        </div>
-        <div style={{ display:"flex", alignItems:"center", gap:4, fontFamily:"monospace", fontSize:8, color:"#e8a030" }}>
-          <svg width={20} height={6}><line x1={0} y1={3} x2={20} y2={3} stroke="#e8a030" strokeWidth={1} strokeDasharray="3,2"/></svg>
-          Mín. entore ({pvMinEntore}kg)
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── DASHBOARDESTABLECIMIENTO ───────────────────────────────────────────────────
 function DashboardEstablecimiento({ motor, form, sat, score, confianza, onTab }) {
@@ -856,5 +650,5 @@ function DashboardEstablecimiento({ motor, form, sat, score, confianza, onTab })
 
 export {
   ScoreRadar, GraficoBalance,
-  TrayectoriaVaquillona, DashboardEstablecimiento,
+  DashboardEstablecimiento,
 };

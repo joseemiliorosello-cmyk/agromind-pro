@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useSession, signOut, signIn, SessionProvider } from "next-auth/react";
 import { T as C, FORM_DEF, MESES_NOM, CALIDAD_C4_CALIBRADA, cc5, SUPLEMENTOS } from "../lib/constantes";
 import { correrMotor, calcCadena, calcConsumoAgua, calcDisp,
-         calcScore, calcGEI, calcTrayectoriaCC, calcDisponibilidadMS,
+         calcScore, calcTrayectoriaCC, calcDisponibilidadMS,
          calcSupervivencia, calcV2S, mcalSuplemento, fetchSat,
          fmtFecha, dZona, dProv, smf, diagnosticarSistema,
          calcImpactoCola, calcFaseCiclo, calcConsumoPasto,
@@ -15,7 +15,7 @@ import { usePersistencia, PanelHistorial, calcConfianzaDiagnostico } from "../li
 import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
          MetricCard, SelectF, Slider, Toggle, SuplSelector, Toast } from "../components/ui";
 import { DashboardEstablecimiento } from "../components/dashboard";
-import { getPasoRenders, GraficoCCEscenarios, PanelAgua, PanelGEI, PanelFaseCiclo } from "../components/pasos"
+import { getPasoRenders, GraficoCCEscenarios, PanelAgua, PanelFaseCiclo } from "../components/pasos"
 import GraficosBalance from "../components/GraficosBalance";
 import { TabCerebro, PanelRecomendaciones, RenderInforme } from "../components/tabs";
 import * as XLSX from "xlsx";
@@ -1532,138 +1532,7 @@ function CalfAIPro() {
         {(parseFloat(form.destHiper)||0) > 30 && (
           <Alerta tipo="warn">Hiperprecoz {">"} 30% — planificar suplementación proteica inmediata post-destete (ternero {"<"} 60 kg).</Alerta>
         )}
-        {/* Impacto inmediato del mix de destete en preñez */}
-        {tray && (parseFloat(form.destTrad)||0)+(parseFloat(form.destAntic)||0)+(parseFloat(form.destHiper)||0) === 100 && (
-          <div style={{ marginTop:10, padding:"10px 12px", borderRadius:10,
-            background: tray.pr >= 60 ? `${C.green}12` : tray.pr >= 45 ? `${C.amber}12` : `${C.red}12`,
-            border: `1px solid ${tray.pr >= 60 ? C.green : tray.pr >= 45 ? C.amber : C.red}30` }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginBottom:4, letterSpacing:.5 }}>
-              IMPACTO EN PREÑEZ — con este mix de destete
-            </div>
-            <div style={{ display:"flex", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-              <div>
-                <span style={{ fontFamily:C.font, fontSize:22, fontWeight:700,
-                  color: tray.pr >= 60 ? C.green : tray.pr >= 45 ? C.amber : C.red }}>
-                  {tray.pr}%
-                </span>
-                <span style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, marginLeft:4 }}>preñez estimada</span>
-              </div>
-              {tray.prHiper && tray.prHiper > tray.pr && (
-                <div style={{ fontFamily:C.font, fontSize:10, color:C.amber }}>
-                  Con hiperprecoz 50d → <strong style={{color:C.green}}>{tray.prHiper}%</strong>
-                  {parseInt(form.vacasN) > 0 && (
-                    <span style={{color:C.textFaint}}> (+{Math.round(parseInt(form.vacasN)*(tray.prHiper-tray.pr)/100*.95)} terneros)</span>
-                  )}
-                </div>
-              )}
-              {tray.prAntic && tray.prAntic > tray.pr && !tray.prHiper && (
-                <div style={{ fontFamily:C.font, fontSize:10, color:C.amber }}>
-                  Con anticipado 90d → <strong style={{color:C.green}}>{tray.prAntic}%</strong>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
-
-      {tray && (
-        <div style={{ marginTop:14 }}>
-          {/* Trayectoria completa CC */}
-          <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
-            TRAYECTORIA CC PROYECTADA
-          </div>
-
-          {/* Flecha visual de trayectoria — CC tacto = CC parto */}
-          <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 10px", marginBottom:10 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap", justifyContent:"space-between" }}>
-              {[
-                { label:"TACTO/PARTO", val:tray.ccParto,   color:smf(parseFloat(tray.ccParto),4.5,5.0) },
-                { label:"MÍN. LACT.",  val:tray.ccMinLact, color:smf(parseFloat(tray.ccMinLact),3.5,4.5) },
-                { label:"SERVICIO",    val:tray.ccServ,    color:smf(parseFloat(tray.ccServ),4.5,5.0) },
-              ].map((item, i, arr) => (
-                <React.Fragment key={item.label}>
-                  <div style={{ textAlign:"center", minWidth:52 }}>
-                    <div style={{ fontFamily:C.font, fontSize:20, fontWeight:700, color:item.color, lineHeight:1 }}>{item.val}</div>
-                    <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>{item.label}</div>
-                  </div>
-                  {i < arr.length - 1 && (
-                    <div style={{ color:C.textFaint, fontSize:14, flexShrink:0 }}>→</div>
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-            <div style={{ marginTop:10, paddingTop:8, borderTop:`1px solid ${C.border}`, display:"flex", gap:6, flexWrap:"wrap" }}>
-              <Pill color={smf(tray.pr,35,55)}>🐄 Preñez {tray.pr}%</Pill>
-              <Pill color={tray.anestro?.riesgo ? C.red : C.green}>⏱ Anestro {tray.anestro?.dias}d</Pill>
-              <Pill color={C.textDim}>📉 Caída lact. −{tray.caidaLact} CC</Pill>
-              <Pill color={C.blue}>🍼 {tray.mesesLact}m lactación</Pill>
-            </div>
-          </div>
-
-          {/* Alerta anestro */}
-          <Alerta tipo={tray.anestro?.riesgo?"error":"ok"}>
-            Anestro posparto: <strong>{tray.anestro?.dias} días</strong> — {tray.anestro?.riesgo
-              ? "⚠️ RIESGO: puede no ciclar durante el servicio → revisar CC al parto y destete"
-              : "✅ OK — debería ciclar dentro del período de servicio"}
-          </Alerta>
-
-          {/* Por grupos — CC, preñez Y supervivencia */}
-          {dist?.grupos?.length >= 1 && (
-            <div style={{ marginTop:10 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1 }}>POR GRUPO DE CC</div>
-                
-              </div>
-              {dist.grupos.map((g, i) => {
-                // Sin supervivencia en este panel — solo CC y preñez
-                return (
-                  <div key={i} style={{ borderRadius:10, marginBottom:8, overflow:"hidden",
-                    border:`1px solid ${g.pr<35?"rgba(224,85,48,.25)":g.pr<55?"rgba(232,160,48,.25)":"rgba(126,200,80,.20)"}` }}>
-                    {/* Header fila */}
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-                      padding:"8px 12px", background:g.pr<35?"rgba(224,85,48,.07)":g.pr<55?"rgba(232,160,48,.06)":"rgba(126,200,80,.05)" }}>
-                      <span style={{ fontFamily:C.font, fontSize:13, color:C.text, fontWeight:600 }}>
-                        CC {g.ccHoy} · {g.pct}% del rodeo
-                      </span>
-                      <div style={{ display:"flex", gap:6 }}>
-                        <Pill color={smf(parseFloat(g.pr),60,80)}>🐄 {g.pr}% preñez</Pill>
-                        <Pill color={smf(parseFloat(g.ccServ),4.0,5.0)}>CC serv. {g.ccServ}</Pill>
-                      </div>
-                    </div>
-                    {/* Trayectoria */}
-                    <div style={{ padding:"8px 12px", display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
-                      {[
-                        ["CC PARTO", g.ccParto, 4.5, 5.0, "CC hoy → parto"],
-                        ["CC MÍN. LACTACIÓN", g.ccMinLact, 3.5, 4.0, "piso durante la lactación"],
-                        ["CC SERVICIO", g.ccServ, 4.5, 5.0, "al entrar al servicio"],
-                      ].map(([l,v,b,a,tooltip], idx) => (
-                        <React.Fragment key={l}>
-                          {idx > 0 && <div style={{ color:C.textFaint, fontSize:12 }}>→</div>}
-                          <div style={{ textAlign:"center" }}>
-                            <div style={{ fontFamily:C.font, fontSize:14, fontWeight:700, color:smf(parseFloat(v),b,a) }}>{v}</div>
-                            <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, maxWidth:60 }}>{l}</div>
-                          </div>
-                        </React.Fragment>
-                      ))}
-                      <div style={{ flex:1, fontFamily:C.font, fontSize:10, color:C.textFaint, textAlign:"right" }}>
-                        {g.recDestete}
-                      </div>
-                    </div>
-                    {/* Destete urgente si CC serv < 4.0 */}
-                    {parseFloat(g.ccServ) < 4.0 && (
-                      <div style={{ padding:"6px 12px", background:"rgba(224,85,48,.08)", borderTop:"1px solid rgba(224,85,48,.20)" }}>
-                        <span style={{ fontFamily:C.sans, fontSize:11, color:C.red }}>
-                          CC serv. {g.ccServ} &lt; 4.0 mínimo — preñez comprometida · {g.recDestete}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       {ccPondVal > 0 && !tray && (
         <Alerta tipo="info" style={{ marginTop:10 }}>
@@ -2825,71 +2694,6 @@ function CalfAIPro() {
 
 
 
-      {/* ── Resultado vaquillona con esta suplementación ── */}
-      {motor && (vaq1E || vaq2E) && (
-        <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginTop:14 }}>
-          <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:10 }}>
-            RESULTADO VAQUILLONA — con la suplementación cargada
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            {vaq1E && (
-              <div style={{ background:C.card, borderRadius:10, padding:"10px 12px",
-                border:`1px solid ${vaq1E.pvSal >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40) ? C.green+"40" : C.amber+"40"}` }}>
-                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:4 }}>VAQ 1° INVIERNO</div>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                  <span style={{ fontFamily:C.font, fontSize:10, color:C.textDim }}>Sin suplemento</span>
-                  <span style={{ fontFamily:C.font, fontSize:11, color:C.red, fontWeight:600 }}>{vaq1E.gdpPasto} g/d</span>
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-                  <span style={{ fontFamily:C.font, fontSize:10, color:C.textDim }}>Con suplemento</span>
-                  <span style={{ fontFamily:C.font, fontSize:11, color:C.green, fontWeight:700 }}>{vaq1E.gdpReal} g/d</span>
-                </div>
-                <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:6 }}>
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
-                    PV entrada: <strong style={{color:C.text}}>{vaq1E.pvEntrada} kg</strong>
-                    {" → "}PV septiembre: <strong style={{
-                      color: vaq1E.pvSal >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40) ? C.green : C.amber
-                    }}>{vaq1E.pvSal} kg</strong>
-                  </div>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:2 }}>
-                    Obj. 40% adulta: {Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40)} kg
-                    {vaq1E.pvSal >= Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40)
-                      ? <span style={{color:C.green}}> ✓</span>
-                      : <span style={{color:C.amber}}> — falta {Math.round((parseFloat(form.pvVacaAdulta)||320)*0.40) - vaq1E.pvSal} kg</span>}
-                  </div>
-                </div>
-              </div>
-            )}
-            {vaq2E && (
-              <div style={{ background:C.card, borderRadius:10, padding:"10px 12px",
-                border:`1px solid ${vaq2E.llegas ? C.green+"40" : C.amber+"40"}` }}>
-                <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:4 }}>VAQ 2° INVIERNO</div>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                  <span style={{ fontFamily:C.font, fontSize:10, color:C.textDim }}>Sin suplemento</span>
-                  <span style={{ fontFamily:C.font, fontSize:11, color:C.red, fontWeight:600 }}>{vaq2E.gdpPastoInv || "—"} g/d</span>
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-                  <span style={{ fontFamily:C.font, fontSize:10, color:C.textDim }}>Con suplemento</span>
-                  <span style={{ fontFamily:C.font, fontSize:11, color:C.green, fontWeight:700 }}>{vaq2E.gdpRealInv || "—"} g/d</span>
-                </div>
-                <div style={{ borderTop:`1px solid ${C.border}`, paddingTop:6 }}>
-                  <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
-                    PV al entore: <strong style={{
-                      color: vaq2E.llegas ? C.green : C.amber
-                    }}>{vaq2E.pvEntore} kg</strong>
-                    {" / mín "}
-                    <strong style={{color:C.text}}>{vaq2E.pvMinEntore} kg</strong>
-                  </div>
-                  <div style={{ fontFamily:C.font, fontSize:8, marginTop:2,
-                    color: vaq2E.llegas ? C.green : C.amber }}>
-                    {vaq2E.llegas ? "✓ Llega al entore" : `⚠ Falta ${vaq2E.pvMinEntore - vaq2E.pvEntore} kg para entore`}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
     );
   };
@@ -3302,7 +3106,7 @@ function CalfAIPro() {
         </div>
 
         {/* Tab nav horizontal */}
-        <div className="calfai-tabs" style={{ maxWidth:1400, margin:"0 auto", display:"flex", overflowX:"auto", borderTop:`1px solid ${C.border}`, padding:"0 20px" }}>
+        <div className="calfai-tabs" style={{ maxWidth:1400, margin:"0 auto", display:"flex", overflowX:"auto", borderTop:`1px solid ${C.border}`, padding:"0 20px", alignItems:"stretch" }}>
           {PASOS.map((p, i) => {
             const dotColor = (() => {
               const step_alerts = alertasMotor.filter(a => {
@@ -3316,25 +3120,37 @@ function CalfAIPro() {
               return null;
             })();
             const active = step === i;
+            const secLabel = i === 0 ? "DATOS" : i === 4 ? "DIAGNÓSTICO" : i === 5 ? "RECOM." : null;
             return (
-              <button key={i} onClick={() => { setStep(i); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{
-                flex:"0 0 auto", padding:"13px 22px",
-                background: active ? C.green+"16" : "none", border:"none",
-                borderBottom: active ? `2px solid ${C.green}` : "2px solid transparent",
-                color: active ? C.green : C.textDim,
-                fontFamily:C.font, fontSize:13,
-                fontWeight: active ? 600 : 400,
-                cursor:"pointer", whiteSpace:"nowrap",
-                position:"relative", letterSpacing: active ? ".3px" : 0,
-                transition:"background .15s, color .15s",
-              }}>
-                <span style={{ opacity:0.45, fontSize:10, marginRight:5, fontWeight:400 }}>{i+1}</span>
-                {p.label}
-                {dotColor && !active && (
-                  <span style={{ position:"absolute", top:6, right:8,
-                    width:6, height:6, borderRadius:3, background:dotColor }} />
+              <React.Fragment key={i}>
+                {secLabel && (
+                  <div style={{ display:"flex", alignItems:"center", paddingLeft: i === 0 ? 0 : 10,
+                    marginLeft: i === 0 ? 0 : 6, borderLeft: i === 0 ? "none" : `1px solid ${C.border}` }}>
+                    <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint,
+                      letterSpacing:1.5, whiteSpace:"nowrap" }}>
+                      {secLabel}
+                    </span>
+                  </div>
                 )}
-              </button>
+                <button onClick={() => { setStep(i); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{
+                  flex:"0 0 auto", padding:"13px 18px",
+                  background: active ? C.green+"16" : "none", border:"none",
+                  borderBottom: active ? `2px solid ${C.green}` : "2px solid transparent",
+                  color: active ? C.green : C.textDim,
+                  fontFamily:C.font, fontSize:13,
+                  fontWeight: active ? 600 : 400,
+                  cursor:"pointer", whiteSpace:"nowrap",
+                  position:"relative", letterSpacing: active ? ".3px" : 0,
+                  transition:"background .15s, color .15s",
+                }}>
+                  <span style={{ opacity:0.45, fontSize:10, marginRight:5, fontWeight:400 }}>{i+1}</span>
+                  {p.label}
+                  {dotColor && !active && (
+                    <span style={{ position:"absolute", top:6, right:8,
+                      width:6, height:6, borderRadius:3, background:dotColor }} />
+                  )}
+                </button>
+              </React.Fragment>
             );
           })}
         </div>

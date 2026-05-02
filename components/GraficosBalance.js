@@ -102,6 +102,11 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}
         onMouseLeave={() => setTooltip(null)}>
+        {/* Y axis label */}
+        <text x={6} y={midY} textAnchor="middle" transform={`rotate(-90,6,${midY})`}
+          style={{ fontFamily:C.font, fontSize:"7px", fill:C.textFaint }}>Mcal/d</text>
+        {/* Y axis line */}
+        <line x1={pad} y1={2} x2={pad} y2={H - 14} stroke={C.textFaint} strokeWidth="0.4" opacity={0.5} />
         {[4, 5, 6].map(i => (
           <rect key={i} x={pad + i * colW} y={2} width={colW} height={H - 14} fill={C.amber + "1c"} />
         ))}
@@ -116,16 +121,16 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
           const hCC     = (d.oferta.movilizacionCC || 0) * escala;
           let yCursor = midY;
           const segments = [];
-          if (hPasto  > 0) { yCursor -= hPasto;  segments.push({ y: yCursor, h: hPasto,  color: C.green }); }
-          if (hSupl   > 0) { yCursor -= hSupl;   segments.push({ y: yCursor, h: hSupl,   color: C.blue }); }
-          if (hVerdeo > 0) { yCursor -= hVerdeo; segments.push({ y: yCursor, h: hVerdeo, color: C.greenDark }); }
+          if (hPasto  > 0) { yCursor -= hPasto;  segments.push({ y: yCursor, h: hPasto,  color: "#1D9E75" }); }
+          if (hSupl   > 0) { yCursor -= hSupl;   segments.push({ y: yCursor, h: hSupl,   color: "#4A9FD4" }); }
+          if (hVerdeo > 0) { yCursor -= hVerdeo; segments.push({ y: yCursor, h: hVerdeo, color: "#7EC859" }); }
           if (mostrarMovCC && hCC > 0) { yCursor -= hCC; segments.push({ y: yCursor, h: hCC, color: C.orange }); }
           const hDem = (d.demanda || 0) * escala;
           const bal  = d.balance;
-          const balCol = bal >= 0 ? C.green : bal > -30 ? C.amber : C.red;
+          const balCol = bal >= 0 ? "#1D9E75" : bal > -30 ? C.amber : "#E24B4A";
           const totalUp = hPasto + hSupl + hVerdeo + (mostrarMovCC ? hCC : 0);
           const stripY = H - STRIP_H - 14;
-          const stripCol = bal >= 0 ? C.green : bal > -30 ? C.amber : C.red;
+          const stripCol = bal >= 0 ? "#1D9E75" : bal > -30 ? C.amber : "#E24B4A";
 
           return (
             <g key={i} style={{ cursor: "crosshair" }}
@@ -141,7 +146,7 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
               {segments.map((s, idx) => (
                 <rect key={idx} x={x} y={s.y} width={barW} height={Math.max(1, s.h)} fill={s.color} opacity={0.85} rx={1} />
               ))}
-              <rect x={x} y={midY} width={barW} height={Math.max(1, hDem)} fill={C.red} opacity={0.6} rx={1} />
+              <rect x={x} y={midY} width={barW} height={Math.max(1, hDem)} fill="#E24B4A" opacity={0.7} rx={1} />
               {/* franja balance en la base */}
               <rect x={x} y={stripY} width={barW} height={STRIP_H}
                 fill={stripCol} opacity={0.70} rx={1} />
@@ -169,11 +174,11 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
       </svg>
       <Tooltip tip={tooltip} />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6, fontFamily: C.font, fontSize: 8, color: C.textDim }}>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.green,     marginRight: 3 }} />Pasto</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.blue,      marginRight: 3 }} />Suplemento</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.greenDark, marginRight: 3 }} />Verdeo</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#1D9E75", marginRight: 3 }} />Pasto</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#4A9FD4", marginRight: 3 }} />Suplemento</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#7EC859", marginRight: 3 }} />Verdeo</span>
         {mostrarMovCC && <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.orange, marginRight: 3 }} />Movilizacion CC</span>}
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.red,       marginRight: 3 }} />Demanda</span>
+        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#E24B4A", marginRight: 3 }} />Demanda</span>
         <span style={{ marginLeft:"auto", color:C.textFaint }}>
           Oferta ↑ · Demanda ↓ · Franja base = balance:
           <span style={{ color:C.green }}> verde superávit</span> ·
@@ -238,6 +243,11 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}
         onMouseLeave={() => setTooltip(null)}>
+        {/* Y axis label */}
+        <text x={6} y={midY / 2} textAnchor="middle" transform={`rotate(-90,6,${midY / 2})`}
+          style={{ fontFamily:C.font, fontSize:"7px", fill:C.textFaint }}>g/día</text>
+        {/* Y axis line */}
+        <line x1={pad} y1={10} x2={pad} y2={midY} stroke={C.textFaint} strokeWidth="0.4" opacity={0.5} />
         {[4,5,6].map(i => (
           <rect key={i} x={pad + i * colW} y={10} width={colW} height={midY - 10} fill={C.amber + "1c"} />
         ))}
@@ -287,7 +297,7 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
           const gdp = d.gdp || 0;
           const obj = objMes(i, objetivoVerano, objetivoInvierno, objetivoGDP);
           const yG  = midY - ((gdp - minG) / rango) * (midY - 15);
-          const col = gdp >= obj ? C.green : gdp >= 0 ? C.amber : C.red;
+          const col = gdp >= obj ? "#1D9E75" : gdp >= 0 ? C.amber : "#E24B4A";
           const x   = pad + i * colW + 1.5;
           const bW  = colW - 3;
           const barTop = Math.min(y0, yG);
@@ -615,7 +625,7 @@ function CronogramaAnual({ motor, form, sat }) {
   const { hitos = [] } = calendarioAcciones || {};
 
   const W = 680, H = 156;
-  const PL = 8, PR = 8;
+  const PL = 28, PR = 8;
   const LABEL_H = 18;
   const BAR_H = 72;
   const EVENT_Y = LABEL_H + BAR_H + 6;
@@ -633,13 +643,29 @@ function CronogramaAnual({ motor, form, sat }) {
         <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>balance Mcal/d · hitos del ciclo · suplementación</div>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", display:"block" }}>
+        {/* Y axis */}
+        <line x1={PL} y1={LABEL_H} x2={PL} y2={LABEL_H + BAR_H} stroke={C.textFaint} strokeWidth="0.5" opacity={0.6} />
+        {[maxAbs, Math.round(maxAbs/2), 0, -Math.round(maxAbs/2), -maxAbs].map(v => {
+          const y = zeroY - v * barScale;
+          return (
+            <g key={v}>
+              <line x1={PL - 3} y1={y} x2={PL} y2={y} stroke={C.textFaint} strokeWidth="0.5" />
+              <text x={PL - 5} y={y + 2.5} textAnchor="end"
+                style={{ fontFamily:C.font, fontSize:"6px", fill:C.textFaint }}>
+                {v}
+              </text>
+            </g>
+          );
+        })}
+        <text x={8} y={zeroY} textAnchor="middle" transform={`rotate(-90,8,${zeroY})`}
+          style={{ fontFamily:C.font, fontSize:"6.5px", fill:C.textFaint }}>Mcal/d</text>
         {cronograma.map((m, i) => {
           const x0 = PL + i * colW;
           const cx = x0 + colW / 2;
           const bgFill = m.esInv ? C.amber + "1a" : m.esActual ? C.green + "26" : "transparent";
           const barH = Math.max(2, Math.abs(m.bal) * barScale);
           const barY = m.bal >= 0 ? zeroY - barH : zeroY;
-          const barColor = m.bal >= 0 ? C.green : m.bal > -30 ? C.amber : C.red;
+          const barColor = m.bal >= 0 ? "#1D9E75" : m.bal > -30 ? C.amber : "#E24B4A";
           const labelFill = m.esActual ? C.green : m.esPasado ? C.textFaint : m.esInv ? C.orange : C.textDim;
 
           return (
@@ -694,8 +720,8 @@ function CronogramaAnual({ motor, form, sat }) {
         })}
       </svg>
       <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginTop:5, fontFamily:C.font, fontSize:8, color:C.textDim }}>
-        <span><span style={{ display:"inline-block", width:8, height:8, background:C.green, marginRight:3, borderRadius:1 }} />Superávit</span>
-        <span><span style={{ display:"inline-block", width:8, height:8, background:C.red, marginRight:3, borderRadius:1 }} />Déficit</span>
+        <span><span style={{ display:"inline-block", width:8, height:8, background:"#1D9E75", marginRight:3, borderRadius:1 }} />Superávit</span>
+        <span><span style={{ display:"inline-block", width:8, height:8, background:"#E24B4A", marginRight:3, borderRadius:1 }} />Déficit</span>
         <span><span style={{ display:"inline-block", width:8, height:8, background:C.orange+"50", border:`1px solid ${C.orange}`, marginRight:3, borderRadius:1 }} />Supl.</span>
         <span><span style={{ display:"inline-block", width:8, height:8, background:C.green+"50", border:`1px solid ${C.green}`, marginRight:3, borderRadius:1 }} />Verdeo</span>
         <span style={{ marginLeft:"auto", color:C.textFaint }}>Fondo ámbar=invierno · borde verde=hoy</span>
