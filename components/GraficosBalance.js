@@ -34,8 +34,9 @@ function Tooltip({ tip }) {
       position: "absolute",
       left: Math.min(tip.x, tip.containerW - 160),
       top: Math.max(4, tip.y - 68),
-      background: C.text,
-      color: "#e8f5e4",
+      background: "#0d1a0b",
+      border: "1px solid #2ECC7140",
+      color: "#d6e8d0",
       borderRadius: 7,
       padding: "6px 9px",
       fontFamily: C.font,
@@ -44,7 +45,7 @@ function Tooltip({ tip }) {
       pointerEvents: "none",
       zIndex: 20,
       whiteSpace: "nowrap",
-      boxShadow: "0 2px 8px rgba(0,0,0,.3)",
+      boxShadow: "0 3px 12px rgba(0,0,0,.6)",
     }}>
       {tip.lines.map((l, i) => <div key={i}>{l}</div>)}
     </div>
@@ -160,7 +161,7 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
                   {/* fondo pill para el número */}
                   <rect x={x + barW/2 - 13} y={bal >= 0 ? midY - totalUp - 10 : midY + hDem + 1}
                     width={26} height={10} rx={3}
-                    fill={balCol + "28"} />
+                    fill={balCol} fillOpacity={0.22} />
                   <text x={x + barW / 2} y={bal >= 0 ? midY - totalUp - 2 : midY + hDem + 9}
                     textAnchor="middle" style={{ fontFamily: C.font, fontSize: "7.5px", fill: balCol, fontWeight: 700 }}>
                     {bal >= 0 ? "+" : ""}{Math.round(bal)}
@@ -507,10 +508,11 @@ function TrayectoriaCC({ form, motor }) {
 
       {tooltip && (
         <div style={{ position:"absolute", left:tooltip.x, top:tooltip.y,
-          background:C.text, color:"#e8f5e4", borderRadius:6, padding:"5px 9px",
+          background:"#0d1a0b", border:"1px solid #2ECC7140", color:"#d6e8d0",
+          borderRadius:6, padding:"5px 9px",
           fontFamily:C.font, fontSize:8.5, lineHeight:1.55,
           pointerEvents:"none", zIndex:20, whiteSpace:"nowrap",
-          boxShadow:"0 2px 8px rgba(0,0,0,.3)" }}>
+          boxShadow:"0 3px 12px rgba(0,0,0,.6)" }}>
           {tooltip.lines.map((l,i) => <div key={i}>{l}</div>)}
         </div>
       )}
