@@ -121,18 +121,18 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
           const hCC     = (d.oferta.movilizacionCC || 0) * escala;
           let yCursor = midY;
           const segments = [];
-          if (hPasto  > 0) { yCursor -= hPasto;  segments.push({ y: yCursor, h: hPasto,  color: "#1D9E75" }); }
-          if (hSupl   > 0) { yCursor -= hSupl;   segments.push({ y: yCursor, h: hSupl,   color: "#4A9FD4" }); }
-          if (hVerdeo > 0) { yCursor -= hVerdeo; segments.push({ y: yCursor, h: hVerdeo, color: "#7EC859" }); }
-          if (mostrarMovCC && hCC > 0) { yCursor -= hCC; segments.push({ y: yCursor, h: hCC, color: C.orange }); }
+          if (hPasto  > 0) { yCursor -= hPasto;  segments.push({ y: yCursor, h: hPasto,  color: "#2ECC71" }); }
+          if (hSupl   > 0) { yCursor -= hSupl;   segments.push({ y: yCursor, h: hSupl,   color: "#3498DB" }); }
+          if (hVerdeo > 0) { yCursor -= hVerdeo; segments.push({ y: yCursor, h: hVerdeo, color: "#F39C12" }); }
+          if (mostrarMovCC && hCC > 0) { yCursor -= hCC; segments.push({ y: yCursor, h: hCC, color: "#9B59B6" }); }
           const hDem      = (d.demanda || 0) * escala;
           const hTerneros = (d.dTerneros || 0) * escala;
           const hDemBase  = Math.max(0, hDem - hTerneros);
           const bal  = d.balance;
-          const balCol = bal >= 0 ? "#1D9E75" : bal > -30 ? C.amber : "#E24B4A";
+          const balCol = bal >= 0 ? "#2ECC71" : bal > -30 ? "#F39C12" : "#E74C3C";
           const totalUp = hPasto + hSupl + hVerdeo + (mostrarMovCC ? hCC : 0);
           const stripY = H - STRIP_H - 14;
-          const stripCol = bal >= 0 ? "#1D9E75" : bal > -30 ? C.amber : "#E24B4A";
+          const stripCol = bal >= 0 ? "#2ECC71" : bal > -30 ? "#F39C12" : "#E74C3C";
 
           return (
             <g key={i} style={{ cursor: "crosshair" }}
@@ -148,9 +148,9 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
               {segments.map((s, idx) => (
                 <rect key={idx} x={x} y={s.y} width={barW} height={Math.max(1, s.h)} fill={s.color} opacity={0.85} rx={1} />
               ))}
-              <rect x={x} y={midY} width={barW} height={Math.max(1, hDemBase > 0 ? hDemBase : hDem)} fill="#E24B4A" opacity={0.7} rx={1} />
+              <rect x={x} y={midY} width={barW} height={Math.max(1, hDemBase > 0 ? hDemBase : hDem)} fill="#E74C3C" opacity={0.85} rx={1} />
               {hTerneros > 1 && (
-                <rect x={x} y={midY + Math.max(0, hDemBase)} width={barW} height={hTerneros} fill="#F4A595" opacity={0.80} rx={1} />
+                <rect x={x} y={midY + Math.max(0, hDemBase)} width={barW} height={hTerneros} fill="#E67E22" opacity={0.85} rx={1} />
               )}
               {/* franja balance en la base */}
               <rect x={x} y={stripY} width={barW} height={STRIP_H}
@@ -178,20 +178,20 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
         })}
       </svg>
       <Tooltip tip={tooltip} />
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6, fontFamily: C.font, fontSize: 8, color: C.textDim }}>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#1D9E75", marginRight: 3 }} />Pasto</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#4A9FD4", marginRight: 3 }} />Suplemento</span>
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#7EC859", marginRight: 3 }} />Verdeo</span>
-        {mostrarMovCC && <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.orange, marginRight: 3 }} />Movilizacion CC</span>}
-        <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#E24B4A", marginRight: 3 }} />Demanda</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 8, fontFamily: C.font, fontSize: 9, color: C.textDim }}>
+        <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display: "inline-block", width: 12, height: 12, background: "#2ECC71", borderRadius:2 }} />Pasto</span>
+        <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display: "inline-block", width: 12, height: 12, background: "#3498DB", borderRadius:2 }} />Suplemento</span>
+        <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display: "inline-block", width: 12, height: 12, background: "#F39C12", borderRadius:2 }} />Verdeo</span>
+        {mostrarMovCC && <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display: "inline-block", width: 12, height: 12, background: "#9B59B6", borderRadius:2 }} />Mov. CC</span>}
+        <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display: "inline-block", width: 12, height: 12, background: "#E74C3C", borderRadius:2 }} />Demanda</span>
         {datos.some(d => (d.dTerneros || 0) > 0) && (
-          <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#F4A595", marginRight: 3 }} />Terneros</span>
+          <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display: "inline-block", width: 12, height: 12, background: "#E67E22", borderRadius:2 }} />Terneros</span>
         )}
-        <span style={{ marginLeft:"auto", color:C.textFaint }}>
+        <span style={{ marginLeft:"auto", color:C.textFaint, fontSize:8 }}>
           Oferta ↑ · Demanda ↓ · Franja base = balance:
-          <span style={{ color:C.green }}> verde superávit</span> ·
-          <span style={{ color:C.amber }}> ámbar déficit leve</span> ·
-          <span style={{ color:C.red }}> rojo déficit grave</span>
+          <span style={{ color:"#2ECC71" }}> verde superávit</span> ·
+          <span style={{ color:"#F39C12" }}> naranja déficit leve</span> ·
+          <span style={{ color:"#E74C3C" }}> rojo déficit grave</span>
         </span>
       </div>
     </div>
@@ -305,7 +305,7 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
           const gdp = d.gdp || 0;
           const obj = objMes(i, objetivoVerano, objetivoInvierno, objetivoGDP);
           const yG  = midY - ((gdp - minG) / rango) * (midY - 15);
-          const col = gdp >= obj ? "#1D9E75" : gdp >= 0 ? C.amber : "#E24B4A";
+          const col = gdp >= obj ? "#2ECC71" : gdp >= 0 ? "#F39C12" : "#E74C3C";
           const x   = pad + i * colW + 1.5;
           const bW  = colW - 3;
           const barTop = Math.min(y0, yG);
@@ -673,7 +673,7 @@ function CronogramaAnual({ motor, form, sat }) {
           const bgFill = m.esInv ? C.amber + "1a" : m.esActual ? C.green + "26" : "transparent";
           const barH = Math.max(2, Math.abs(m.bal) * barScale);
           const barY = m.bal >= 0 ? zeroY - barH : zeroY;
-          const barColor = m.bal >= 0 ? "#1D9E75" : m.bal > -30 ? C.amber : "#E24B4A";
+          const barColor = m.bal >= 0 ? "#2ECC71" : m.bal > -30 ? "#F39C12" : "#E74C3C";
           const labelFill = m.esActual ? C.green : m.esPasado ? C.textFaint : m.esInv ? C.orange : C.textDim;
 
           return (
@@ -688,8 +688,8 @@ function CronogramaAnual({ motor, form, sat }) {
                 fill={barColor} opacity={0.82} rx={1.5} />
               {(m.esSupl || m.esVerdeo) && (
                 <rect x={x0+1.5} y={H - 17} width={colW-3} height={7} rx={2}
-                  fill={(m.esVerdeo ? C.green : C.orange) + "50"}
-                  stroke={m.esVerdeo ? C.green : C.orange} strokeWidth={0.6} />
+                  fill={(m.esVerdeo ? "#F39C12" : "#3498DB") + "60"}
+                  stroke={m.esVerdeo ? "#F39C12" : "#3498DB"} strokeWidth={0.8} />
               )}
               <text x={cx} y={LABEL_H - 3} textAnchor="middle"
                 style={{ fontFamily:C.font, fontSize:"8.5px", fill:labelFill,
@@ -727,12 +727,12 @@ function CronogramaAnual({ motor, form, sat }) {
           );
         })}
       </svg>
-      <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginTop:5, fontFamily:C.font, fontSize:8, color:C.textDim }}>
-        <span><span style={{ display:"inline-block", width:8, height:8, background:"#1D9E75", marginRight:3, borderRadius:1 }} />Superávit</span>
-        <span><span style={{ display:"inline-block", width:8, height:8, background:"#E24B4A", marginRight:3, borderRadius:1 }} />Déficit</span>
-        <span><span style={{ display:"inline-block", width:8, height:8, background:C.orange+"50", border:`1px solid ${C.orange}`, marginRight:3, borderRadius:1 }} />Supl.</span>
-        <span><span style={{ display:"inline-block", width:8, height:8, background:C.green+"50", border:`1px solid ${C.green}`, marginRight:3, borderRadius:1 }} />Verdeo</span>
-        <span style={{ marginLeft:"auto", color:C.textFaint }}>Fondo ámbar=invierno · borde verde=hoy</span>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginTop:5, fontFamily:C.font, fontSize:9, color:C.textDim }}>
+        <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display:"inline-block", width:12, height:12, background:"#2ECC71", borderRadius:2 }} />Superávit</span>
+        <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display:"inline-block", width:12, height:12, background:"#E74C3C", borderRadius:2 }} />Déficit</span>
+        <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display:"inline-block", width:12, height:12, background:"#3498DB80", border:"1px solid #3498DB", borderRadius:2 }} />Supl.</span>
+        <span style={{ display:"flex", alignItems:"center", gap:4 }}><span style={{ display:"inline-block", width:12, height:12, background:"#F39C1280", border:"1px solid #F39C12", borderRadius:2 }} />Verdeo</span>
+        <span style={{ marginLeft:"auto", color:C.textFaint, fontSize:8 }}>Fondo naranja=invierno · borde verde=mes actual</span>
       </div>
     </div>
   );

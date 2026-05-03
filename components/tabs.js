@@ -293,45 +293,56 @@ function TabCerebro({ motor, form, sat }) {
                 fill={C.green+"12"} rx={2} />
               {/* Barras de riesgo */}
               {cronograma.map((m, i) => {
-                const col = riskLevel[i] === 2 ? C.red : riskLevel[i] === 1 ? C.amber : C.green;
-                const alpha = riskLevel[i] === 2 ? "50" : riskLevel[i] === 1 ? "35" : "15";
-                const bH = riskLevel[i] === 2 ? 28 : riskLevel[i] === 1 ? 18 : 8;
+                const col = riskLevel[i] === 2 ? "#E74C3C" : riskLevel[i] === 1 ? "#F39C12" : "#2ECC71";
+                const alpha = riskLevel[i] === 2 ? "70" : riskLevel[i] === 1 ? "55" : "30";
+                const bH = riskLevel[i] === 2 ? 32 : riskLevel[i] === 1 ? 22 : 10;
                 return (
                   <rect key={i} x={padX+i*colW+1} y={H-20-bH} width={colW-2} height={bH}
                     fill={col+alpha} rx={2}
-                    stroke={riskLevel[i]>0 ? col+"60" : "none"} strokeWidth="0.5" />
+                    stroke={col} strokeWidth={riskLevel[i]>0 ? "0.8" : "0"} />
                 );
               })}
-              {/* Íconos de hitos y acciones */}
+              {/* Etiquetas de hitos sobre las barras */}
               {cronograma.map((m, i) =>
-                m.riesgos.slice(0, 2).map((r, ei) => (
-                  <text key={i+"-"+ei}
-                    x={padX + i*colW + colW/2}
-                    y={10 + ei * 16}
-                    textAnchor="middle"
-                    style={{ fontSize:"9px" }}>
-                    {r.tipo === "hito" ? (r.label === "Parición" ? "🐄" : r.label === "Servicio" ? "🐂" : "🍼")
-                     : r.tipo === "deficit" ? "⚡"
-                     : r.tipo === "accion"  ? "⚠"
-                     : r.tipo === "recurso" ? "🌾"
-                     : "•"}
-                  </text>
-                ))
+                m.riesgos.slice(0, 2).map((r, ei) => {
+                  const etiq = r.tipo === "hito"
+                    ? (r.label.startsWith("Pari") ? "Par" : r.label.startsWith("Serv") ? "Ser" : "Des")
+                    : r.tipo === "deficit_severo" ? "DEF"
+                    : r.tipo === "deficit_leve"   ? "def"
+                    : r.tipo === "accion"          ? "Acc"
+                    : r.tipo === "recurso"         ? "Rec"
+                    : "";
+                  const tcol = r.tipo === "hito"
+                    ? (r.label.startsWith("Pari") ? "#2ECC71" : r.label.startsWith("Serv") ? "#3498DB" : "#F39C12")
+                    : r.color || C.textFaint;
+                  return (
+                    <text key={i+"-"+ei}
+                      x={padX + i*colW + colW/2}
+                      y={10 + ei * 14}
+                      textAnchor="middle"
+                      style={{ fontFamily:C.font, fontSize:"6.5px", fontWeight:"700", fill:tcol }}>
+                      {etiq}
+                    </text>
+                  );
+                })
               )}
               {/* Etiquetas mes */}
               {cronograma.map((m, i) => (
                 <text key={i} x={padX+i*colW+colW/2} y={H-5} textAnchor="middle"
-                  style={{ fontFamily:C.font, fontSize:"6px",
-                    fill: i === mesHoy ? C.green : m.esInv ? C.amber : C.textFaint,
+                  style={{ fontFamily:C.font, fontSize:"6.5px",
+                    fill: i === mesHoy ? "#2ECC71" : m.esInv ? "#F39C12" : C.textFaint,
                     fontWeight: i === mesHoy || m.esInv ? "700" : "400" }}>
                   {m.mes}
                 </text>
               ))}
               {/* Leyenda */}
-              <text x={padX} y={H-14} style={{ fontFamily:C.font, fontSize:"5.5px", fill:C.red }}>■ déficit</text>
-              <text x={padX+28} y={H-14} style={{ fontFamily:C.font, fontSize:"5.5px", fill:C.amber }}>■ acción</text>
-              <text x={padX+56} y={H-14} style={{ fontFamily:C.font, fontSize:"5.5px", fill:C.green }}>■ ok</text>
-              <text x={W-padX} y={H-14} textAnchor="end" style={{ fontFamily:C.font, fontSize:"5.5px", fill:C.amber }}>▐ invierno</text>
+              <rect x={padX}    y={H-17} width={8} height={8} fill="#E74C3C" rx={1}/>
+              <text x={padX+10} y={H-11} style={{ fontFamily:C.font, fontSize:"6px", fill:"#E74C3C" }}>Déficit</text>
+              <rect x={padX+36} y={H-17} width={8} height={8} fill="#F39C12" rx={1}/>
+              <text x={padX+46} y={H-11} style={{ fontFamily:C.font, fontSize:"6px", fill:"#F39C12" }}>Acción</text>
+              <rect x={padX+72} y={H-17} width={8} height={8} fill="#2ECC71" rx={1}/>
+              <text x={padX+82} y={H-11} style={{ fontFamily:C.font, fontSize:"6px", fill:"#2ECC71" }}>OK</text>
+              <text x={W-padX} y={H-11} textAnchor="end" style={{ fontFamily:C.font, fontSize:"6px", fill:"#F39C12" }}>▐ invierno</text>
             </svg>
             {/* Detalle de meses con eventos */}
             <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
