@@ -522,6 +522,82 @@ function CalfAIPro() {
         salto(bChH + 6);
       }
 
+      // ── GRÁFICO TRAYECTORIA CC — 12 MESES ───────────────────────────────
+      if (tray && tray.ccHoy && tray.ccParto && tray.ccServ) {
+        chk(42);
+        doc.setFillColor(230,248,230);
+        doc.roundedRect(ML, y, AU, 8, 2, 2, "F");
+        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(45,106,31);
+        doc.text("TRAYECTORIA CC — CICLO ANUAL", ML+4, y+5.5);
+        salto(11);
+        const tCH = 26, tPL = 12, tPR = 4, tPT = 3, tPB = 8;
+        const tDW = AU - tPL - tPR, tDH = tCH - tPT - tPB;
+        const CC_LO = 3.0, CC_HI = 6.5;
+        const yCC = (cc) => y + tPT + tDH - ((Math.min(CC_HI, Math.max(CC_LO, cc)) - CC_LO) / (CC_HI - CC_LO)) * tDH;
+        const xM  = (i)  => ML + tPL + (i / 11) * tDW;
+        // Grid lines
+        [3.5, 4.0, 4.5, 5.0, 5.5, 6.0].forEach(v => {
+          const gy = yCC(v);
+          doc.setDrawColor(220,220,220); doc.setLineWidth(0.15);
+          doc.line(ML + tPL, gy, ML + tPL + tDW, gy);
+          doc.setFontSize(4.5); doc.setFont("helvetica","normal"); doc.setTextColor(160,160,160);
+          doc.text(v.toFixed(1), ML + tPL - 2, gy + 1.5, {align:"right"});
+        });
+        // Winter background
+        const xJun = ML + tPL + (5/11)*tDW, xAgo = ML + tPL + (7/11)*tDW;
+        doc.setFillColor(255,248,225); doc.rect(xJun, y+tPT, xAgo-xJun, tDH, "F");
+        // Build CC line using interpCC logic from GraficosBalance
+        const ccHoyP = parseFloat(tray.ccHoy) || CC_LO;
+        const ccPartoP = parseFloat(tray.ccParto) || ccHoyP;
+        const ccMinP = parseFloat(tray.ccMinLact) || ccPartoP;
+        const ccServP = parseFloat(tray.ccServ) || ccMinP;
+        const mesParto = typeof tray.mesParto === "number" ? tray.mesParto : 2;
+        const mesesLactP = Math.ceil(parseFloat(tray.mesesLact)||6);
+        const mesDestN = (mesParto + mesesLactP) % 12;
+        const mesServN = typeof tray.mesServ === "number" ? tray.mesServ : (mesDestN+2)%12;
+        const ccLine = Array.from({length:12},(_,i) => {
+          let cc;
+          if (i < mesParto)     cc = ccHoyP  + (ccPartoP - ccHoyP) * (i / Math.max(1,mesParto));
+          else if (i < mesDestN || mesDestN <= mesParto) cc = ccPartoP + (ccMinP - ccPartoP) * Math.min(1,(i-mesParto)/Math.max(1,mesesLactP));
+          else if (i < mesServN || mesServN < mesDestN) cc = ccMinP  + (ccServP - ccMinP) * Math.min(1,(i-mesDestN)/Math.max(1,(mesServN-mesDestN+12)%12||3));
+          else cc = ccServP + (ccHoyP - ccServP) * Math.min(1,(i-mesServN)/Math.max(1,12-mesServN));
+          return Math.max(CC_LO, Math.min(CC_HI, cc));
+        });
+        // Threshold lines 4.5 and 5.0
+        const y45T = yCC(4.5), y50T = yCC(5.0);
+        doc.setDrawColor(200,140,20); doc.setLineWidth(0.3); doc.setLineDashPattern([1,1],0);
+        doc.line(ML+tPL, y45T, ML+tPL+tDW, y45T);
+        doc.setDrawColor(45,140,60);
+        doc.line(ML+tPL, y50T, ML+tPL+tDW, y50T);
+        doc.setLineDashPattern([],0);
+        doc.setFontSize(4); doc.setTextColor(200,140,20);
+        doc.text("4.5", ML+tPL+tDW+1, y45T+1);
+        doc.setTextColor(45,140,60);
+        doc.text("5.0", ML+tPL+tDW+1, y50T+1);
+        // CC line
+        const lineCol = ccServP >= 5.0 ? [45,140,60] : ccServP >= 4.5 ? [200,140,20] : [180,60,40];
+        doc.setDrawColor(...lineCol); doc.setLineWidth(1.2);
+        for (let i=0;i<11;i++) {
+          doc.line(xM(i), yCC(ccLine[i]), xM(i+1), yCC(ccLine[i+1]));
+        }
+        // Dots at key milestones
+        [[mesParto,"P"],[mesDestN,"D"],[mesServN,"S"]].forEach(([mi,lbl]) => {
+          doc.setFillColor(...lineCol);
+          doc.circle(xM(mi%12), yCC(ccLine[mi%12]), 1.2, "F");
+          doc.setFontSize(4); doc.setFont("helvetica","bold"); doc.setTextColor(...lineCol);
+          doc.text(lbl, xM(mi%12), yCC(ccLine[mi%12])-2.5, {align:"center"});
+        });
+        // Month labels
+        ["E","F","M","A","M","J","J","A","S","O","N","D"].forEach((m,i) => {
+          doc.setFontSize(4.5); doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120);
+          doc.text(m, xM(i), y+tPT+tDH+tPB-1, {align:"center"});
+        });
+        // Legend
+        doc.setFontSize(5); doc.setTextColor(100,100,100);
+        doc.text(`P=parto CC${ccPartoP.toFixed(1)}  D=destete CC${ccMinP.toFixed(1)}  S=servicio CC${ccServP.toFixed(1)}  Invierno=fondo ambar`, ML+tPL, y+tPT+tDH+tPB+1);
+        salto(tCH + 5);
+      }
+
       // ── NDVI Y CAMPO ─────────────────────────────────────────────────────
       if (sat?.ndvi || sat?.temp || sat?.p30) {
         chk(26);
