@@ -1598,7 +1598,6 @@ function CalfAIPro() {
       "Pasturas templadas C3":                      { cat:"c3",       label:"Pasturas templadas C3",             emoji:"🌾", fenologia:false, altura:false, pb:16, desc:"Producción más estable · sin fenología estacional marcada" },
       "Mixta gramíneas+leguminosas":                { cat:"mixta",    label:"Mixta gramíneas + leguminosas",     emoji:"🌱", fenologia:false, altura:false, pb:18, desc:"PB alta por leguminosas · buena calidad todo el año" },
       "Bosque nativo / monte":                      { cat:"monte",    label:"Bosque nativo / monte",             emoji:"🌳", fenologia:false, altura:false, pb:2.5, desc:"Baja oferta · valor en sombra y refugio · no suplementa" },
-      "Verdeo de invierno":                         { cat:"verdeo",   label:"Verdeo de invierno",                emoji:"🌾", fenologia:false, altura:false, pb:20, desc:"Avena / Raigrás / Melilotus · PB alta · no requiere supl proteica" },
     };
 
     const haPot   = potreros.reduce((s,p)=>s+(parseFloat(p.ha)||0), 0);
@@ -1904,106 +1903,7 @@ function CalfAIPro() {
             );
           })()}
         </div>
-        {/* ══ PANEL 1: MANEJO DE LACTANCIA — herramienta principal para vacas ══ */}
-        <div style={{ background:`${C.green}06`, border:`1px solid ${C.green}25`, borderRadius:14, padding:14, marginBottom:16 }}>
-          <div style={{ fontFamily:C.font, fontSize:10, color:C.green, letterSpacing:1, marginBottom:4 }}>
-            🐄 MANEJO DE LACTANCIA — HERRAMIENTA PRINCIPAL DEL SISTEMA
-          </div>
-          <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:8, fontFamily:C.font, fontSize:8, color:C.textDim }}>
-            <span><span style={{ color:C.red }}>⚡</span> Hiperprecoz — CC &lt;4.0 · crítico</span>
-            <span><span style={{ color:C.amber }}>🔶</span> Anticipado — CC 4.0–4.9 · borderline</span>
-            <span><span style={{ color:C.green }}>🟢</span> Tradicional — CC ≥5.0 · óptimo</span>
-          </div>
-          <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, lineHeight:1.5, marginBottom:12 }}>
-            El ternero al pie consume <strong style={{color:C.text}}>6–8 Mcal/día</strong> = más que cualquier suplemento posible.
-            La herramienta para mejorar CC de la vaca es <strong style={{color:C.green}}>controlar cuándo y cómo se retira ese costo</strong>.
-          </div>
-
-          {/* Diagnóstico por grupo CC */}
-          {distCC.filter(g=>parseFloat(g.cc)&&parseFloat(g.pct)>0).length > 0 ? (
-            <div>
-              {distCC.filter(g=>parseFloat(g.cc)&&parseFloat(g.pct)>0).map((g,i)=>{
-                const cc   = parseFloat(g.cc);
-                const pct  = parseFloat(g.pct);
-                const nVac = Math.round((parseInt(form.vacasN)||0)*pct/100);
-                const bt   = getBiotipo(form.biotipo);
-
-                // Herramienta recomendada por CC
-                const herramienta = cc < 4.0
-                  ? { tipo:"hiperprecoz", label:"⚡ Hiperprecoz (≤50 días)", color:C.red,
-                      razon:"CC crítica — anestro garantizado con ternero al pie. Retirar ternero libera 6–8 Mcal/día → ciclado en 7–14 días (Wiltbank 1990)",
-                      ccRecup: +(recupCCSinTernero * (diasServicio/30)).toFixed(1) }
-                  : cc < 4.5
-                  ? { tipo:"anticipado", label:"🔶 Anticipado (90 días)", color:C.amber,
-                      razon:"CC borderline — con ternero al pie no va a llegar al servicio ciclando. Destete anticipado + recuperación en pasto otoñal.",
-                      ccRecup: +(recupCCSinTernero * 0.7 * (diasServicio/30)).toFixed(1) }
-                  : cc < 5.0
-                  ? { tipo:"anticipado_opcional", label:"🔶 Anticipado según marcha (90d)", color:C.amber,
-                      razon:"CC aceptable — si el pasto falla o el invierno avanza, destete anticipado como seguro.",
-                      ccRecup: +(recupCCSinTernero * 0.5 * (diasServicio/30)).toFixed(1) }
-                  : { tipo:"tradicional", label:"🟢 Tradicional (180 días)", color:C.green,
-                      razon:"CC buena — puede sostener lactancia completa y llegar al servicio en condición.",
-                      ccRecup: 0 };
-
-                const ccProyServ = Math.min(7, cc + herramienta.ccRecup - (herramienta.tipo==="tradicional"?0.8:0.3));
-                const prenezProy = ccAPrenez(ccProyServ);
-
-                return (
-                  <div key={i} style={{
-                    background:C.card2, border:`1px solid ${herramienta.color}30`,
-                    borderRadius:10, padding:12, marginBottom:8
-                  }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-                      <div>
-                        <span style={{ fontFamily:C.font, fontSize:11, color:C.text, fontWeight:700 }}>CC {cc} · {pct}% del rodeo</span>
-                        <span style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, marginLeft:8 }}>({nVac} vacas)</span>
-                      </div>
-                      <span style={{ fontFamily:C.font, fontSize:9, color:herramienta.color,
-                        background:`${herramienta.color}15`, border:`1px solid ${herramienta.color}30`,
-                        borderRadius:6, padding:"3px 8px" }}>{herramienta.label}</span>
-                    </div>
-                    <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim, lineHeight:1.4, marginBottom:8 }}>
-                      {herramienta.razon}
-                    </div>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
-                      <div style={{ background:`${herramienta.color}10`, borderRadius:7, padding:"6px 8px", textAlign:"center" }}>
-                        <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:herramienta.color }}>{cc}</div>
-                        <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>CC HOY</div>
-                      </div>
-                      <div style={{ background:`${C.green}10`, borderRadius:7, padding:"6px 8px", textAlign:"center" }}>
-                        <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:C.green }}>{ccProyServ.toFixed(1)}</div>
-                        <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>CC SERV. PROY.</div>
-                      </div>
-                      <div style={{ background:`${prenezProy>=80?C.green:prenezProy>=50?C.amber:C.red}10`, borderRadius:7, padding:"6px 8px", textAlign:"center" }}>
-                        <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:prenezProy>=80?C.green:prenezProy>=50?C.amber:C.red }}>{prenezProy}%</div>
-                        <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>PREÑEZ EST.</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{ fontFamily:C.sans, fontSize:11, color:C.textFaint, textAlign:"center", padding:12 }}>
-              Ingresá la distribución de CC en el paso 2 para ver el plan por grupo
-            </div>
-          )}
-
-          {/* Costo real del ternero al pie */}
-          <div style={{ background:`${C.red}06`, border:`1px solid ${C.red}20`, borderRadius:8, padding:10, marginTop:8 }}>
-            <div style={{ fontFamily:C.font, fontSize:8, color:C.red, letterSpacing:1, marginBottom:6 }}>
-              ⚡ ¿POR QUÉ NO SUPLEMENTAR VACAS CON TERNERO AL PIE?
-            </div>
-            <div style={{ fontFamily:C.sans, fontSize:11, color:C.text, marginBottom:8, lineHeight:1.5 }}>
-              La lactación le cuesta a la vaca <strong style={{color:C.red}}>6–8 Mcal/día</strong> extras. Para compensar ese gasto con suplemento necesitarías darle <strong style={{color:C.red}}>{(6.5/2.6).toFixed(1)} kg/día de expeller</strong> — más caro e ineficiente. Además, mientras el ternero esté al pie, la vaca no cicla por el estímulo del amamantamiento (bloqueo LH).
-            </div>
-            <div style={{ fontFamily:C.sans, fontSize:11, color:C.green, lineHeight:1.5 }}>
-              ✅ <strong>La herramienta correcta es el destete:</strong> al retirar el ternero, la vaca elimina ese gasto de 6–8 Mcal/día y retoma el cicio en <strong>7–14 días</strong>. Ningún suplemento logra eso.
-            </div>
-          </div>
-        </div>
-
-        {/* ══ PANEL 2: SUPLEMENTACIÓN — solo categorías que lo necesitan ══ */}
+        {/* ══ SUPLEMENTACIÓN — solo categorías que lo necesitan ══ */}
         <div style={{ fontFamily:C.font, fontSize:12, color:C.textDim, letterSpacing:1, marginBottom:10 }}>
           💊 SUPLEMENTACIÓN — V2S · TOROS · VAQUILLONA 1° y 2°
         </div>
@@ -2320,6 +2220,89 @@ function CalfAIPro() {
           );
         })()}
 
+        {/* ══ MANEJO DE LACTANCIA — vacas de cría ══ */}
+        <details style={{ marginTop:16 }}>
+          <summary style={{ fontFamily:C.font, fontSize:10, color:C.green, letterSpacing:1, cursor:"pointer", padding:"8px 0", listStyle:"none", display:"flex", alignItems:"center", gap:6 }}>
+            <span style={{ fontSize:12 }}>▶</span> 🐄 MANEJO DE LACTANCIA — destete por grupo CC
+          </summary>
+          <div style={{ background:`${C.green}06`, border:`1px solid ${C.green}25`, borderRadius:14, padding:14, marginTop:8 }}>
+            <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:8, fontFamily:C.font, fontSize:8, color:C.textDim }}>
+              <span><span style={{ color:C.red }}>⚡</span> Hiperprecoz — CC &lt;4.0 · crítico</span>
+              <span><span style={{ color:C.amber }}>🔶</span> Anticipado — CC 4.0–4.9 · borderline</span>
+              <span><span style={{ color:C.green }}>🟢</span> Tradicional — CC ≥5.0 · óptimo</span>
+            </div>
+            <div style={{ fontFamily:C.sans, fontSize:11, color:C.textDim, lineHeight:1.5, marginBottom:12 }}>
+              El ternero al pie consume <strong style={{color:C.text}}>6–8 Mcal/día</strong> = más que cualquier suplemento posible.
+              La herramienta para mejorar CC de la vaca es <strong style={{color:C.green}}>controlar cuándo y cómo se retira ese costo</strong>.
+            </div>
+
+            {distCC.filter(g=>parseFloat(g.cc)&&parseFloat(g.pct)>0).length > 0 ? (
+              <div>
+                {distCC.filter(g=>parseFloat(g.cc)&&parseFloat(g.pct)>0).map((g,i)=>{
+                  const cc   = parseFloat(g.cc);
+                  const pct  = parseFloat(g.pct);
+                  const nVac = Math.round((parseInt(form.vacasN)||0)*pct/100);
+                  const herramienta = cc < 4.0
+                    ? { tipo:"hiperprecoz", label:"⚡ Hiperprecoz (≤50 días)", color:C.red,
+                        razon:"CC crítica — anestro garantizado con ternero al pie. Retirar ternero libera 6–8 Mcal/día → ciclado en 7–14 días (Wiltbank 1990)",
+                        ccRecup: +(recupCCSinTernero * (diasServicio/30)).toFixed(1) }
+                    : cc < 4.5
+                    ? { tipo:"anticipado", label:"🔶 Anticipado (90 días)", color:C.amber,
+                        razon:"CC borderline — con ternero al pie no va a llegar al servicio ciclando. Destete anticipado + recuperación en pasto otoñal.",
+                        ccRecup: +(recupCCSinTernero * 0.7 * (diasServicio/30)).toFixed(1) }
+                    : cc < 5.0
+                    ? { tipo:"anticipado_opcional", label:"🔶 Anticipado según marcha (90d)", color:C.amber,
+                        razon:"CC aceptable — si el pasto falla o el invierno avanza, destete anticipado como seguro.",
+                        ccRecup: +(recupCCSinTernero * 0.5 * (diasServicio/30)).toFixed(1) }
+                    : { tipo:"tradicional", label:"🟢 Tradicional (180 días)", color:C.green,
+                        razon:"CC buena — puede sostener lactancia completa y llegar al servicio en condición.",
+                        ccRecup: 0 };
+                  const ccProyServ = Math.min(7, cc + herramienta.ccRecup - (herramienta.tipo==="tradicional"?0.8:0.3));
+                  const prenezProy = ccAPrenez(ccProyServ);
+                  return (
+                    <div key={i} style={{ background:C.card2, border:`1px solid ${herramienta.color}30`, borderRadius:10, padding:12, marginBottom:8 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                        <div>
+                          <span style={{ fontFamily:C.font, fontSize:11, color:C.text, fontWeight:700 }}>CC {cc} · {pct}% del rodeo</span>
+                          <span style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, marginLeft:8 }}>({nVac} vacas)</span>
+                        </div>
+                        <span style={{ fontFamily:C.font, fontSize:9, color:herramienta.color, background:`${herramienta.color}15`, border:`1px solid ${herramienta.color}30`, borderRadius:6, padding:"3px 8px" }}>{herramienta.label}</span>
+                      </div>
+                      <div style={{ fontFamily:C.sans, fontSize:10, color:C.textDim, lineHeight:1.4, marginBottom:8 }}>{herramienta.razon}</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
+                        <div style={{ background:`${herramienta.color}10`, borderRadius:7, padding:"6px 8px", textAlign:"center" }}>
+                          <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:herramienta.color }}>{cc}</div>
+                          <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>CC HOY</div>
+                        </div>
+                        <div style={{ background:`${C.green}10`, borderRadius:7, padding:"6px 8px", textAlign:"center" }}>
+                          <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:C.green }}>{ccProyServ.toFixed(1)}</div>
+                          <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>CC SERV. PROY.</div>
+                        </div>
+                        <div style={{ background:`${prenezProy>=80?C.green:prenezProy>=50?C.amber:C.red}10`, borderRadius:7, padding:"6px 8px", textAlign:"center" }}>
+                          <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color:prenezProy>=80?C.green:prenezProy>=50?C.amber:C.red }}>{prenezProy}%</div>
+                          <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint }}>PREÑEZ EST.</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ fontFamily:C.sans, fontSize:11, color:C.textFaint, textAlign:"center", padding:12 }}>
+                Ingresá la distribución de CC en el paso 2 para ver el plan por grupo
+              </div>
+            )}
+            <div style={{ background:`${C.red}06`, border:`1px solid ${C.red}20`, borderRadius:8, padding:10, marginTop:8 }}>
+              <div style={{ fontFamily:C.font, fontSize:8, color:C.red, letterSpacing:1, marginBottom:6 }}>⚡ ¿POR QUÉ NO SUPLEMENTAR VACAS CON TERNERO AL PIE?</div>
+              <div style={{ fontFamily:C.sans, fontSize:11, color:C.text, marginBottom:8, lineHeight:1.5 }}>
+                La lactación le cuesta a la vaca <strong style={{color:C.red}}>6–8 Mcal/día</strong> extras. Para compensar ese gasto con suplemento necesitarías darle <strong style={{color:C.red}}>{(6.5/2.6).toFixed(1)} kg/día de expeller</strong> — más caro e ineficiente.
+              </div>
+              <div style={{ fontFamily:C.sans, fontSize:11, color:C.green, lineHeight:1.5 }}>
+                ✅ <strong>La herramienta correcta es el destete:</strong> al retirar el ternero, la vaca elimina ese gasto de 6–8 Mcal/día y retoma el ciclo en <strong>7–14 días</strong>.
+              </div>
+            </div>
+          </div>
+        </details>
 
 
     </div>
