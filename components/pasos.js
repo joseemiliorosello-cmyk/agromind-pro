@@ -18,8 +18,7 @@ import { calcCadena, calcFaseCiclo, fmtFecha, FENOLOGIAS,
          reqEM } from "../lib/motor";
 import { DistCC, Input, SelectF, Slider, SuplSelector, Alerta, Pill, MetricCard, Toggle,
          smf, smf2, pbPasto, mcalKgAdj } from "./ui";
-import { DashboardEstablecimiento, GraficoBalance,
-         ScoreRadar } from "./dashboard";
+import { DashboardEstablecimiento } from "./dashboard";
 import { TabCerebro, RenderInforme, SimuladorEscenarios,
          PanelRecomendaciones } from "./tabs";
 
@@ -2282,9 +2281,6 @@ const renderUbicacion = () => {
                   )}
                 </div>
 
-                {/* ── GRÁFICO DETALLADO (GraficoBalance) ── */}
-                <GraficoBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} />
-
                 {/* ── ESCENARIOS CC ── */}
                 {tray && cadena && (
                   <GraficoCCEscenarios
@@ -2569,122 +2565,7 @@ const renderUbicacion = () => {
           {tab === "cerebro" && (
             <div>
 
-              {/* ── 1. RESUMEN DE DATOS CARGADOS — qué sabe el sistema ── */}
-              <div style={{ background:C.card2, border:"1px solid "+C.border,
-                borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
-                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint,
-                  letterSpacing:1, marginBottom:8 }}>
-                  DATOS CARGADOS — lo que alimenta el análisis
-                </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"4px 12px" }}>
-                  {[
-                    ["Establecimiento", form.nombreProductor || "—"],
-                    ["Provincia", form.provincia || "⚠️ sin dato"],
-                    ["Biotipo", form.biotipo || "⚠️ sin dato"],
-                    ["Vacas", form.vacasN ? form.vacasN+" cab" : "⚠️ sin dato"],
-                    ["PV adulto", form.pvVacaAdulta ? form.pvVacaAdulta+" kg" : "estimado 320 kg *"],
-                    ["CC ponderada", motor?.ccPondVal > 0 ? motor.ccPondVal.toFixed(1)+" (escala 1-9)" : "⚠️ sin dato"],
-                    ["Servicio", (form.iniServ && form.finServ)
-                      ? new Date(form.iniServ+"T12:00").toLocaleDateString("es-AR",{month:"short"})+" → "+
-                        new Date(form.finServ+"T12:00").toLocaleDateString("es-AR",{month:"short",year:"2-digit"})
-                      : "⚠️ sin fechas"],
-                    ["Superficie", form.supHa ? form.supHa+" ha" : "estimada *"],
-                    ["Vegetación", form.vegetacion || "⚠️ sin dato"],
-                    ["NDVI hoy", sat?.ndvi ? sat.ndvi+" ("+sat.condForr+")" : "sin GPS/provincia"],
-                    ["Supl. cargado", (form.supl1||form.supl_vacas) ? "Sí" : "No"],
-                    ["Vaquillona", (form.edadVaqMayo||form.vaq1PV) ? "Con datos" : "Sin datos *"],
-                  ].map(([k,v]) => (
-                    <div key={k} style={{ display:"flex", justifyContent:"space-between",
-                      padding:"3px 0", borderBottom:"1px solid "+C.border+"50" }}>
-                      <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>{k}</span>
-                      <span style={{ fontFamily:C.font, fontSize:9,
-                        color: v.includes("⚠️") ? C.amber : v.includes("*") ? C.textDim : C.text }}>
-                        {v}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {(!form.pvVacaAdulta || !form.supHa || !form.edadVaqMayo) && (
-                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginTop:6 }}>
-                    * Datos marcados se estimaron con valores típicos NEA — cargalos para mayor precisión
-                  </div>
-                )}
-              </div>
-
-              {/* ── 2. BALANCE INVERNAL — mini gráfico siempre visible ── */}
-              {motor?.balanceMensual?.length > 0 && (() => {
-                const bm = motor.balanceMensual;
-                const MESES_C2 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-                const mesHoyC  = new Date().getMonth();
-                const vals2    = bm.map(m => m.balance ?? 0);
-                const maxAbs2  = Math.max(1, ...vals2.map(Math.abs));
-                const W2=320, H2=90, pad2=16, barW2=(W2-pad2*2)/12-2;
-                return (
-                  <div style={{ background:C.card2, border:"1px solid "+C.border,
-                    borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint,
-                      letterSpacing:1, marginBottom:6 }}>
-                      BALANCE FORRAJERO MENSUAL (Mcal/día)
-                    </div>
-                    <svg viewBox={"0 0 "+W2+" "+H2} style={{ width:"100%", display:"block" }}>
-                      <line x1={pad2} y1={H2/2} x2={W2-pad2} y2={H2/2}
-                        stroke={C.border} strokeWidth="1" />
-                      {bm.map((m,i) => {
-                        const x2   = pad2 + i*((W2-pad2*2)/12);
-                        const pct2 = Math.min(1, Math.abs(m.balance??0)/maxAbs2);
-                        const pos2 = (m.balance??0) >= 0;
-                        const bH2  = Math.max(2, pct2*(H2/2-8));
-                        const y2   = pos2 ? H2/2-bH2 : H2/2;
-                        const col2 = pos2 ? C.green : C.red;
-                        const cur2 = i === mesHoyC;
-                        return (
-                          <g key={i}>
-                            {cur2 && <rect x={x2-1} y={4} width={barW2+4} height={H2-10}
-                              fill={C.green+"08"} rx={2} />}
-                            <rect x={x2+1} y={y2} width={barW2} height={bH2}
-                              fill={col2+(cur2?"ff":"88")} rx={2} />
-                            <text x={x2+barW2/2} y={H2-2} textAnchor="middle"
-                              style={{ fontFamily:C.font, fontSize:"6px",
-                                fill: cur2 ? C.green : C.textFaint }}>
-                              {MESES_C2[i]}
-                            </text>
-                          </g>
-                        );
-                      })}
-                      <text x={pad2} y={10} style={{ fontFamily:C.font, fontSize:"7px", fill:C.green }}>
-                        ▓ Superávit
-                      </text>
-                      <text x={W2-pad2} y={H2-10} textAnchor="end"
-                        style={{ fontFamily:C.font, fontSize:"7px", fill:C.red }}>
-                        ▼ Déficit
-                      </text>
-                    </svg>
-                    <div style={{ display:"flex", gap:4, marginTop:6 }}>
-                      {[5,6,7].map(i => {
-                        const b2 = bm[i];
-                        const ok2 = (b2?.balance??0) >= 0;
-                        const MESES_C2b = ["Jun","Jul","Ago"];
-                        return (
-                          <div key={i} style={{ flex:1, background:(ok2?C.green:C.red)+"12",
-                            border:"1px solid "+(ok2?C.green:C.red)+"40",
-                            borderRadius:6, padding:"4px 6px", textAlign:"center" }}>
-                            <div style={{ fontFamily:C.font, fontSize:8,
-                              color:ok2?C.green:C.red, fontWeight:700 }}>
-                              {MESES_C2b[i-5]}
-                            </div>
-                            <div style={{ fontFamily:C.font, fontSize:9,
-                              color:ok2?C.green:C.red, fontWeight:700 }}>
-                              {b2 ? (b2.balance>0?"+":"")+Math.round(b2.balance) : "—"}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* ── 3. TARJETAS POR DIMENSIÔN — estado del sistema ── */}
+              {/* ── TARJETAS POR DIMENSIÔN — estado del sistema ── */}
               <TabCerebro motor={motor} form={form} sat={sat} />
 
               {/* ── 4. INFORME IA ── */}
