@@ -1940,40 +1940,6 @@ function CalfAIPro() {
           </div>
         )}
 
-        {/* ── Verdeos de invierno ── */}
-        <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1 }}>🌾 VERDEOS DE INVIERNO</div>
-            <div style={{ display:"flex", gap:6 }}>
-              {[["no","No tengo"],["si","Tengo"]].map(([v,l]) => (
-                <button key={v} onClick={()=>set("tieneVerdeo",v)} style={{
-                  padding:"4px 12px", borderRadius:16, cursor:"pointer", fontFamily:C.font, fontSize:9,
-                  background: form.tieneVerdeo===v ? `${C.green}20` : "transparent",
-                  border:`1px solid ${form.tieneVerdeo===v ? C.green : C.border}`,
-                  color: form.tieneVerdeo===v ? C.green : C.textFaint,
-                }}>{l}</button>
-              ))}
-            </div>
-          </div>
-          {form.tieneVerdeo === "si" && (
-            <div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-                <Input label="SUPERFICIE (ha)" value={form.verdeoHa||""} onChange={v=>set("verdeoHa",v)} placeholder="50" type="number" />
-                <SelectF label="TIPO" value={form.verdeoTipo||"Avena / Raigrás / Melilotus"} onChange={v=>set("verdeoTipo",v)} options={[
-                  ["Avena / Raigrás / Melilotus","Avena · Raigrás · Melilotus (invierno clásico)"],
-                  ["Melilotus","Melilotus (leguminosa — PB 22% — NEA)"],
-                  ["Raigrás anual","Raigrás anual"],
-                  ["Triticale","Triticale"],
-                  ["Gramínea + leguminosa","Gramínea + leguminosa consociada"],
-                ]} />
-              </div>
-              <SelectF label="DESTINADO PARA" value={form.verdeoDestinoVaq||"si"} onChange={v=>set("verdeoDestinoVaq",v)} options={[
-                ["si","Vaquillona 1° inv. (prioridad)"],["v2s","Vaca 2° servicio"],
-                ["todo","Rodeo general"],["ternero","Destete precoz"],
-              ]} />
-            </div>
-          )}
-        </div>
       </div>
     );
   };
@@ -2068,6 +2034,41 @@ function CalfAIPro() {
         {/* ── Agua de bebida ── */}
         {showAgua && _aguaSection}
         {showAgua && <div style={{ height:1, background:C.border, margin:"16px 0" }} />}
+        {/* ── Verdeos de invierno ── */}
+        <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1 }}>🌾 VERDEOS DE INVIERNO</div>
+            <div style={{ display:"flex", gap:6 }}>
+              {[["no","No tengo"],["si","Tengo"]].map(([v,l]) => (
+                <button key={v} onClick={()=>set("tieneVerdeo",v)} style={{
+                  padding:"4px 12px", borderRadius:16, cursor:"pointer", fontFamily:C.font, fontSize:9,
+                  background: form.tieneVerdeo===v ? `${C.green}20` : "transparent",
+                  border:`1px solid ${form.tieneVerdeo===v ? C.green : C.border}`,
+                  color: form.tieneVerdeo===v ? C.green : C.textFaint,
+                }}>{l}</button>
+              ))}
+            </div>
+          </div>
+          {form.tieneVerdeo === "si" && (
+            <div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+                <Input label="SUPERFICIE (ha)" value={form.verdeoHa||""} onChange={v=>set("verdeoHa",v)} placeholder="50" type="number" />
+                <SelectF label="TIPO" value={form.verdeoTipo||"Avena / Raigrás / Melilotus"} onChange={v=>set("verdeoTipo",v)} options={[
+                  ["Avena / Raigrás / Melilotus","Avena · Raigrás · Melilotus (invierno clásico)"],
+                  ["Melilotus","Melilotus (leguminosa — PB 22% — NEA)"],
+                  ["Raigrás anual","Raigrás anual"],
+                  ["Triticale","Triticale"],
+                  ["Gramínea + leguminosa","Gramínea + leguminosa consociada"],
+                ]} />
+              </div>
+              <SelectF label="DESTINADO PARA" value={form.verdeoDestinoVaq||"si"} onChange={v=>set("verdeoDestinoVaq",v)} options={[
+                ["si","Vaquillona 1° inv. (prioridad)"],["v2s","Vaca 2° servicio"],
+                ["todo","Rodeo general"],["ternero","Destete precoz"],
+              ]} />
+            </div>
+          )}
+        </div>
+
         {/* ── Meses de suplementación — selector exacto ── */}
         <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
           <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
