@@ -197,10 +197,17 @@ function TabCerebro({ motor, form, sat }) {
 
       {/* ══ DIAGNÓSTICO DE SUSTENTABILIDAD ══════════════════════ */}
       {diagnosticoSustentabilidad && (
-        <div style={{ background:C.card2, border:"2px solid "+diagnosticoSustentabilidad.color+"50",
-          borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
+        <div style={{ background:C.card2, border:"1px solid "+C.border,
+          borderRadius:12, overflow:"hidden", marginBottom:12 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:5,
+            padding:"5px 12px", borderBottom:"1px solid "+C.border+"60",
+            background:C.card }}>
+            <span style={{ fontSize:10 }}>🔍</span>
+            <span style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, letterSpacing:1.5 }}>DIAGNÓSTICO</span>
+          </div>
+          <div style={{ padding:"12px 14px" }}>
           <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:6 }}>
-            DIAGNÓSTICO DE SUSTENTABILIDAD — ¿puede este sistema alcanzar ≥{resumen.metaPrenez}% preñez?
+            Sustentabilidad — ¿puede este sistema alcanzar ≥{resumen.metaPrenez}% preñez?
           </div>
           {/* Semáforo y resumen */}
           <div style={{ display:"flex", alignItems:"flex-start", gap:10, marginBottom:8 }}>
@@ -244,6 +251,7 @@ function TabCerebro({ motor, form, sat }) {
               🛰 {alertaSat}
             </div>
           )}
+          </div>
         </div>
       )}
 
@@ -369,6 +377,10 @@ function TabCerebro({ motor, form, sat }) {
               <span style={{ fontSize:18, flexShrink:0 }}>{dim.icono}</span>
               <div style={{ flex:1 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2, flexWrap:"wrap" }}>
+                  <span style={{ fontFamily:C.font, fontSize:7, color:C.textFaint,
+                    letterSpacing:1.2, display:"flex", alignItems:"center", gap:3 }}>
+                    🔍 DIAGNÓSTICO
+                  </span>
                   <span style={{ fontFamily:C.font, fontSize:8, color:col,
                     background:col+"18", borderRadius:4, padding:"1px 6px", letterSpacing:.5 }}>
                     {dim.prioridad} · {dim.categoria}
@@ -400,16 +412,28 @@ function TabCerebro({ motor, form, sat }) {
                     {dim.impacto}
                   </div>
                 </div>
-                {/* Solución */}
-                <div style={{ background:col+"0a", border:"1px solid "+col+"25",
-                  borderRadius:8, padding:"8px 10px", marginBottom:8 }}>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:col, marginBottom:4 }}>
-                    ▶ SOLUCIÓN RECOMENDADA
-                  </div>
-                  <div style={{ fontFamily:C.sans, fontSize:11, color:C.text, lineHeight:1.5 }}>
-                    {dim.solucion}
-                  </div>
-                </div>
+                {/* Solución — RECOMENDACIÓN card */}
+                {(() => {
+                  const recoCol = dim.prioridad === "URGENTE" ? "#E24B4A" : "#1D9E75";
+                  return (
+                    <div style={{ borderTop:"1px solid "+recoCol+"30",
+                      borderRight:"1px solid "+recoCol+"30",
+                      borderBottom:"1px solid "+recoCol+"30",
+                      borderLeft:"4px solid "+recoCol,
+                      borderRadius:"0 8px 8px 0",
+                      background:recoCol+"08", padding:"8px 10px", marginBottom:8 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:4 }}>
+                        <span style={{ color:recoCol, fontSize:11, fontWeight:700 }}>→</span>
+                        <span style={{ fontFamily:C.font, fontSize:7, color:recoCol, letterSpacing:1.2 }}>
+                          RECOMENDACIÓN
+                        </span>
+                      </div>
+                      <div style={{ fontFamily:C.sans, fontSize:11, color:C.text, lineHeight:1.5 }}>
+                        {dim.solucion}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* Cuándo actuar */}
                 {dim.cuandoActuar && (
                   <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
