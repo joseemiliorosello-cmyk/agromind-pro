@@ -377,98 +377,89 @@ function TabCerebro({ motor, form, sat }) {
         const abierta  = expandida === dim.id;
         const colP     = { URGENTE:C.red, P1:C.amber, P2:C.blue, P3:C.textFaint };
         const col      = colP[dim.prioridad] || C.textFaint;
+        const recoCol  = dim.prioridad === "URGENTE" ? C.red : dim.prioridad === "P1" ? C.amber : C.green;
         return (
           <div key={dim.id}
             onClick={() => setExpandida(abierta ? null : dim.id)}
-            style={{ background:C.card2, border:"1px solid "+(abierta ? col+"60" : C.border),
-              borderRadius:12, marginBottom:8, overflow:"hidden", cursor:"pointer",
-              transition:"border-color 0.2s" }}>
-            {/* Header */}
-            <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px" }}>
-              <span style={{ fontSize:18, flexShrink:0 }}>{dim.icono}</span>
+            style={{ borderRadius:12, marginBottom:10, overflow:"hidden", cursor:"pointer",
+              border:"1px solid "+(abierta ? col+"60" : C.border) }}>
+
+            {/* ── FILA 1: DIAGNÓSTICO (gris) ── */}
+            <div style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 14px 8px",
+              background:C.card2 }}>
+              <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>{dim.icono}</span>
               <div style={{ flex:1 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2, flexWrap:"wrap" }}>
-                  <span style={{ fontFamily:C.font, fontSize:7, color:C.textFaint,
-                    letterSpacing:1.2, display:"flex", alignItems:"center", gap:3 }}>
-                    🔍 DIAGNÓSTICO
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3, flexWrap:"wrap" }}>
+                  <span style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, letterSpacing:1.2 }}>
+                    🔍 QUÉ PASA
                   </span>
                   <span style={{ fontFamily:C.font, fontSize:8, color:col,
                     background:col+"18", borderRadius:4, padding:"1px 6px", letterSpacing:.5 }}>
                     {dim.prioridad} · {dim.categoria}
                   </span>
                   {dim.cuandoActuar && (
-                    <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>
-                      📅 {dim.cuandoActuar}
-                    </span>
+                    <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>📅 {dim.cuandoActuar}</span>
                   )}
                 </div>
-                <div style={{ fontFamily:C.sans, fontSize:12, color:C.text,
-                  lineHeight:1.4, fontWeight:500 }}>
+                <div style={{ fontFamily:C.sans, fontSize:12, color:C.text, lineHeight:1.4, fontWeight:500 }}>
                   {dim.titulo}
                 </div>
+                {dim.impacto && !abierta && (
+                  <div style={{ fontFamily:C.sans, fontSize:10, color:C.textFaint, lineHeight:1.4, marginTop:2 }}>
+                    {dim.impacto.length > 90 ? dim.impacto.slice(0,90)+"…" : dim.impacto}
+                  </div>
+                )}
               </div>
-              <span style={{ fontFamily:C.font, fontSize:12, color:C.textFaint, flexShrink:0 }}>
+              <span style={{ fontFamily:C.font, fontSize:11, color:C.textFaint, flexShrink:0, marginTop:2 }}>
                 {abierta ? "▲" : "▼"}
               </span>
             </div>
-            {/* Detalle expandido */}
-            {abierta && (
-              <div style={{ padding:"0 14px 14px", borderTop:"1px solid "+C.border+"60" }}>
-                {/* Impacto */}
-                <div style={{ marginBottom:8, paddingTop:10 }}>
-                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, marginBottom:3 }}>
-                    IMPACTO EN EL SISTEMA
-                  </div>
-                  <div style={{ fontFamily:C.sans, fontSize:11, color:col, lineHeight:1.5 }}>
-                    {dim.impacto}
+
+            {/* ── FILA 2: RECOMENDACIÓN (siempre visible, fondo coloreado) ── */}
+            {dim.solucion && (
+              <div style={{ display:"flex", alignItems:"flex-start", gap:8, padding:"8px 14px 10px",
+                background:recoCol+"10", borderTop:"2px solid "+recoCol+"40" }}>
+                <span style={{ fontFamily:C.font, fontSize:9, color:recoCol, fontWeight:700,
+                  flexShrink:0, marginTop:1 }}>→</span>
+                <div style={{ flex:1 }}>
+                  <span style={{ fontFamily:C.font, fontSize:7, color:recoCol, letterSpacing:1.2 }}>
+                    QUÉ HACER
+                  </span>
+                  <div style={{ fontFamily:C.sans, fontSize:11, color:C.text, lineHeight:1.5, marginTop:2 }}>
+                    {abierta ? dim.solucion : (dim.solucion.length > 100 ? dim.solucion.slice(0,100)+"…" : dim.solucion)}
                   </div>
                 </div>
-                {/* Solución — RECOMENDACIÓN card */}
-                {(() => {
-                  const recoCol = dim.prioridad === "URGENTE" ? "#E24B4A" : "#1D9E75";
-                  return (
-                    <div style={{ borderTop:"1px solid "+recoCol+"30",
-                      borderRight:"1px solid "+recoCol+"30",
-                      borderBottom:"1px solid "+recoCol+"30",
-                      borderLeft:"4px solid "+recoCol,
-                      borderRadius:"0 8px 8px 0",
-                      background:recoCol+"08", padding:"8px 10px", marginBottom:8 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:4 }}>
-                        <span style={{ color:recoCol, fontSize:11, fontWeight:700 }}>→</span>
-                        <span style={{ fontFamily:C.font, fontSize:7, color:recoCol, letterSpacing:1.2 }}>
-                          RECOMENDACIÓN
-                        </span>
-                      </div>
-                      <div style={{ fontFamily:C.sans, fontSize:11, color:C.text, lineHeight:1.5 }}>
-                        {dim.solucion}
-                      </div>
-                    </div>
-                  );
-                })()}
-                {/* Cuándo actuar */}
+              </div>
+            )}
+
+            {/* ── DETALLE EXPANDIDO ── */}
+            {abierta && (
+              <div style={{ padding:"10px 14px 14px", background:C.card,
+                borderTop:"1px solid "+C.border+"40" }}>
                 {dim.cuandoActuar && (
-                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
                     <span style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>📅 CUÁNDO:</span>
-                    <span style={{ fontFamily:C.font, fontSize:9, color:col, fontWeight:700 }}>{dim.cuandoActuar}</span>
+                    <span style={{ fontFamily:C.font, fontSize:10, color:col, fontWeight:700 }}>{dim.cuandoActuar}</span>
                   </div>
                 )}
-                {/* Tipo suplemento + cuantificación */}
-                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  {dim.tipoSupl && (
-                    <div style={{ fontFamily:C.font, fontSize:8, fontWeight:700,
-                      background: dim.tipoSupl==="P" ? C.green+"20" : dim.tipoSupl==="E" ? C.amber+"20" : C.blue+"20",
-                      color:       dim.tipoSupl==="P" ? C.green : dim.tipoSupl==="E" ? C.amber : C.blue,
-                      border:`1px solid ${dim.tipoSupl==="P" ? C.green+"40" : dim.tipoSupl==="E" ? C.amber+"40" : C.blue+"40"}`,
-                      borderRadius:5, padding:"2px 8px" }}>
-                      {dim.tipoSupl==="P" ? "PROTEICO" : dim.tipoSupl==="E" ? "ENERGÉTICO" : "E+PROTEICO"}
-                    </div>
-                  )}
-                  {dim.cuantifica && (
-                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
-                      📦 {dim.cuantifica}
-                    </div>
-                  )}
-                </div>
+                {(dim.tipoSupl || dim.cuantifica) && (
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    {dim.tipoSupl && (
+                      <div style={{ fontFamily:C.font, fontSize:8, fontWeight:700,
+                        background: dim.tipoSupl==="P" ? C.green+"20" : dim.tipoSupl==="E" ? C.amber+"20" : C.blue+"20",
+                        color:       dim.tipoSupl==="P" ? C.green : dim.tipoSupl==="E" ? C.amber : C.blue,
+                        border:`1px solid ${dim.tipoSupl==="P" ? C.green+"40" : dim.tipoSupl==="E" ? C.amber+"40" : C.blue+"40"}`,
+                        borderRadius:5, padding:"2px 8px" }}>
+                        {dim.tipoSupl==="P" ? "PROTEICO" : dim.tipoSupl==="E" ? "ENERGÉTICO" : "E+PROTEICO"}
+                      </div>
+                    )}
+                    {dim.cuantifica && (
+                      <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+                        📦 {dim.cuantifica}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
