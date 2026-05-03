@@ -1087,22 +1087,130 @@ function CalfAIPro() {
       });
     }
 
-    const SEP = [["","","","","","","","","",""]];
-    const hojaUnica = [
-      ...hoja1,
-      ...SEP,
-      ...hoja2,
-      ...SEP,
-      ...hoja3,
-      ...SEP,
-      ...hojaRepro,
-      ...SEP,
-      ...hoja5,
+    // ── HOJA 1: HISTORIAL ANCHO (variables = columnas, visitas = filas) ──
+    const HEADERS_WIDE = [
+      "Fecha","Productor","Localidad","Provincia",
+      "Vacas (cab)","Toros (cab)","V2S (cab)","Vaq2 (cab)",
+      "PV vaca adulta (kg)","Biotipo","% Reposicion",
+      "Inicio servicio","Fin servicio","Duracion servicio (d)",
+      "CC ponderada hoy","CC parto","CC min lactacion","CC al servicio",
+      "Prenez est (%)","Anestro (d)","Meses lactacion",
+      "% Destete trad 180d","% Destete anticip 90d","% Destete hiperprecoz 50d",
+      "Sup ganadera (ha)","Carga (EV/ha)","Tiene verdeo","Verdeo (ha)",
+      "Supl V2S","Dosis V2S (kg/d)","Supl Vaq2","Dosis Vaq2 (kg/d)","Supl Vaq1","Dosis Vaq1 (kg/d)",
+      "Meses suplementacion","Meses deficit inv (Jun-Ago)","Nivel riesgo","ENSO",
+      "Lluvia 30d (mm)","NDVI","Condicion forrajera",
+      "Score total","Score CC","Score balance","Score repro",
     ];
+
+    const histVisitas = leerHistorial();
+    // Incluir la visita actual al inicio (si aún no está guardada en el historial de hoy)
+    const hoyIso = isoDate;
+    const currentAlreadyInHist = histVisitas.some(h =>
+      h.productor === (form.nombreProductor || "") && h.fecha?.slice(0,10) === hoyIso
+    );
+    const todasVisitas = currentAlreadyInHist ? histVisitas : [
+      { id: Date.now(), fecha: new Date().toISOString(), productor: form.nombreProductor || "", form,
+        prenezEst: tray?.pr, ccServ: tray?.ccServ, mesesDeficit: motor?.balanceMensual
+          ? [4,5,6].filter(i => (motor.balanceMensual[i]?.balance ?? 0) < 0).length : 0,
+        nivelRiesgo: "—" },
+      ...histVisitas,
+    ];
+
+    const filas = todasVisitas.map(entrada => {
+      const f = entrada.form || {};
+      const fCadena = f.iniServ && f.finServ ? (() => { try { return calcCadena(f.iniServ, f.finServ); } catch { return null; } })() : null;
+      const fTray = (() => {
+        try {
+          return calcTrayectoriaCC({
+            dist: f.distribucionCC, cadena: fCadena,
+            destTrad: f.destTrad, destAntic: f.destAntic, destHiper: f.destHiper,
+            supHa: f.supHa, vacasN: f.vacasN, biotipo: f.biotipo, primerParto: f.primerParto,
+            supl1: f.supl1 || "", dosis1: f.dosis1 || "0", supl2: "", dosis2: "0",
+            supl3: f.supl3 || "", dosis3: f.dosis3 || "0", provincia: f.provincia,
+          });
+        } catch { return null; }
+      })();
+      const ccPond = (() => {
+        const dist = f.distribucionCC || [];
+        const { s, t } = dist.reduce((acc, g) => {
+          const p = parseFloat(g.pct) || 0, c = parseFloat(g.cc) || 0;
+          return { s: acc.s + p * c, t: acc.t + p };
+        }, { s: 0, t: 0 });
+        return t > 0 ? +(s / t).toFixed(2) : "";
+      })();
+      const nVac = parseInt(f.vacasN) || 0;
+      const nTor = parseInt(f.torosN) || 0;
+      const supHa = parseFloat(f.supHa) || 0;
+      const cargaEVha = nVac > 0 && supHa > 0 ? +(nVac / supHa).toFixed(2) : "";
+      const diasServF = fCadena?.diasServ || 0;
+      const scF = (() => { try { return calcScore(null, f, null); } catch { return null; } })();
+      const cbF = (() => { try { return calcCerebro(null, f, null); } catch { return null; } })();
+
+      return [
+        entrada.fecha?.slice(0,10) || fecha,
+        f.nombreProductor || entrada.productor || "",
+        f.localidad || "",
+        f.provincia || "",
+        nVac || "",
+        nTor || "",
+        parseInt(f.v2sN) || "",
+        parseInt(f.vaq2N) || "",
+        parseFloat(f.pvVacaAdulta) || "",
+        f.biotipo || "",
+        parseFloat(f.pctReposicion) || 20,
+        f.iniServ || "",
+        f.finServ || "",
+        diasServF || "",
+        ccPond,
+        fTray?.ccParto?.toFixed ? +fTray.ccParto.toFixed(2) : (entrada.ccServ || ""),
+        fTray?.ccMinLact?.toFixed ? +fTray.ccMinLact.toFixed(2) : "",
+        fTray?.ccServ?.toFixed ? +fTray.ccServ.toFixed(2) : (entrada.ccServ || ""),
+        fTray?.pr || entrada.prenezEst || "",
+        fTray?.anestro?.dias || "",
+        fTray?.mesesLact || "",
+        parseFloat(f.destTrad) || 0,
+        parseFloat(f.destAntic) || 0,
+        parseFloat(f.destHiper) || 0,
+        supHa || "",
+        cargaEVha,
+        f.tieneVerdeo === "si" ? "Si" : "No",
+        f.tieneVerdeo === "si" ? (parseFloat(f.verdeoHa) || "") : "",
+        f.supl_v2s || "",
+        parseFloat(f.dosis_v2s) || 0,
+        f.supl_vaq2 || "",
+        parseFloat(f.dosis_vaq2) || 0,
+        f.supl_vaq1 || "",
+        parseFloat(f.dosis_vaq1) || 0,
+        (f.suplMeses || ["5","6","7"]).length,
+        typeof entrada.mesesDeficit === "number" ? entrada.mesesDeficit : "",
+        cbF?.resumen?.nivelRiesgo || entrada.nivelRiesgo || "",
+        f.enso || "neutro",
+        "",  // lluvia 30d — no disponible en historial
+        "",  // NDVI — no disponible en historial
+        "",  // condición forrajera — no disponible en historial
+        scF?.total || "",
+        scF?.dim?.find(d=>d.id==="cc")?.score || "",
+        scF?.dim?.find(d=>d.id==="balance")?.score || "",
+        scF?.dim?.find(d=>d.id==="repro")?.score || "",
+      ];
+    });
+
+    const wsHistorial = XLSX.utils.aoa_to_sheet([HEADERS_WIDE, ...filas]);
+    // Congelar fila de encabezados
+    wsHistorial["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+    // ── HOJA 2: DETALLE VISITA ACTUAL (formato original) ──
+    const SEP = [["","","","","","","","","",""]];
+    const hojaDetalle = [
+      ...hoja1, ...SEP, ...hoja2, ...SEP, ...hoja3, ...SEP, ...hojaRepro, ...SEP, ...hoja5,
+    ];
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaUnica), "Informe");
-    XLSX.writeFile(wb, `calfai_${(form.nombreProductor||"datos").replace(/\s/g,"_")}_${isoDate}.xlsx`);
-    showToast("Excel generado y descargado ✓", "ok");
+    XLSX.utils.book_append_sheet(wb, wsHistorial, "Historial");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaDetalle), "Detalle visita");
+    XLSX.writeFile(wb, `calfai_historial_${isoDate}.xlsx`);
+    showToast(`Excel generado: ${todasVisitas.length} visita${todasVisitas.length!==1?"s":""} ✓`, "ok");
   }
 
   // ══════════════════════════════════════════════════════════════
