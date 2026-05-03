@@ -125,7 +125,9 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
           if (hSupl   > 0) { yCursor -= hSupl;   segments.push({ y: yCursor, h: hSupl,   color: "#4A9FD4" }); }
           if (hVerdeo > 0) { yCursor -= hVerdeo; segments.push({ y: yCursor, h: hVerdeo, color: "#7EC859" }); }
           if (mostrarMovCC && hCC > 0) { yCursor -= hCC; segments.push({ y: yCursor, h: hCC, color: C.orange }); }
-          const hDem = (d.demanda || 0) * escala;
+          const hDem      = (d.demanda || 0) * escala;
+          const hTerneros = (d.dTerneros || 0) * escala;
+          const hDemBase  = Math.max(0, hDem - hTerneros);
           const bal  = d.balance;
           const balCol = bal >= 0 ? "#1D9E75" : bal > -30 ? C.amber : "#E24B4A";
           const totalUp = hPasto + hSupl + hVerdeo + (mostrarMovCC ? hCC : 0);
@@ -146,7 +148,10 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
               {segments.map((s, idx) => (
                 <rect key={idx} x={x} y={s.y} width={barW} height={Math.max(1, s.h)} fill={s.color} opacity={0.85} rx={1} />
               ))}
-              <rect x={x} y={midY} width={barW} height={Math.max(1, hDem)} fill="#E24B4A" opacity={0.7} rx={1} />
+              <rect x={x} y={midY} width={barW} height={Math.max(1, hDemBase > 0 ? hDemBase : hDem)} fill="#E24B4A" opacity={0.7} rx={1} />
+              {hTerneros > 1 && (
+                <rect x={x} y={midY + Math.max(0, hDemBase)} width={barW} height={hTerneros} fill="#F4A595" opacity={0.80} rx={1} />
+              )}
               {/* franja balance en la base */}
               <rect x={x} y={stripY} width={barW} height={STRIP_H}
                 fill={stripCol} opacity={0.70} rx={1} />
@@ -179,6 +184,9 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
         <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#7EC859", marginRight: 3 }} />Verdeo</span>
         {mostrarMovCC && <span><span style={{ display: "inline-block", width: 8, height: 8, background: C.orange, marginRight: 3 }} />Movilizacion CC</span>}
         <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#E24B4A", marginRight: 3 }} />Demanda</span>
+        {datos.some(d => (d.dTerneros || 0) > 0) && (
+          <span><span style={{ display: "inline-block", width: 8, height: 8, background: "#F4A595", marginRight: 3 }} />Terneros</span>
+        )}
         <span style={{ marginLeft:"auto", color:C.textFaint }}>
           Oferta ↑ · Demanda ↓ · Franja base = balance:
           <span style={{ color:C.green }}> verde superávit</span> ·
@@ -982,11 +990,34 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
       try { return balancePorCategoria(motor, formActivo, sat, cat); }
       catch(e) { console.error(`GraficosBalance error [${cat}]:`, e); return null; }
     };
+
+    const general   = safe("general");
+    const vacas_v2s = safe("vacas_v2s");
+
+    // Enrich general and vacas_v2s with ternero direct grass demand (per-animal scale).
+    // balancePorCategoria computes the cow's demand via the 1.90 lactation factor (milk energy),
+    // but does not include the calf's own grass intake — that lives in motor.balanceMensual.dTerneros.
+    const enrichWithTerneros = (cat, n) => {
+      if (!cat?.meses || n <= 0) return;
+      cat.meses = cat.meses.map((m, i) => {
+        const dTern = (motor.balanceMensual?.[i]?.dTerneros || 0) / n;
+        if (dTern <= 0) return m;
+        return {
+          ...m,
+          dTerneros: +dTern.toFixed(2),
+          demanda:   +(m.demanda + dTern).toFixed(1),
+          balance:   +(m.balance - dTern).toFixed(1),
+        };
+      });
+    };
+    enrichWithTerneros(general,   general?.nAnimales   || 1);
+    enrichWithTerneros(vacas_v2s, vacas_v2s?.nAnimales || 1);
+
     return {
-      general:   safe("general"),
-      vacas_v2s: safe("vacas_v2s"),
-      vaq1:      safe("vaq1"),
-      vaq2:      safe("vaq2"),
+      general,
+      vacas_v2s,
+      vaq1: safe("vaq1"),
+      vaq2: safe("vaq2"),
     };
   }, [motor, formActivo, sat]);
 
