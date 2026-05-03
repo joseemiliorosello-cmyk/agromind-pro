@@ -40,8 +40,8 @@ const PASOS = [
   { id:"rodeo",           label:"Rodeo y CC"       },
   { id:"potreros",        label:"Potreros"         },
   { id:"sanidad",         label:"Agua y sanidad"   },
-  { id:"diagnostico",     label:"Diagnóstico"      },
-  { id:"recomendaciones", label:"Recomendaciones"  },
+  { id:"diagnostico",     label:"Balance y CC"     },
+  { id:"recomendaciones", label:"Plan de acción"   },
 ];
 
 
@@ -2653,7 +2653,7 @@ function CalfAIPro() {
             justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
             <div>
               <div style={{ fontFamily:C.font, fontSize:12, color:C.green, fontWeight:600, marginBottom:3 }}>
-                ¿Querés el informe completo con recomendaciones?
+                ¿Querés el plan de acción completo?
               </div>
               <div style={{ fontFamily:C.fontSans, fontSize:11, color:C.textDim, lineHeight:1.5 }}>
                 El paso siguiente genera el análisis IA con planes de acción, dosis y cronograma.
@@ -2664,7 +2664,7 @@ function CalfAIPro() {
                 background:C.green, border:"none",
                 fontFamily:C.font, fontSize:12, fontWeight:700, color:"#fff",
                 flexShrink:0 }}>
-              Ver Recomendaciones →
+              Ver Plan de acción →
             </button>
           </div>
         )}
@@ -2682,7 +2682,7 @@ function CalfAIPro() {
       {/* Análisis IA */}
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 18px" }}>
         <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:12 }}>
-          INFORME IA — diagnóstico completo del sistema con recomendaciones personalizadas
+          INFORME IA — plan de acción personalizado
         </div>
         {!result && !loading && (
           <button onClick={runAnalysis} style={{
@@ -2934,7 +2934,7 @@ function CalfAIPro() {
               return null;
             })();
             const active = step === i;
-            const secLabel = i === 0 ? "DATOS" : i === 4 ? "DIAGNÓSTICO" : i === 5 ? "RECOM." : null;
+            const secLabel = i === 0 ? "DATOS" : i === 4 ? "RESULTADOS" : null;
             return (
               <React.Fragment key={i}>
                 {secLabel && (
