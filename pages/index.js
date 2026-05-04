@@ -1796,11 +1796,12 @@ function CalfAIPro() {
   const renderForraje = () => {
     // Tipos de recurso forrajero con sus propiedades
     const RECURSOS = {
-      "Pastizal natural":                 { cat:"pastizal", label:"Pastizal natural",        emoji:"🌿", fenologia:true,  altura:true,  pb:14, desc:"Calidad variable por fenología · estimación por altura" },
-      "Megatérmicas C4": { cat:"c4",       label:"Megatérmicas C4",emoji:"🌱", fenologia:true,  altura:false, pb:22, desc:"Alta producción en verano · baja en invierno · fenología aplica" },
-      "Pasturas templadas C3":                      { cat:"c3",       label:"Pasturas templadas C3",             emoji:"🌾", fenologia:false, altura:false, pb:16, desc:"Producción más estable · sin fenología estacional marcada" },
-      "Mixta gramíneas+leguminosas":                { cat:"mixta",    label:"Mixta gramíneas + leguminosas",     emoji:"🌱", fenologia:false, altura:false, pb:18, desc:"PB alta por leguminosas · buena calidad todo el año" },
-      "Bosque nativo / monte":                      { cat:"monte",    label:"Bosque nativo / monte",             emoji:"🌳", fenologia:false, altura:false, pb:2.5, desc:"Baja oferta · valor en sombra y refugio · no suplementa" },
+      "Pastizal natural":         { cat:"pastizal", label:"Pastizal natural",              emoji:"🌿", fenologia:true,  altura:true,  pb:14,  desc:"Calidad variable por fenología · estimación por altura" },
+      "Megatérmicas C4":          { cat:"c4",       label:"Megatérmicas C4",               emoji:"🌱", fenologia:true,  altura:false, pb:22,  desc:"Alta producción en verano · baja en invierno · fenología aplica" },
+      "Pasturas templadas C3":    { cat:"c3",       label:"Pasturas templadas C3",          emoji:"🌾", fenologia:false, altura:false, pb:16,  desc:"Producción más estable · sin fenología estacional marcada" },
+      "Mixta gramíneas+legum.":   { cat:"mixta",    label:"Mixta gramíneas + leguminosas",  emoji:"🌱", fenologia:false, altura:false, pb:18,  desc:"PB alta por leguminosas · buena calidad todo el año" },
+      "Bosque nativo / monte":    { cat:"monte",    label:"Bosque nativo / monte",          emoji:"🌳", fenologia:false, altura:false, pb:2.5, desc:"Baja oferta · valor en sombra y refugio · no suplementa" },
+      "Verdeo de invierno":       { cat:"verdeo",   label:"Verdeo de invierno",             emoji:"🌾", fenologia:false, altura:false, pb:18,  desc:"Avena · raigrás · melilotus — pastoreo 3 meses" },
     };
 
     const haPot   = potreros.reduce((s,p)=>s+(parseFloat(p.ha)||0), 0);
@@ -1830,6 +1831,7 @@ function CalfAIPro() {
         {potreros.map((p, i) => {
           const rec = RECURSOS[p.veg] || RECURSOS["Pastizal natural"];
           const esPastizal = rec.cat === "pastizal";
+          const esVerdeo   = rec.cat === "verdeo";
           const esC4oPatizal = rec.cat === "c4" || rec.cat === "pastizal";
           const disp = esPastizal && p.altPasto ? calcDisponibilidadMS(p.altPasto, p.tipoPasto||"corto_denso") : null;
 
@@ -1912,6 +1914,34 @@ function CalfAIPro() {
                       <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint }}>Rango: {disp.rango[0]}–{disp.rango[1]} kgMS/ha</div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Tipo y disponibilidad — solo verdeo */}
+              {esVerdeo && (
+                <div style={{ marginBottom:8 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    <SelectF label="ESPECIE" value={p.verdeoTipo||"Avena / Raigrás / Melilotus"}
+                      onChange={v=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],verdeoTipo:v};return n;})}
+                      options={[
+                        ["Avena / Raigrás / Melilotus","Avena · Raigrás · Melilotus"],
+                        ["Melilotus","Melilotus (leguminosa)"],
+                        ["Raigrás anual","Raigrás anual"],
+                        ["Triticale","Triticale"],
+                        ["Gramínea + leguminosa","Gramínea + leguminosa"],
+                      ]} />
+                    <SelectF label="DISPONIBLE DESDE" value={p.verdeoDisp||"agosto"}
+                      onChange={v=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],verdeoDisp:v};return n;})}
+                      options={[
+                        ["junio","Junio"],["julio","Julio"],["agosto","Agosto"],["septiembre","Septiembre"],
+                      ]} />
+                  </div>
+                  <SelectF label="DESTINADO A" value={p.verdeoDestino||"si"}
+                    onChange={v=>setPotreros(ps=>{const n=[...ps];n[i]={...n[i],verdeoDestino:v};return n;})}
+                    options={[
+                      ["si","Vaquillona 1° inv. (prioridad)"],["vaq2","Vaquillona 2° inv."],
+                      ["v2s","Vaca 2° servicio"],["todo","Rodeo general"],
+                    ]} />
                 </div>
               )}
             </div>
@@ -2034,41 +2064,6 @@ function CalfAIPro() {
         {/* ── Agua de bebida ── */}
         {showAgua && _aguaSection}
         {showAgua && <div style={{ height:1, background:C.border, margin:"16px 0" }} />}
-        {/* ── Verdeos de invierno ── */}
-        <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:14, marginBottom:12 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1 }}>🌾 VERDEOS DE INVIERNO</div>
-            <div style={{ display:"flex", gap:6 }}>
-              {[["no","No tengo"],["si","Tengo"]].map(([v,l]) => (
-                <button key={v} onClick={()=>set("tieneVerdeo",v)} style={{
-                  padding:"4px 12px", borderRadius:16, cursor:"pointer", fontFamily:C.font, fontSize:9,
-                  background: form.tieneVerdeo===v ? `${C.green}20` : "transparent",
-                  border:`1px solid ${form.tieneVerdeo===v ? C.green : C.border}`,
-                  color: form.tieneVerdeo===v ? C.green : C.textFaint,
-                }}>{l}</button>
-              ))}
-            </div>
-          </div>
-          {form.tieneVerdeo === "si" && (
-            <div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-                <Input label="SUPERFICIE (ha)" value={form.verdeoHa||""} onChange={v=>set("verdeoHa",v)} placeholder="50" type="number" />
-                <SelectF label="TIPO" value={form.verdeoTipo||"Avena / Raigrás / Melilotus"} onChange={v=>set("verdeoTipo",v)} options={[
-                  ["Avena / Raigrás / Melilotus","Avena · Raigrás · Melilotus (invierno clásico)"],
-                  ["Melilotus","Melilotus (leguminosa — PB 22% — NEA)"],
-                  ["Raigrás anual","Raigrás anual"],
-                  ["Triticale","Triticale"],
-                  ["Gramínea + leguminosa","Gramínea + leguminosa consociada"],
-                ]} />
-              </div>
-              <SelectF label="DESTINADO PARA" value={form.verdeoDestinoVaq||"si"} onChange={v=>set("verdeoDestinoVaq",v)} options={[
-                ["si","Vaquillona 1° inv. (prioridad)"],["v2s","Vaca 2° servicio"],
-                ["todo","Rodeo general"],["ternero","Destete precoz"],
-              ]} />
-            </div>
-          )}
-        </div>
-
         {/* ── Meses de suplementación — selector exacto ── */}
         <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
           <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
