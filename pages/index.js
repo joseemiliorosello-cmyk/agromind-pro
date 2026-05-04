@@ -14,7 +14,6 @@ import { useMotor } from "../lib/useMotor";
 import { usePersistencia, PanelHistorial, calcConfianzaDiagnostico } from "../lib/persistencia";
 import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
          MetricCard, SelectF, Slider, Toggle, SuplSelector, Toast } from "../components/ui";
-import { DashboardEstablecimiento } from "../components/dashboard";
 import { getPasoRenders, GraficoCCEscenarios, PanelAgua, PanelFaseCiclo } from "../components/pasos"
 import GraficosBalance from "../components/GraficosBalance";
 import { TabCerebro, PanelRecomendaciones, RenderInforme } from "../components/tabs";
@@ -2633,7 +2632,6 @@ function CalfAIPro() {
     </div>
   );
   const renderDiagnostico  = () => {
-    const scoreD = motor ? calcScore(motor, form, calcFaseCiclo(motor?.cadena ?? calcCadena(form.iniServ, form.finServ), form)) : null;
     if (!form.vacasN && !motor) return (
       <div style={{ padding:"60px 24px", textAlign:"center", maxWidth:440, margin:"0 auto" }}>
         <div style={{ fontSize:36, marginBottom:16, opacity:0.4 }}>◈</div>
@@ -2651,19 +2649,175 @@ function CalfAIPro() {
         </button>
       </div>
     );
+
+    const DG = "#1D9E75";
+    const DR = "#E24B4A";
+    const DA = "#F39C12";
+    const GR = "#94A3B8";
+    const SD = <span style={{ color:GR, fontStyle:"italic" }}>sin datos</span>;
+
+    const kpiCol = (val, g, a) => (val === null || val === undefined) ? GR : val >= g ? DG : val >= a ? DA : DR;
+
+    const ccHoy    = ccPondVal > 0 ? ccPondVal : null;
+    const ccServ   = tray?.ccServ ? parseFloat(tray.ccServ) : null;
+    const anestro  = tray?.anestro?.dias ?? null;
+    const mDef     = motor ? balanceMensual.filter(m => [5,6,7].includes(m.i) && (m.balance ?? 0) < 0).length : null;
+    const gdpVaq1  = vaq1E?.gdpReal ?? null;
+    const llegaV2  = vaq2E ? vaq2E.llegas : null;
+
+    const haTotal        = parseFloat(form.supHa) || null;
+    const cabezasTotales = nVacas + nToros + nV2s + nVaq1 + nVaq2;
+
+    const KPI = ({ label, value, color, unit }) => (
+      <div style={{ background:color+"18", border:`1px solid ${color}40`,
+        borderRadius:8, padding:"10px 14px", minWidth:96, flex:"1 1 96px" }}>
+        <div style={{ fontFamily:C.font, fontSize:9, color:GR, letterSpacing:.8, marginBottom:4 }}>{label}</div>
+        <div style={{ fontFamily:C.font, fontSize:16, fontWeight:700, color }}>
+          {(value !== null && value !== undefined) ? value : "—"}
+          {unit && (value !== null && value !== undefined) &&
+            <span style={{ fontSize:10, fontWeight:400, marginLeft:2 }}>{unit}</span>}
+        </div>
+      </div>
+    );
+
+    const FR = ({ label, value }) => (
+      <div style={{ display:"flex", justifyContent:"space-between", gap:8,
+        padding:"3px 0", borderBottom:`1px solid ${C.border}30` }}>
+        <span style={{ fontFamily:C.fontSans, fontSize:11, color:C.textDim, flexShrink:0 }}>{label}</span>
+        <span style={{ fontFamily:C.fontSans, fontSize:11, color:C.text, textAlign:"right", maxWidth:"55%" }}>
+          {(value !== null && value !== undefined && value !== "") ? value : SD}
+        </span>
+      </div>
+    );
+
+    const suplCat = (s, d) => {
+      const sup = form[s]; const dos = parseFloat(form[d]) || 0;
+      return (sup && dos) ? `${sup} · ${dos} kg/d` : null;
+    };
+
+    const secSum = { padding:"8px 14px", cursor:"pointer", fontFamily:C.font,
+      fontSize:10, color:C.text, letterSpacing:.5, listStyle:"none", userSelect:"none" };
+
     return (
       <div>
-        <div className="diag-grid">
-          <div className="diag-sticky">
-            <DashboardEstablecimiento
-              motor={motor} form={form} sat={sat} score={scoreD}
-              confianza={confianza} onTab={(t) => t === "cerebro" && setStep(5)}
-            />
+        {/* ── BLOQUE 0 — Cabecera ── */}
+        <div style={{ background:C.card2, border:`1px solid ${C.border}`, borderRadius:10,
+          padding:"10px 18px", marginBottom:16,
+          display:"flex", flexWrap:"wrap", gap:"4px 20px", alignItems:"center" }}>
+          {form.nombreProductor && (
+            <span style={{ fontFamily:C.font, fontSize:13, fontWeight:700, color:C.text }}>
+              {form.nombreProductor}
+            </span>
+          )}
+          {[
+            form.localidad,
+            form.provincia,
+            form.zona,
+            form.biotipo,
+            haTotal && `${haTotal.toLocaleString()} ha`,
+            cargaEV_ha && `${cargaEV_ha.toFixed(2)} EV/ha`,
+            cabezasTotales > 0 && `${cabezasTotales} cabezas`,
+            (form.iniServ || form.finServ) && `Serv. ${form.iniServ || "?"}–${form.finServ || "?"}`,
+          ].filter(Boolean).map((item, i) => (
+            <span key={i} style={{ fontFamily:C.fontSans, fontSize:11, color:C.textDim }}>{item}</span>
+          ))}
+        </div>
+
+        {/* ── BLOQUE 1 — KPIs ── */}
+        {motor && (
+          <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:20 }}>
+            <KPI label="CC HOY" value={ccHoy?.toFixed(1)} color={kpiCol(ccHoy, 5.0, 4.5)} />
+            <KPI label="CC SERVICIO" value={ccServ?.toFixed(1)} color={kpiCol(ccServ, 5.0, 4.5)} />
+            <KPI label="ANESTRO" value={anestro} unit="días"
+              color={anestro === null ? GR : anestro <= 60 ? DG : anestro <= 90 ? DA : DR} />
+            <KPI label={`PREÑEZ ${prenezFuente}`} value={prenezDisplay} unit="%" color={kpiCol(prenezDisplay, 90, 70)} />
+            <KPI label="CARGA" value={cargaEV_ha?.toFixed(2)} unit="EV/ha" color={GR} />
+            <KPI label="MESES DÉFICIT" value={mDef}
+              color={mDef === null ? GR : mDef === 0 ? DG : mDef === 1 ? DA : DR} />
+            {gdpVaq1 !== null && (
+              <KPI label="GDP VAQ1" value={gdpVaq1} unit="g/d" color={kpiCol(gdpVaq1, 500, 200)} />
+            )}
+            {llegaV2 !== null && (
+              <KPI label="VAQ2 ENTORE" value={llegaV2 ? "Llega" : "No llega"} color={llegaV2 ? DG : DR} />
+            )}
           </div>
+        )}
+
+        {/* ── BLOQUE 2 + 3 ── */}
+        <div className="diag-grid">
+          {/* BLOQUE 2 — Panel datos cargados (sticky) */}
+          <div className="diag-sticky">
+            <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, overflow:"hidden" }}>
+              <div style={{ padding:"10px 14px", borderBottom:`1px solid ${C.border}`,
+                fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1 }}>
+                DATOS CARGADOS
+              </div>
+
+              <details open style={{ borderBottom:`1px solid ${C.border}` }}>
+                <summary style={secSum}>RODEO</summary>
+                <div style={{ padding:"4px 14px 10px" }}>
+                  <FR label="Vacas"          value={nVacas || null} />
+                  <FR label="Toros"          value={nToros || null} />
+                  <FR label="V2S"            value={nV2s   || null} />
+                  <FR label="Vaq2"           value={nVaq2  || null} />
+                  <FR label="Vaq1"           value={nVaq1  || null} />
+                  <FR label="Biotipo"        value={form.biotipo} />
+                  <FR label="PV vaca adulta" value={form.pvVacaAdulta ? `${form.pvVacaAdulta} kg` : null} />
+                  <FR label="% Reposición"   value={form.pctReposicion ? `${form.pctReposicion}%` : null} />
+                </div>
+              </details>
+
+              <details open style={{ borderBottom:`1px solid ${C.border}` }}>
+                <summary style={secSum}>CICLO REPRODUCTIVO</summary>
+                <div style={{ padding:"4px 14px 10px" }}>
+                  <FR label="Inicio servicio"   value={form.iniServ} />
+                  <FR label="Fin servicio"       value={form.finServ} />
+                  <FR label="Preñez ingresada"   value={form.prenez ? `${form.prenez}%` : null} />
+                  <FR label="CC hoy (prom.)"     value={ccHoy?.toFixed(2)} />
+                  <FR label="Fecha CC"           value={form.fechaCC} />
+                  <FR label="Estado reproductivo" value={form.eReprod} />
+                  {form.ccAnterior && (
+                    <FR label="CC anterior" value={`${form.ccAnterior}${form.fechaCCAnterior ? ` (${form.fechaCCAnterior})` : ""}`} />
+                  )}
+                </div>
+              </details>
+
+              <details open style={{ borderBottom:`1px solid ${C.border}` }}>
+                <summary style={secSum}>FORRAJE</summary>
+                <div style={{ padding:"4px 14px 10px" }}>
+                  <FR label="Superficie"   value={form.supHa ? `${form.supHa} ha` : null} />
+                  <FR label="Vegetación"   value={form.vegetacion} />
+                  <FR label="Fenología"    value={form.fenologia} />
+                  <FR label="% Monte"      value={form.pctMonte ? `${form.pctMonte}%` : null} />
+                  {form.tieneVerdeo === "si"
+                    ? <>
+                        <FR label="Verdeo" value={`${form.verdeoTipo}${form.verdeoHa ? ` · ${form.verdeoHa} ha` : ""}`} />
+                        <FR label="Disponible desde" value={form.verdeoDisp} />
+                      </>
+                    : <FR label="Verdeo" value={null} />
+                  }
+                </div>
+              </details>
+
+              <details>
+                <summary style={secSum}>SUPLEMENTO</summary>
+                <div style={{ padding:"4px 14px 10px" }}>
+                  <FR label="Vacas"  value={suplCat("supl_vacas","dosis_vacas") || suplCat("supl1","dosis1")} />
+                  <FR label="Vaq1"   value={suplCat("supl_vaq1","dosis_vaq1")} />
+                  <FR label="Vaq2"   value={suplCat("supl_vaq2","dosis_vaq2")} />
+                  <FR label="Toros"  value={suplCat("supl_toros","dosis_toros")} />
+                </div>
+              </details>
+            </div>
+          </div>
+
+          {/* BLOQUE 3 — Gráficos */}
           <div>
             {motor && <GraficosBalance form={form} sat={sat} cadena={cadena} tray={tray} motor={motor} usaPotreros={usaPotreros} potreros={potreros} />}
           </div>
         </div>
+
+        {/* ── Botón plan de acción ── */}
         {motor && (
           <div style={{ marginTop:32, padding:"18px 20px",
             background:C.green+"0E", border:`1px solid ${C.green}30`,

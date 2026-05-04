@@ -9,22 +9,10 @@ import { T as C } from "../lib/constantes";
 
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
-function aplicarRecomendaciones(form) {
-  const f = { ...form };
-  if (!f.supl_vaq1 || parseFloat(f.dosis_vaq1 || 0) < 0.3) {
-    f.supl_vaq1 = "Expeller de girasol";
-    f.dosis_vaq1 = "0.5";
-  }
-  if (!f.supl_vaq2 || parseFloat(f.dosis_vaq2 || 0) < 0.3) {
-    f.supl_vaq2 = "Expeller de girasol";
-    f.dosis_vaq2 = "0.5";
-  }
-  f.suplMeses = ["4","5","6","7"];
-  if (f.tieneVerdeo && (!f.verdeoDestinoVaq || f.verdeoDestinoVaq === "todo")) {
-    f.verdeoDestinoVaq = "vaq1";
-  }
-  return f;
-}
+// ─── Paleta diagnóstico (status) ───────────────────────────────────
+const DG = "#1D9E75";  // superávit / positivo
+const DR = "#E24B4A";  // déficit  / negativo
+// (neutro/referencia: #94A3B8 — usado inline donde corresponde)
 
 // ─── Tooltip flotante ───
 function Tooltip({ tip }) {
@@ -130,10 +118,10 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
           const hTerneros = (d.dTerneros || 0) * escala;
           const hDemBase  = Math.max(0, hDem - hTerneros);
           const bal  = d.balance;
-          const balCol = bal >= 0 ? "#2ECC71" : bal > -30 ? "#F39C12" : "#E74C3C";
+          const balCol  = bal >= 0 ? DG : DR;
           const totalUp = hPasto + hSupl + hVerdeo + (mostrarMovCC ? hCC : 0);
-          const stripY = H - STRIP_H - 14;
-          const stripCol = bal >= 0 ? "#2ECC71" : bal > -30 ? "#F39C12" : "#E74C3C";
+          const stripY  = H - STRIP_H - 14;
+          const stripCol = bal >= 0 ? DG : DR;
 
           return (
             <g key={i} style={{ cursor: "crosshair" }}
@@ -142,7 +130,7 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
               {/* fondo de déficit por columna */}
               {bal < 0 && (
                 <rect x={x - 1} y={2} width={barW + 2} height={stripY - 4}
-                  fill={bal < -30 ? C.red + "18" : C.amber + "14"} />
+                  fill={DR + "20"} />
               )}
               {/* zona hover invisible */}
               <rect x={x - 1} y={2} width={barW + 2} height={H - 14} fill="transparent" />
@@ -190,9 +178,8 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
         )}
         <span style={{ marginLeft:"auto", color:C.textFaint, fontSize:8 }}>
           Oferta ↑ · Demanda ↓ · Franja base = balance:
-          <span style={{ color:"#2ECC71" }}> verde superávit</span> ·
-          <span style={{ color:"#F39C12" }}> naranja déficit leve</span> ·
-          <span style={{ color:"#E74C3C" }}> rojo déficit grave</span>
+          <span style={{ color:DG }}> verde superávit</span> ·
+          <span style={{ color:DR }}> rojo déficit</span>
         </span>
       </div>
     </div>
@@ -306,7 +293,7 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
           const gdp = d.gdp || 0;
           const obj = objMes(i, objetivoVerano, objetivoInvierno, objetivoGDP);
           const yG  = midY - ((gdp - minG) / rango) * (midY - 15);
-          const col = gdp >= obj ? "#2ECC71" : gdp >= 0 ? "#F39C12" : "#E74C3C";
+          const col = gdp >= obj ? DG : gdp >= 0 ? "#F39C12" : DR;
           const x   = pad + i * colW + 1.5;
           const bW  = colW - 3;
           const barTop = Math.min(y0, yG);
@@ -405,7 +392,7 @@ function TrayectoriaCC({ form, motor }) {
     interpCC(ccHoy, ccParto, ccMinLact, ccServ, i)
   );
   const pts = lineActual.map((cc, i) => `${xMes(i)},${yCC(cc)}`).join(" ");
-  const lineColor = ccServ >= 5.0 ? C.green : ccServ >= 4.5 ? C.amber : C.red;
+  const lineColor = ccServ >= 5.0 ? DG : ccServ >= 4.5 ? C.amber : DR;
 
   const y50 = yCC(5.0), y45 = yCC(4.5), y40 = yCC(4.0);
 
@@ -482,18 +469,6 @@ function TrayectoriaCC({ form, motor }) {
           );
         })}
 
-        {/* Scenario dots at mesServN */}
-        {[
-          { cc:ccServAntic, off:-8, color:C.blue,   label:`A ${ccServAntic?.toFixed(1)}` },
-          { cc:ccServHiper, off: 8, color:C.purple,  label:`H ${ccServHiper?.toFixed(1)}` },
-        ].filter(s => s.cc && mesServN !== null).map(s => (
-          <g key={s.label}>
-            <circle cx={xMes(mesServN) + s.off} cy={yCC(s.cc)} r={3} fill={s.color+"80"} stroke={s.color} strokeWidth={0.8}/>
-            <text x={xMes(mesServN) + s.off + (s.off > 0 ? 6 : -6)} y={yCC(s.cc)+3}
-              textAnchor={s.off > 0 ? "start" : "end"}
-              style={{ fontFamily:C.font, fontSize:"6px", fill:s.color }}>{s.label}</text>
-          </g>
-        ))}
 
         {/* Month labels */}
         {MESES.map((mes, i) => (
@@ -519,8 +494,6 @@ function TrayectoriaCC({ form, motor }) {
 
       <div style={{ display:"flex", gap:12, marginTop:5, fontFamily:C.font, fontSize:8, color:C.textDim }}>
         <span style={{ color:lineColor }}>● Actual: CC serv {ccServ?.toFixed(1)}</span>
-        {ccServAntic && <span style={{ color:C.blue }}>● Anticipado 90d: {ccServAntic?.toFixed(1)}</span>}
-        {ccServHiper && <span style={{ color:C.purple }}>● Hiperprecoz 50d: {ccServHiper?.toFixed(1)}</span>}
         <span style={{ marginLeft:"auto", color:C.textFaint }}>Bandas: ≥5.0 óptimo · ≥4.5 aceptable · &lt;4.0 crítico</span>
       </div>
     </div>
@@ -740,241 +713,101 @@ function CronogramaAnual({ motor, form, sat }) {
   );
 }
 
-// ─── Trayectoria PV Vaquillona ───
-// Muestra trayectoria CON vs SIN suplemento desde mayo año 1 hasta entore.
-// El objetivo de entore es DINÁMICO: 75% del PV adulto de la vaca del rodeo.
-function GraficoTrayectoriaVaq({ vaq1E, vaq2E, pvVacaAdulta = 320 }) {
+// ─── Trayectoria PV Vaquillona (diagnóstico puro) ───
+// Una sola línea: trayectoria real con forraje y suplemento cargados.
+// Sin línea de objetivo, sin comparativo sin-supl.
+function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
   if (!vaq1E || !vaq2E || !vaq1E.pvEntrada || !vaq2E.pvMayo2Inv) return null;
 
-  // ── Períodos (días desde mayo año 1) ─────────────────────────
-  const DIAS_INV1 = 122;  // may → sep
-  const DIAS_VER  = 270;  // sep yr1 → may yr2
-  const DIAS_INV2 = 90;   // may → ago
-  const DIAS_ENT  = 90;   // ago → nov
-  const TOTAL     = DIAS_INV1 + DIAS_VER + DIAS_INV2 + DIAS_ENT; // 572
+  const DIAS_INV1 = 122;
+  const DIAS_VER  = 270;
+  const DIAS_INV2 = 90;
+  const DIAS_ENT  = 90;
+  const TOTAL     = DIAS_INV1 + DIAS_VER + DIAS_INV2 + DIAS_ENT;
 
   const pvIni = vaq1E.pvEntrada;
-  // Objetivo dinámico: 75% del PV adulto
-  const pvMin = Math.round((pvVacaAdulta || 320) * 0.75);
+  const pvSep = vaq1E.pvSal;
+  const pvMay = vaq2E.pvMayo2Inv;
+  const pvAgo = vaq2E.pvV2Agosto;
+  const pvNov = vaq2E.pvEntore;
 
-  // CON supl
-  const pvSepCon = vaq1E.pvSal;
-  const pvMayCon = vaq2E.pvMayo2Inv;
-  const pvAgoCon = vaq2E.pvV2Agosto;
-  const pvNovCon = vaq2E.pvEntore;
-
-  // SIN supl
-  const gdpP1    = vaq1E.gdpPasto || 0;
-  const gdpP2    = vaq2E.gdpPastoInv || 0;
-  const gdpP3    = 280;
-  const pvSepSin = Math.round(pvIni + gdpP1 * DIAS_INV1 / 1000);
-  const ganVer   = pvMayCon - pvSepCon;
-  const pvMaySin = Math.round(pvSepSin + ganVer);
-  const pvAgoSin = Math.round(pvMaySin + gdpP2 * DIAS_INV2 / 1000);
-  const pvNovSin = Math.round(pvAgoSin + gdpP3 * DIAS_ENT  / 1000);
-
-  const pvCon  = [pvIni, pvSepCon, pvMayCon, pvAgoCon, pvNovCon];
-  const pvSin  = [pvIni, pvSepSin, pvMaySin, pvAgoSin, pvNovSin];
+  const pvTray = [pvIni, pvSep, pvMay, pvAgo, pvNov];
   const xDays  = [0, DIAS_INV1, DIAS_INV1 + DIAS_VER, DIAS_INV1 + DIAS_VER + DIAS_INV2, TOTAL];
 
-  // ── Encuentra el punto donde la línea cruza pvMin ─────────────
-  function findCrossing(pvLine) {
-    for (let i = 0; i < pvLine.length - 1; i++) {
-      const p0 = pvLine[i], p1 = pvLine[i + 1];
-      if (p0 < pvMin && p1 >= pvMin) {
-        const t = (pvMin - p0) / (p1 - p0);
-        return { idx: i, t, days: xDays[i] + t * (xDays[i + 1] - xDays[i]) };
-      }
-    }
-    return null;
-  }
-
-  function daysToLabel(days) {
-    if (days === null || days === undefined) return null;
-    if (days < DIAS_INV1)  return "1° invierno (antes de sep año 1)";
-    if (days < DIAS_INV1 + DIAS_VER) return "verano año 1–2";
-    const d2 = days - (DIAS_INV1 + DIAS_VER);
-    if (d2 < 30) return "jun año 2 (2° inv)";
-    if (d2 < 60) return "jul año 2 (2° inv)";
-    if (d2 < DIAS_INV2) return "ago año 2 (2° inv)";
-    const d3 = d2 - DIAS_INV2;
-    if (d3 < 30) return "sep año 2 (primavera)";
-    if (d3 < 60) return "oct año 2";
-    return "nov año 2";
-  }
-
-  const cruzaCon = findCrossing(pvCon);
-  const cruzaSin = findCrossing(pvSin);
-  const llegaCon = pvNovCon >= pvMin;
-  const llegaSin = pvNovSin >= pvMin;
-
-  // ── SVG coords ───────────────────────────────────────────────
-  const W = 680, H = 160;
-  const PL = 36, PR = 70, PT = 10, PB = 30;
+  const W = 680, H = 130;
+  const PL = 36, PR = 20, PT = 10, PB = 30;
   const dW = W - PL - PR, dH = H - PT - PB;
 
-  const xPct = xDays.map(d => d / TOTAL);
-  const xPos = xPct.map(p => PL + p * dW);
-
-  const allPv = [...pvCon, ...pvSin, pvMin];
-  const pvLo  = Math.floor(Math.min(...allPv) / 10) * 10 - 10;
-  const pvHi  = Math.ceil( Math.max(...allPv) / 10) * 10 + 10;
-  const yPV   = (v) => PT + dH - ((v - pvLo) / (pvHi - pvLo)) * dH;
-  const yMin  = yPV(pvMin);
-
-  const ptsCon = pvCon.map((v, i) => `${xPos[i].toFixed(1)},${yPV(v).toFixed(1)}`).join(" ");
-  const ptsSin = pvSin.map((v, i) => `${xPos[i].toFixed(1)},${yPV(v).toFixed(1)}`).join(" ");
+  const pvLo = Math.floor(Math.min(...pvTray) / 10) * 10 - 10;
+  const pvHi = Math.ceil( Math.max(...pvTray) / 10) * 10 + 10;
+  const yPV  = (v) => PT + dH - ((v - pvLo) / (pvHi - pvLo)) * dH;
+  const xPos = xDays.map(d => PL + (d / TOTAL) * dW);
 
   const pvRange = pvHi - pvLo;
   const step    = pvRange <= 80 ? 20 : pvRange <= 160 ? 40 : 60;
   const yTicks  = [];
   for (let v = Math.ceil(pvLo / step) * step; v <= pvHi; v += step) yTicks.push(v);
 
-  // Posición X del cruce interpolada en px
-  function crossXpx(cruz) {
-    if (!cruz) return null;
-    return xPos[cruz.idx] + cruz.t * (xPos[cruz.idx + 1] - xPos[cruz.idx]);
-  }
-  const xCruzCon = crossXpx(cruzaCon);
-  const xCruzSin = crossXpx(cruzaSin);
+  const pts = pvTray.map((v, i) => `${xPos[i].toFixed(1)},${yPV(v).toFixed(1)}`).join(" ");
 
   const HITOS = [
     { label: "May Año 1", sub: "destete"    },
     { label: "Sep",       sub: "fin 1° inv" },
     { label: "May Año 2", sub: "ini 2° inv" },
     { label: "Ago",       sub: "fin 2° inv" },
-    { label: "Nov",       sub: "entore obj" },
+    { label: "Nov",       sub: "entore"     },
   ];
 
   return (
     <div style={{ position: "relative", marginBottom: 12, background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 10px 6px" }}>
-      {/* Header con objetivo dinámico */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
         <div style={{ fontFamily: C.font, fontSize: 9, color: C.textDim, letterSpacing: 1 }}>
-          TRAYECTORIA PESO VIVO — RECRÍA VAQUILLONA (1° y 2° INVIERNO)
+          PESO VIVO VAQUILLONA — RECRÍA (1° y 2° INVIERNO)
         </div>
-        <div style={{ fontFamily: C.font, fontSize: 8, color: C.amber }}>
-          Obj. entore: <strong>{pvMin} kg</strong> = 75% de {pvVacaAdulta} kg adulta
+        <div style={{ fontFamily: C.font, fontSize: 8, color: C.textFaint }}>
+          {pvIni} kg entrada → {pvNov} kg al entore
         </div>
       </div>
-      <div style={{ position: "relative", overflowX: "auto" }}>
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%", maxWidth: W }}>
-          {/* fondos invierno */}
-          {[[xPos[0], xPos[1]], [xPos[2], xPos[3]]].map(([x1, x2], i) => (
-            <rect key={i} x={x1} y={PT} width={x2 - x1} height={dH} fill={C.amber + "14"} />
-          ))}
-
-          {/* grid Y */}
-          {yTicks.map(v => {
-            const y = yPV(v);
-            return (
-              <g key={v}>
-                <line x1={PL} x2={W - PR} y1={y} y2={y} stroke={C.border} strokeWidth={0.6} />
-                <text x={PL - 3} y={y + 3} textAnchor="end"
-                  style={{ fontFamily: C.font, fontSize: "7px", fill: C.textFaint }}>{v}</text>
-              </g>
-            );
-          })}
-
-          {/* línea objetivo dinámico */}
-          <line x1={PL} x2={W - PR} y1={yMin} y2={yMin}
-            stroke={C.amber} strokeWidth={1.2} strokeDasharray="5,3" />
-          <text x={W - PR + 3} y={yMin + 3}
-            style={{ fontFamily: C.font, fontSize: "7.5px", fill: C.amber, fontWeight: "700" }}>
-            {pvMin} kg
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: "block", width: "100%" }}>
+        {/* fondos invierno */}
+        {[[xPos[0], xPos[1]], [xPos[2], xPos[3]]].map(([x1, x2], i) => (
+          <rect key={i} x={x1} y={PT} width={x2 - x1} height={dH} fill={C.amber + "14"} />
+        ))}
+        {/* grid Y */}
+        {yTicks.map(v => (
+          <g key={v}>
+            <line x1={PL} x2={W - PR} y1={yPV(v)} y2={yPV(v)} stroke={C.border} strokeWidth={0.6} />
+            <text x={PL - 3} y={yPV(v) + 3} textAnchor="end"
+              style={{ fontFamily: C.font, fontSize: "7px", fill: C.textFaint }}>{v}</text>
+          </g>
+        ))}
+        {/* trayectoria real */}
+        <polyline points={pts} fill="none" stroke={DG} strokeWidth={2} />
+        {/* puntos en hitos */}
+        {pvTray.map((v, i) => (
+          <circle key={i} cx={xPos[i]} cy={yPV(v)} r={3} fill={DG} />
+        ))}
+        {/* valores sobre cada punto */}
+        {pvTray.map((v, i) => (
+          <text key={i} x={xPos[i]} y={yPV(v) - 6} textAnchor="middle"
+            style={{ fontFamily: C.font, fontSize: "7.5px", fill: DG, fontWeight: "700" }}>
+            {v}
           </text>
-          <text x={W - PR + 3} y={yMin + 11}
-            style={{ fontFamily: C.font, fontSize: "6px", fill: C.amber + "cc" }}>
-            75% adulta
-          </text>
-
-          {/* SIN supl — rojo discontinuo */}
-          <polyline points={ptsSin} fill="none" stroke={C.red} strokeWidth={1.5} strokeDasharray="5,3" />
-          {/* CON supl — verde sólido */}
-          <polyline points={ptsCon} fill="none" stroke={C.green} strokeWidth={2} />
-
-          {/* Dots CON */}
-          {pvCon.map((v, i) => (
-            <circle key={i} cx={xPos[i]} cy={yPV(v)} r={3} fill={C.green} />
-          ))}
-          {/* Dots SIN */}
-          {pvSin.map((v, i) => (
-            <circle key={i} cx={xPos[i]} cy={yPV(v)} r={2.5} fill="none"
-              stroke={C.red} strokeWidth={1.2} />
-          ))}
-
-          {/* ◆ Marcador de cruce CON supl */}
-          {xCruzCon && (
-            <g>
-              <polygon
-                points={`${xCruzCon},${yMin - 6} ${xCruzCon + 5},${yMin} ${xCruzCon},${yMin + 6} ${xCruzCon - 5},${yMin}`}
-                fill={C.green} stroke={C.card2} strokeWidth={1} />
-              <text x={xCruzCon} y={yMin - 9} textAnchor="middle"
-                style={{ fontFamily: C.font, fontSize: "6px", fill: C.green, fontWeight: "700" }}>
-                ◆ C
-              </text>
-            </g>
-          )}
-          {/* ◆ Marcador de cruce SIN supl */}
-          {xCruzSin && (
-            <g>
-              <polygon
-                points={`${xCruzSin},${yMin - 5} ${xCruzSin + 4},${yMin} ${xCruzSin},${yMin + 5} ${xCruzSin - 4},${yMin}`}
-                fill="none" stroke={C.red} strokeWidth={1.2} />
-              <text x={xCruzSin} y={yMin + 16} textAnchor="middle"
-                style={{ fontFamily: C.font, fontSize: "6px", fill: C.red }}>
-                ◆ S
-              </text>
-            </g>
-          )}
-
-          {/* Etiquetas PV finales (Nov) */}
-          <text x={xPos[4] + 3} y={yPV(pvNovCon) + 3}
-            style={{ fontFamily: C.font, fontSize: "7.5px",
-              fill: llegaCon ? C.green : C.amber, fontWeight: "700" }}>
-            {pvNovCon}
-          </text>
-          <text x={xPos[4] + 3} y={yPV(pvNovSin) + 3}
-            style={{ fontFamily: C.font, fontSize: "7.5px",
-              fill: llegaSin ? C.green : C.red + "dd" }}>
-            {pvNovSin}
-          </text>
-
-          {/* Hitos eje X */}
-          {HITOS.map((h, i) => (
-            <g key={i}>
-              <line x1={xPos[i]} x2={xPos[i]} y1={PT} y2={PT + dH}
-                stroke={C.border} strokeWidth={0.6} strokeDasharray={i > 0 ? "2,3" : "none"} />
-              <text x={xPos[i]} y={H - PB + 11} textAnchor="middle"
-                style={{ fontFamily: C.font, fontSize: "7px", fill: C.textDim }}>{h.label}</text>
-              <text x={xPos[i]} y={H - PB + 20} textAnchor="middle"
-                style={{ fontFamily: C.font, fontSize: "6px", fill: C.textFaint }}>{h.sub}</text>
-            </g>
-          ))}
-        </svg>
-      </div>
-
-      {/* Leyenda con resultado dinámico */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontFamily: C.font, fontSize: 8, color: C.textDim, marginTop: 5 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <svg width={18} height={8}><line x1={0} y1={4} x2={18} y2={4} stroke={C.green} strokeWidth={2} /></svg>
-          <strong style={{ color: C.green }}>Con supl · {pvNovCon} kg</strong>
-          {llegaCon
-            ? <span style={{ color: C.green }}> ✓ llega
-                {cruzaCon ? ` (alcanza objetivo en ${daysToLabel(cruzaCon.days)})` : ""}</span>
-            : <span style={{ color: C.amber }}> ⚠ falta {pvMin - pvNovCon} kg al entore</span>}
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <svg width={18} height={8}><line x1={0} y1={4} x2={18} y2={4} stroke={C.red} strokeWidth={1.5} strokeDasharray="4,2" /></svg>
-          <strong style={{ color: C.red }}>Sin supl · {pvNovSin} kg</strong>
-          {llegaSin
-            ? <span style={{ color: C.green }}> ✓ llega
-                {cruzaSin ? ` (${daysToLabel(cruzaSin.days)})` : ""}</span>
-            : <span style={{ color: C.red }}> ✗ no llega — falta {pvMin - pvNovSin} kg</span>}
-        </span>
-        <span style={{ color: C.textFaint, marginLeft: "auto" }}>
-          ◆ = punto donde cruza el objetivo · fondo ámbar = invierno
-        </span>
+        ))}
+        {/* hitos eje X */}
+        {HITOS.map((h, i) => (
+          <g key={i}>
+            <line x1={xPos[i]} x2={xPos[i]} y1={PT} y2={PT + dH}
+              stroke={C.border} strokeWidth={0.6} strokeDasharray={i > 0 ? "2,3" : "none"} />
+            <text x={xPos[i]} y={H - PB + 11} textAnchor="middle"
+              style={{ fontFamily: C.font, fontSize: "7px", fill: C.textDim }}>{h.label}</text>
+            <text x={xPos[i]} y={H - PB + 20} textAnchor="middle"
+              style={{ fontFamily: C.font, fontSize: "6px", fill: C.textFaint }}>{h.sub}</text>
+          </g>
+        ))}
+      </svg>
+      <div style={{ fontFamily: C.font, fontSize: 8, color: C.textDim, marginTop: 4 }}>
+        Trayectoria real con forraje y suplemento cargados · fondo ámbar = invierno
       </div>
     </div>
   );
@@ -982,14 +815,11 @@ function GraficoTrayectoriaVaq({ vaq1E, vaq2E, pvVacaAdulta = 320 }) {
 
 // ─── Componente principal ───
 export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPotreros, potreros }) {
-  const [conReco, setConReco] = useState(false);
-
-  const formActivo = useMemo(() => conReco ? aplicarRecomendaciones(form) : form, [form, conReco]);
 
   const datos = useMemo(() => {
     if (!motor) return null;
     const safe = (cat) => {
-      try { return balancePorCategoria(motor, formActivo, sat, cat); }
+      try { return balancePorCategoria(motor, form, sat, cat); }
       catch(e) { console.error(`GraficosBalance error [${cat}]:`, e); return null; }
     };
 
@@ -1021,7 +851,7 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
       vaq1: safe("vaq1"),
       vaq2: safe("vaq2"),
     };
-  }, [motor, formActivo, sat]);
+  }, [motor, form, sat]);
 
   const todosNull = datos && !datos.general && !datos.vacas_v2s && !datos.vaq1 && !datos.vaq2;
   if (!datos || todosNull) {
@@ -1041,139 +871,75 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
 
   const sinPotreros = !usaPotreros || !(potreros || []).length;
 
-  // Calcular diferencia entre actual y con recomendaciones para el badge
-  const diffReco = useMemo(() => {
-    if (!motor || !datos?.general) return null;
-    try {
-      const formReco = aplicarRecomendaciones(form);
-      const datosReco = balancePorCategoria(motor, formReco, sat, "general");
-      const balActual = datos.general.meses.reduce((s, m) => s + (m.balance || 0), 0);
-      const balReco   = datosReco.meses.reduce((s, m) => s + (m.balance || 0), 0);
-      const diff = Math.round(balReco - balActual);
-      const mesesMejoran = datosReco.meses.filter((m, i) => m.balance > datos.general.meses[i].balance).length;
-      return { diff, mesesMejoran };
-    } catch(e) { return null; }
-  }, [motor, datos, form, sat]);
-
   return (
     <div>
-      {/* Toggle antes/despues */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "stretch" }}>
-        <button onClick={() => setConReco(false)} style={{
-          flex: 1, padding: "8px 10px", borderRadius: 8, cursor: "pointer",
-          background: !conReco ? C.textDim + "25" : "transparent",
-          border: `1px solid ${!conReco ? C.textDim : C.border}`,
-          color: !conReco ? C.text : C.textDim,
-          fontFamily: C.font, fontSize: 10, fontWeight: !conReco ? 700 : 400,
-        }}>
-          Situacion actual
-        </button>
-        <button onClick={() => setConReco(true)} style={{
-          flex: 1, padding: "8px 10px", borderRadius: 8, cursor: "pointer",
-          background: conReco ? C.green + "25" : "transparent",
-          border: `1px solid ${conReco ? C.green : C.border}`,
-          color: conReco ? C.green : C.textDim,
-          fontFamily: C.font, fontSize: 10, fontWeight: conReco ? 700 : 400,
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-        }}>
-          <span>Con recomendaciones</span>
-          {diffReco && !conReco && diffReco.diff !== 0 && (
-            <span style={{ fontSize: 8, color: diffReco.diff > 0 ? C.green : C.amber, fontWeight: 600 }}>
-              {diffReco.diff > 0 ? "+" : ""}{diffReco.diff} Mcal/d · {diffReco.mesesMejoran} meses mejoran
-            </span>
-          )}
-        </button>
-      </div>
-
       {sinPotreros && (
         <div style={{ background: C.amber + "28", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.amber }}>
-          Estimacion sin asignacion de potreros a categorias — carga los potreros en el paso "El campo" para balance preciso.
-        </div>
-      )}
-
-      {conReco && (
-        <div style={{ background: C.green + "1e", border: `1px solid ${C.green}30`, borderRadius: 8, padding: "6px 10px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.green }}>
-          Proyeccion con ajustes estandar: suplementacion proteica vaq1 y vaq2 en invierno + verdeo orientado a recria.
+          Sin asignación de potreros a categorías — completá el paso Potreros para un balance preciso.
         </div>
       )}
 
       <TrayectoriaCC form={form} motor={motor} />
 
-      {datos.general && (
-        <GraficoMcal
-          datos={datos.general.meses}
-          titulo={`General · ${datos.general.nAnimales} cabezas`}
-          subTitulo={datos.general.label}
-          mostrarMovCC={true}
-        />
-      )}
-
       {datos.vacas_v2s && (
         <GraficoMcal
           datos={datos.vacas_v2s.meses}
           titulo={`Vacas + V2S · ${datos.vacas_v2s.nAnimales} cabezas`}
-          subTitulo={`${datos.vacas_v2s.pv} kg PV · con movilizacion CC`}
+          subTitulo={`${datos.vacas_v2s.pv} kg PV`}
           mostrarMovCC={true}
         />
       )}
 
-      <GraficoTrayectoriaVaq vaq1E={motor?.vaq1E} vaq2E={motor?.vaq2E} pvVacaAdulta={parseFloat(form?.pvVacaAdulta) || 320} />
-
       {datos.vaq1 ? (
         datos.vaq1.nAnimales > 0 ? (
-          <GraficoGDP
-            datos={datos.vaq1.meses}
-            titulo={`Vaquillona 1° invierno · ${datos.vaq1.nAnimales} cabezas`}
-            subTitulo={`${datos.vaq1.pv} kg PV · recría hacia entore`}
-            objetivoVerano={500}
-            objetivoInvierno={200}
-          />
+          <>
+            <GraficoMcal
+              datos={datos.vaq1.meses}
+              titulo={`Vaquillona 1° invierno · ${datos.vaq1.nAnimales} cabezas`}
+              subTitulo={`${datos.vaq1.pv} kg PV`}
+              mostrarMovCC={false}
+            />
+            <GraficoGDP
+              datos={datos.vaq1.meses}
+              titulo={`GDP · Vaquillona 1° invierno`}
+              subTitulo="Referencias NRC: verano 500 g/d · invierno 200 g/d"
+              objetivoVerano={500}
+              objetivoInvierno={200}
+            />
+          </>
         ) : (
           <div style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.textDim }}>
-            Vaquillona 1 invierno — sin animales registrados. Configurá el % de reposición en el paso Rodeo.
+            Vaquillona 1 invierno — sin animales registrados. Completá el % de reposición en el paso Rodeo.
           </div>
         )
       ) : null}
 
       {datos.vaq2 ? (
-        datos.vaq2.nAnimales > 0 ? (() => {
-          const vaq2E = motor?.vaq2E;
-          const llegaEntore = vaq2E?.llegas;
-          const gdpMinNecesario = vaq2E
-            ? Math.ceil((vaq2E.pvMinEntore - vaq2E.pvMayo2Inv) * 1000 / (12 * 30))
-            : 400;
-          return (
-            <>
-              {llegaEntore ? (
-                <div style={{ background: C.green + "2c", border: `1px solid ${C.green}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 6, fontFamily: C.font, fontSize: 9, color: C.green }}>
-                  Llega al entore con peso proyectado ({vaq2E.pvEntore} kg / min {vaq2E.pvMinEntore} kg)
-                </div>
-              ) : vaq2E ? (
-                <div style={{ background: C.amber + "2c", border: `1px solid ${C.amber}40`, borderRadius: 8, padding: "6px 10px", marginBottom: 6, fontFamily: C.font, fontSize: 9, color: C.amber }}>
-                  No llega al entore — falta {vaq2E.pvMinEntore - vaq2E.pvEntore} kg · necesita &ge; {gdpMinNecesario} g/d promedio
-                </div>
-              ) : null}
-              <GraficoGDP
-                datos={datos.vaq2.meses}
-                titulo={`Vaquillona 2° invierno · ${datos.vaq2.nAnimales} cabezas`}
-                subTitulo={`${datos.vaq2.pv} kg PV · mín entore ${vaq2E?.pvMinEntore ?? "—"} kg`}
-                objetivoGDP={llegaEntore ? 400 : gdpMinNecesario}
-              />
-            </>
-          );
-        })() : (
+        datos.vaq2.nAnimales > 0 ? (
+          <>
+            <GraficoMcal
+              datos={datos.vaq2.meses}
+              titulo={`Vaquillona 2° invierno · ${datos.vaq2.nAnimales} cabezas`}
+              subTitulo={`${datos.vaq2.pv} kg PV`}
+              mostrarMovCC={false}
+            />
+            <GraficoGDP
+              datos={datos.vaq2.meses}
+              titulo={`GDP · Vaquillona 2° invierno`}
+              subTitulo={`${datos.vaq2.pv} kg PV actual`}
+            />
+          </>
+        ) : (
           <div style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.textDim }}>
-            Vaquillona 2 invierno — sin animales registrados. Cargá la cantidad en el paso Rodeo.
+            Vaquillona 2 invierno — sin animales registrados. Completá la cantidad en el paso Rodeo.
           </div>
         )
       ) : null}
 
-      <GraficoDistribucionPartos cadena={cadena} />
-
-      <CronogramaAnual motor={motor} form={form} sat={sat} />
+      <GraficoTrayectoriaVaq vaq1E={motor?.vaq1E} vaq2E={motor?.vaq2E} />
 
       <div style={{ fontFamily: C.font, fontSize: 8, color: C.textFaint, marginTop: 8, textAlign: "center" }}>
-        Metodo: balance por categoria con consumo real (Rosello et al. 2025, Detmann 2010, NRC 2000).
+        Balance por categoría · consumo real (Rosello et al. 2025, Detmann 2010, NRC 2000)
       </div>
     </div>
   );
