@@ -222,7 +222,7 @@ function CalfAIPro() {
     "Tarija / Chaco (BO)":      { lat:-22.0, lon:-63.5 },
     "Rio Grande do Sul (BR)":   { lat:-30.0, lon:-53.0 },
     "Pantanal (BR)":            { lat:-17.0, lon:-57.5 },
-    "Misiones":                 { lat:-27.4, lon:-55.9 },
+    "Misiones":                 { lat:-27.0, lon:-55.0 },
     "Jujuy":                    { lat:-24.2, lon:-65.3 },
     "Tucumán":                  { lat:-26.8, lon:-65.2 },
     "Catamarca":                { lat:-28.5, lon:-65.8 },
@@ -254,7 +254,15 @@ function CalfAIPro() {
     return () => window.removeEventListener("keydown", handler);
   }, [step]);
 
-  // ── GPS ───────────────────────────────────────────────────────
+  // ── GPS — distancia mínima al centroide de provincia ─────────
+  function nearestProv(lat, lon) {
+    let best = "Corrientes", minD = Infinity;
+    for (const [prov, c] of Object.entries(COORDS_PROV)) {
+      const d = (lat - c.lat) ** 2 + (lon - c.lon) ** 2;
+      if (d < minD) { minD = d; best = prov; }
+    }
+    return best;
+  }
   async function gpsClick() {
     if (!navigator.geolocation) {
       showToast("GPS no disponible en este navegador", "error");
@@ -267,32 +275,33 @@ function CalfAIPro() {
         const lo = +pos.coords.longitude.toFixed(5);
         setCoords({ lat:la, lon:lo });
         set("zona",      dZona(la, lo));
-        set("provincia", dProv(la, lo));
+        const prov = nearestProv(la, lo);
+        set("provincia", prov);
         // Reverse geocoding para obtener localidad
         try {
           const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json&accept-language=es`);
           const d = await r.json();
           const addr = d.address || {};
-          const loc = addr.city || addr.town || addr.village || addr.county || addr.municipality || addr.state_district || "";
+          const loc = addr.city || addr.town || addr.village || addr.municipality || addr.county || addr.state_district || "";
           if (loc) {
             set("localidad", loc);
-            showToast(`📍 GPS: ${loc} (${la.toFixed(3)}°, ${lo.toFixed(3)}°)`, "ok");
+            showToast(`📍 ${loc} · ${prov}`, "ok");
           } else {
-            showToast(`📍 GPS activo: ${la.toFixed(3)}°, ${lo.toFixed(3)}°`, "ok");
+            showToast(`📍 ${prov} (${la.toFixed(3)}°, ${lo.toFixed(3)}°)`, "ok");
           }
         } catch(e) {
-          showToast(`📍 GPS activo: ${la.toFixed(3)}°, ${lo.toFixed(3)}°`, "ok");
+          showToast(`📍 ${prov} (${la.toFixed(3)}°, ${lo.toFixed(3)}°)`, "ok");
         }
         setGpsLoading(false);
       },
       (err) => {
         setGpsLoading(false);
-        const msg = err.code === 1 ? "Permiso GPS denegado — activalo en el navegador"
-                  : err.code === 3 ? "GPS tardó demasiado — intentá de nuevo"
+        const msg = err.code === 1 ? "Permiso GPS denegado — activalo en Configuración del navegador"
+                  : err.code === 3 ? "GPS tardó demasiado — intentá al aire libre"
                   : "No se pudo obtener la ubicación";
-        showToast(msg, "error", 5000);
+        showToast(msg, "error", 6000);
       },
-      { timeout:8000 }
+      { timeout:15000, enableHighAccuracy:false }
     );
   }
 
@@ -1315,32 +1324,45 @@ function CalfAIPro() {
   // ── PASO 0: UBICACIÓN ─────────────────────────────────────────
   const renderUbicacion = () => (
     <div>
-      {/* GPS opcional — provincia es lo que importa */}
-      {!coords && (
-        <div style={{ background:`${C.green}08`, border:`1px solid ${C.green}30`, borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
-          <div style={{ fontFamily:C.sans, fontSize:12, color:C.green, fontWeight:700, marginBottom:4 }}>
-            📌 Seleccioná Zona y Provincia abajo — es todo lo que necesitás
-          </div>
-          <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, lineHeight:1.6 }}>
-            El análisis usa datos climáticos históricos por provincia (temperatura, precipitación, estacionalidad).
-            El GPS agrega temperatura real (Open-Meteo) y un NDVI estimado por zona/lluvia/ENSO (no MODIS).
+      {/* GPS — siempre visible, acción principal */}
+      <div style={{ background: coords ? `${C.green}0d` : `${C.card2}`,
+        border:`1px solid ${coords ? C.green+"40" : C.border}`,
+        borderRadius:12, padding:"12px 14px", marginBottom:12 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
+          <div style={{ flex:1 }}>
+            {coords ? (
+              <div>
+                <div style={{ fontFamily:C.font, fontSize:10, color:C.green, fontWeight:700, marginBottom:2 }}>
+                  📍 {form.localidad || form.provincia || "Ubicación detectada"}
+                  {form.provincia && form.localidad ? ` · ${form.provincia}` : ""}
+                </div>
+                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+                  {coords.lat.toFixed(4)}°, {coords.lon.toFixed(4)}° · toca para actualizar
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontFamily:C.font, fontSize:11, color:C.text, fontWeight:600, marginBottom:2 }}>
+                  Detectar ubicación automáticamente
+                </div>
+                <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>
+                  Autodetecta provincia y localidad · o elegí manualmente abajo
+                </div>
+              </div>
+            )}
           </div>
           <button onClick={gpsClick} disabled={gpsLoading} style={{
-            marginTop:8, padding:"6px 12px", borderRadius:8,
-            background:"transparent", border:`1px solid ${C.green}40`,
-            fontFamily:C.font, fontSize:11, color:C.green, cursor:"pointer",
+            padding:"10px 16px", borderRadius:10, cursor:"pointer", flexShrink:0,
+            background: coords ? `${C.green}20` : C.green,
+            border:`1px solid ${C.green}`,
+            fontFamily:C.font, fontSize:11, fontWeight:700,
+            color: coords ? C.green : "#fff",
             opacity: gpsLoading ? 0.6 : 1,
           }}>
-            {gpsLoading ? "📍 Obteniendo ubicación…" : "📍 Activar GPS (datos satelitales en tiempo real)"}
+            {gpsLoading ? "…" : coords ? "🔄" : "📍 GPS"}
           </button>
         </div>
-      )}
-      {coords && (
-        <Alerta tipo="ok">
-          📍 GPS activo: {form.zona} · {form.provincia} {form.localidad ? `· ${form.localidad}` : ""}
-          <span style={{ opacity:0.6, fontSize:10 }}> ({coords.lat.toFixed(3)}°, {coords.lon.toFixed(3)}°)</span>
-        </Alerta>
-      )}
+      </div>
       {sat && !sat.error && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, margin:"10px 0" }}>
           <MetricCard label="TEMPERATURA" value={sat.temp+"°C"}  color={C.amber} />
