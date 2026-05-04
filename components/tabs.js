@@ -361,7 +361,6 @@ function TabCerebro({ motor, form, sat }) {
         </div>
       )}
 
-      {/* ══ CRONOGRAMA DE RIESGOS — línea de tiempo ════════════ */}
       {/* Banner alerta satelital */}
       {alertaSat && (
         <div style={{ background:alertaSat.startsWith("✓") ? C.green+"0d" : C.amber+"0d",
@@ -372,99 +371,6 @@ function TabCerebro({ motor, form, sat }) {
           <span>🛰</span><span>{alertaSat}</span>
         </div>
       )}
-
-      {cronograma && cronograma.length > 0 && (() => {
-        const W = 340, H = 110, padX = 14;
-        const colW = (W - padX * 2) / 12;
-        // Calcular nivel de riesgo por mes (0=ok, 1=alerta, 2=crítico)
-        const riskLevel = cronograma.map(m => {
-          const hasUrgente = m.riesgos.some(r => r.tipo === "deficit");
-          const hasAlerta  = m.riesgos.some(r => r.tipo === "leve" || r.tipo === "accion");
-          return hasUrgente ? 2 : hasAlerta ? 1 : 0;
-        });
-        return (
-          <div style={{ background:C.card2, border:"1px solid "+C.border, borderRadius:12,
-            padding:"12px 14px", marginBottom:12, overflowX:"auto" }}>
-            <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint, letterSpacing:1, marginBottom:8 }}>
-              🗓 LÍNEA DE TIEMPO — riesgos y acciones en el año
-            </div>
-            <svg viewBox={"0 0 "+W+" "+H} style={{ width:"100%", display:"block", minWidth:300 }}>
-              {/* Fondos */}
-              {[5,6,7].map(i => (
-                <rect key={i} x={padX+i*colW} y={2} width={colW} height={H-20}
-                  fill={C.amber+"08"} />
-              ))}
-              {/* Mes actual */}
-              <rect x={padX+mesHoy*colW} y={2} width={colW} height={H-20}
-                fill={C.green+"12"} rx={2} />
-              {/* Barras de riesgo */}
-              {cronograma.map((m, i) => {
-                const col = riskLevel[i] === 2 ? "#E74C3C" : riskLevel[i] === 1 ? "#F39C12" : "#2ECC71";
-                const alpha = riskLevel[i] === 2 ? "70" : riskLevel[i] === 1 ? "55" : "30";
-                const bH = riskLevel[i] === 2 ? 32 : riskLevel[i] === 1 ? 22 : 10;
-                return (
-                  <rect key={i} x={padX+i*colW+1} y={H-20-bH} width={colW-2} height={bH}
-                    fill={col+alpha} rx={2}
-                    stroke={col} strokeWidth={riskLevel[i]>0 ? "0.8" : "0"} />
-                );
-              })}
-              {/* Etiquetas de hitos sobre las barras */}
-              {cronograma.map((m, i) =>
-                m.riesgos.slice(0, 2).map((r, ei) => {
-                  const etiq = r.tipo === "hito"
-                    ? (r.label.startsWith("Pari") ? "Par" : r.label.startsWith("Serv") ? "Ser" : "Des")
-                    : r.tipo === "deficit_severo" ? "DEF"
-                    : r.tipo === "deficit_leve"   ? "def"
-                    : r.tipo === "accion"          ? "Acc"
-                    : r.tipo === "recurso"         ? "Rec"
-                    : "";
-                  const tcol = r.tipo === "hito"
-                    ? (r.label.startsWith("Pari") ? "#2ECC71" : r.label.startsWith("Serv") ? "#3498DB" : "#F39C12")
-                    : r.color || C.textFaint;
-                  return (
-                    <text key={i+"-"+ei}
-                      x={padX + i*colW + colW/2}
-                      y={10 + ei * 14}
-                      textAnchor="middle"
-                      style={{ fontFamily:C.font, fontSize:"6.5px", fontWeight:"700", fill:tcol }}>
-                      {etiq}
-                    </text>
-                  );
-                })
-              )}
-              {/* Etiquetas mes */}
-              {cronograma.map((m, i) => (
-                <text key={i} x={padX+i*colW+colW/2} y={H-5} textAnchor="middle"
-                  style={{ fontFamily:C.font, fontSize:"6.5px",
-                    fill: i === mesHoy ? "#2ECC71" : m.esInv ? "#F39C12" : C.textFaint,
-                    fontWeight: i === mesHoy || m.esInv ? "700" : "400" }}>
-                  {m.mes}
-                </text>
-              ))}
-              {/* Leyenda */}
-              <rect x={padX}    y={H-17} width={8} height={8} fill="#E74C3C" rx={1}/>
-              <text x={padX+10} y={H-11} style={{ fontFamily:C.font, fontSize:"6px", fill:"#E74C3C" }}>Déficit</text>
-              <rect x={padX+36} y={H-17} width={8} height={8} fill="#F39C12" rx={1}/>
-              <text x={padX+46} y={H-11} style={{ fontFamily:C.font, fontSize:"6px", fill:"#F39C12" }}>Acción</text>
-              <rect x={padX+72} y={H-17} width={8} height={8} fill="#2ECC71" rx={1}/>
-              <text x={padX+82} y={H-11} style={{ fontFamily:C.font, fontSize:"6px", fill:"#2ECC71" }}>OK</text>
-              <text x={W-padX} y={H-11} textAnchor="end" style={{ fontFamily:C.font, fontSize:"6px", fill:"#F39C12" }}>▐ invierno</text>
-            </svg>
-            {/* Detalle de meses con eventos */}
-            <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
-              {cronograma.filter(m => m.riesgos.length > 0).map(m => (
-                <div key={m.i} style={{ background:C.card, border:"1px solid "+C.border,
-                  borderRadius:6, padding:"4px 8px", minWidth:70 }}>
-                  <div style={{ fontFamily:C.font, fontSize:7, color:C.textFaint, marginBottom:1 }}>{m.mes}</div>
-                  {m.riesgos.map((r,j) => (
-                    <div key={j} style={{ fontFamily:C.font, fontSize:8, color:r.color }}>{r.label}</div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Parrafo ejecutivo */}
       {parrafo && (

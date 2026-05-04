@@ -225,9 +225,9 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
     const lines = [
       `${MESES[i]}${[4,5,6].includes(i) ? " ❄" : ""}`,
       `GDP:      ${gdp} g/d`,
-      `Objetivo: ${obj} g/d`,
-      cumple ? "Estado:   cumple ✓" : `Estado:   deficit (${gdp - obj} g/d)`,
-    ];
+      obj > 0 ? `Ref. NRC:  ${obj} g/d` : null,
+      obj > 0 ? (cumple ? "Estado:   cumple ✓" : `Déficit:  ${gdp - obj} g/d`) : null,
+    ].filter(Boolean);
     setTooltip({ x: pixX / (rel.width / contRect.width) + 8, y: pixY / (rel.height / contRect.height), lines, containerW: contRect.width });
   };
 
