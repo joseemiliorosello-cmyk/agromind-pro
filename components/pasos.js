@@ -2566,7 +2566,7 @@ const renderUbicacion = () => {
             <div>
 
               {/* ── TARJETAS POR DIMENSIÔN — estado del sistema ── */}
-              <TabCerebro motor={motor} form={form} sat={sat} />
+              <TabCerebro motor={motor} form={form} sat={sat} potreros={potreros} />
 
               {/* ── 4. INFORME IA ── */}
               <div style={{ marginTop:14 }}>

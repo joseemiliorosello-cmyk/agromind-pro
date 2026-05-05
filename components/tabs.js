@@ -178,15 +178,14 @@ function SimuladorEscenarios({ form, cadena, baseParams, sat }) {
 }
 
 // ─── TABCEREBRO ───────────────────────────────────────────────────
-function TabCerebro({ motor, form, sat }) {
-  const cerebro    = React.useMemo(() => calcCerebro(motor, form, sat), [motor, form, sat]);
+function TabCerebro({ motor, form, sat, potreros = [] }) {
+  const cerebro    = React.useMemo(() => calcCerebro(motor, form, sat, potreros), [motor, form, sat, potreros]);
   const [expandida, setExpandida] = React.useState(null);
   if (!cerebro) return null;
 
-  const {
-    parrafo, tarjetas, resumen, contextoClima, calendarioAcciones,
-    faseCiclo, alertaSat, cronograma, diagnosticoSustentabilidad,
-  } = cerebro;
+  const { diagnostico, prescripciones } = cerebro;
+  const { faseCiclo, contextoClima, alertaSat, diagnosticoSustentabilidad } = diagnostico;
+  const { tarjetas, parrafo, resumen, cronograma, calendarioAcciones } = prescripciones;
   const mesHoy = new Date().getMonth();
   const MESES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   const tray    = motor?.tray;

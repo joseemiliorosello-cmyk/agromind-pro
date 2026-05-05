@@ -595,10 +595,10 @@ function GraficoDistribucionPartos({ cadena }) {
 }
 
 // ─── Cronograma anual ───
-function CronogramaAnual({ motor, form, sat }) {
+function CronogramaAnual({ motor, form, sat, potreros = [] }) {
   const cerebro = useMemo(() => {
     if (!motor) return null;
-    try { return calcCerebro(motor, form, sat); }
+    try { return calcCerebro(motor, form, sat, potreros); }
     catch(e) { console.error("CronogramaAnual:", e); return null; }
   }, [motor, form, sat]);
 

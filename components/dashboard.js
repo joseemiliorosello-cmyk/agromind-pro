@@ -380,7 +380,7 @@ function GraficoBalance({ form, sat, cadena, tray, motor }) {
 
 
 // ─── DASHBOARDESTABLECIMIENTO ───────────────────────────────────────────────────
-function DashboardEstablecimiento({ motor, form, sat, score, confianza, onTab }) {
+function DashboardEstablecimiento({ motor, form, sat, score, confianza, onTab, potreros = [] }) {
   const hoy     = new Date();
   const mesHoy  = hoy.getMonth();
   const MESES   = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -420,8 +420,8 @@ function DashboardEstablecimiento({ motor, form, sat, score, confianza, onTab })
   const mesesRojos = balInv.filter(b => b.bal !== null && b.bal < 0).length;
 
   // Puntos críticos del motor — máximo 3
-  const cerebro = motor ? calcCerebro(motor, form, sat) : null;
-  const tarjCrit = cerebro?.tarjetas?.filter(t => t.prioridad === "P1" || t.prioridad === "URGENTE")
+  const cerebro = motor ? calcCerebro(motor, form, sat, potreros) : null;
+  const tarjCrit = cerebro?.prescripciones?.tarjetas?.filter(t => t.prioridad === "P1" || t.prioridad === "URGENTE")
     .slice(0,3) ?? [];
 
   return (

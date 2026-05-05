@@ -316,7 +316,7 @@ function CalfAIPro() {
       guardarEnHistorial(form, motor, null);
       let cerebroData, prompt;
       try {
-        cerebroData = calcCerebro(motor, form, sat);
+        cerebroData = calcCerebro(motor, form, sat, potreros);
         prompt = buildPromptFull(motor, form, sat, cerebroData, potreros);
       } catch (buildErr) {
         console.error("Error generando el análisis:", buildErr);
@@ -448,8 +448,8 @@ function CalfAIPro() {
       }
 
       // ── PUNTOS CRÍTICOS DEL MOTOR ────────────────────────────────────
-      const cerebPDF = motor ? calcCerebro(motor, form, sat) : null;
-      const critiPDF = cerebPDF ? (cerebPDF.tarjetas||[]).filter(t => t.prioridad==="P1"||t.prioridad==="URGENTE").slice(0,3) : [];
+      const cerebPDF = motor ? calcCerebro(motor, form, sat, potreros) : null;
+      const critiPDF = cerebPDF ? (cerebPDF.prescripciones?.tarjetas||[]).filter(t => t.prioridad==="P1"||t.prioridad==="URGENTE").slice(0,3) : [];
       if (critiPDF.length > 0) {
         chk(15);
         doc.setFillColor(224, 85, 48);
@@ -903,7 +903,7 @@ function CalfAIPro() {
     const fecha   = new Date().toLocaleDateString("es-AR");
     const isoDate = new Date().toISOString().slice(0,10);
     const dispMS  = calcDisponibilidadMS(form.altPasto, form.tipoPasto);
-    const cb      = calcCerebro(motor, form, sat);
+    const cb      = calcCerebro(motor, form, sat, potreros);
     const sc      = calcScore(motor, form, null);
 
     // Datos derivados reutilizables
@@ -1117,8 +1117,8 @@ function CalfAIPro() {
       ["", "", ""],
       ["PUNTOS CRITICOS", "", ""],
     ];
-    if (cb?.tarjetas) {
-      cb.tarjetas.forEach(t => {
+    if (cb?.prescripciones?.tarjetas) {
+      cb.prescripciones.tarjetas.forEach(t => {
         hoja3.push([t.prioridad || "", t.titulo || "", t.descripcion || ""]);
       });
     }
@@ -1178,8 +1178,8 @@ function CalfAIPro() {
       ["", "", "", "", ""],
       ["Prioridad", "Area", "Accion", "Descripcion / Que hacer", "Cuando"],
     ];
-    if (cb?.tarjetas) {
-      cb.tarjetas.filter(t => ["P1","P2","URGENTE"].includes(t.prioridad)).forEach(t => {
+    if (cb?.prescripciones?.tarjetas) {
+      cb.prescripciones.tarjetas.filter(t => ["P1","P2","URGENTE"].includes(t.prioridad)).forEach(t => {
         hoja5.push([
           t.prioridad  || "",
           t.area       || "",
@@ -2603,7 +2603,7 @@ function CalfAIPro() {
     potreros, setPotreros, runAnalysis,
     pvEntVaq1, pvSalidaVaq1, pvEntradaVaq2,
     nVacas, nToros, nV2s, nVaq1, nVaq2, cadena, disponMS, tcSave,
-    PASOS, C, cerebro: calcCerebro(motor, form, sat),
+    PASOS, C, cerebro: calcCerebro(motor, form, sat, potreros),
   });
 
   // ── 6 pasos de planilla de carga ───────────────────────────────
@@ -2847,7 +2847,7 @@ function CalfAIPro() {
     <div className="reco-grid">
       <div className="diag-sticky">
         {/* Cerebro estructurado (cálculo local) */}
-        <TabCerebro motor={motor} form={form} sat={sat} />
+        <TabCerebro motor={motor} form={form} sat={sat} potreros={potreros} />
       </div>
 
       <div>
