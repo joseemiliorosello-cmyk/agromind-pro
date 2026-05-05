@@ -1107,13 +1107,10 @@ function CalfAIPro() {
       ["Score Sanidad",      sc?.dim?.find(d=>d.id==="sanidad")?.score ?? ""],
       ["", "", ""],
       ["ANALISIS CEREBRO", "", ""],
-      ["Score riesgo",       cb?.resumen?.scoreRiesgo || ""],
-      ["Nivel riesgo",       cb?.resumen?.nivelRiesgo || ""],
-      ["Prenez potencial (%)", cb?.resumen?.prenezPot || ""],
-      ["Terneros adicionales", cb?.resumen?.ternerosDif || ""],
-      ["Valor adicional",    cb?.resumen?.valorDif || ""],
-      ["Anos recupero Vaq1", cb?.anosRecupVaq1 || ""],
-      ["Anos recupero Vaq2", cb?.anosRecupVaq2 || ""],
+      ["Score riesgo",         motor?.scoreRiesgo || ""],
+      ["Nivel riesgo",         motor?.nivelRiesgo || ""],
+      ["Prenez potencial (%)", cb?.prescripciones?.resumen?.prenezPot || ""],
+      ["Terneros adicionales", cb?.prescripciones?.resumen?.ternerosDif || ""],
       ["", "", ""],
       ["PUNTOS CRITICOS", "", ""],
     ];
@@ -1127,7 +1124,7 @@ function CalfAIPro() {
     hoja3.push(["Balance junio (Mcal/d)",  motor?.balanceMensual?.[5]?.balance != null ? +motor.balanceMensual[5].balance.toFixed(1) : ""]);
     hoja3.push(["Balance julio (Mcal/d)",  motor?.balanceMensual?.[6]?.balance != null ? +motor.balanceMensual[6].balance.toFixed(1) : ""]);
     hoja3.push(["Balance agosto (Mcal/d)", motor?.balanceMensual?.[7]?.balance != null ? +motor.balanceMensual[7].balance.toFixed(1) : ""]);
-    hoja3.push(["Meses en deficit (jun-ago)", motor?.balanceMensual ? motor.balanceMensual.filter(m=>[5,6,7].includes(m.i)&&m.deficit).length : ""]);
+    hoja3.push(["Meses en deficit (jun-ago)", motor?.mesesDeficit ?? ""]);
     if (result) {
       hoja3.push(["", "", ""]);
       hoja3.push(["INFORME IA", "", ""]);
@@ -2968,7 +2965,7 @@ function CalfAIPro() {
           Iniciar sesión con Google
         </button>
         <div style={{ fontFamily:C.font, fontSize:10, color:C.textFaint, marginTop:20 }}>
-          INTA · AgroMind Pro · v2025
+          AgroMind Pro · v2025
         </div>
       </div>
     </div>
