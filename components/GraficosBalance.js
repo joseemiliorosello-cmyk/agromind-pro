@@ -909,11 +909,38 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
               subTitulo={`${datos.vaq2.pv} kg PV`}
               mostrarMovCC={false}
             />
-            <GraficoGDP
-              datos={datos.vaq2.meses}
-              titulo={`GDP · Vaquillona 2° invierno`}
-              subTitulo={`${datos.vaq2.pv} kg PV actual`}
-            />
+            {(() => {
+              const vaq2E = motor?.vaq2E;
+              const llegaEntore = vaq2E?.llegas;
+              const gdpMinNecesario = vaq2E && !llegaEntore
+                ? Math.ceil((vaq2E.pvMinEntore - vaq2E.pvMayo2Inv) * 1000 / (12 * 30))
+                : 400;
+              return (
+                <>
+                  {llegaEntore != null && (
+                    llegaEntore ? (
+                      <div style={{ background: DG + "18", border: `1px solid ${DG}50`,
+                        borderRadius: 8, padding: "6px 10px", marginBottom: 6,
+                        fontFamily: C.font, fontSize: 9, color: DG }}>
+                        ✓ Llega al entore — {vaq2E.pvEntore} kg / {vaq2E.pvMinEntore} kg mín (75% PV adulto)
+                      </div>
+                    ) : (
+                      <div style={{ background: "#F39C1218", border: "1px solid #F39C1250",
+                        borderRadius: 8, padding: "6px 10px", marginBottom: 6,
+                        fontFamily: C.font, fontSize: 9, color: "#F39C12" }}>
+                        ⚠ No llega al entore — falta {vaq2E.pvMinEntore - vaq2E.pvEntore} kg · necesita {gdpMinNecesario} g/d promedio
+                      </div>
+                    )
+                  )}
+                  <GraficoGDP
+                    datos={datos.vaq2.meses}
+                    titulo="GDP · Vaquillona 2° invierno"
+                    subTitulo={`${datos.vaq2.pv} kg PV · mín entore ${vaq2E?.pvMinEntore ?? "—"} kg`}
+                    objetivoGDP={llegaEntore ? 400 : gdpMinNecesario}
+                  />
+                </>
+              );
+            })()}
           </>
         ) : (
           <div style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px", marginBottom: 10, fontFamily: C.font, fontSize: 9, color: C.textDim }}>
