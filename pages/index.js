@@ -777,6 +777,51 @@ function CalfAIPro() {
         salto(4);
       }
 
+      // ── DIAGNÓSTICO TÉCNICO ────────────────────────────────────────────
+      if (cerebPDF) {
+        const dx  = cerebPDF.diagnostico;
+        const dxS = dx?.diagnosticoSustentabilidad;
+        if (dx?.resumen) {
+          const dxCol = dxS?.esSustentable  ? [45,106,31]
+                      : dxS?.ciclosAlColapso && dxS.ciclosAlColapso <= 2 ? [200,60,40]
+                      : [200,140,20];
+          chk(14);
+          doc.setFillColor(...dxCol);
+          doc.roundedRect(ML, y, AU, 8, 2, 2, "F");
+          doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+          doc.text("DIAGNÓSTICO TÉCNICO", ML+4, y+5.5);
+          salto(11);
+          // Párrafo ejecutivo
+          const dxTxt = dx.resumen.replace(/[^\x20-\x7E\n]/g," ");
+          doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
+          doc.splitTextToSize(dxTxt, AU).forEach(ln => { chk(5); doc.text(ln, ML, y); salto(4.5); });
+          salto(3);
+          // Sustentabilidad resumen
+          if (dxS?.resumen) {
+            chk(8);
+            const dxSLabel = (dxS.resumen||"").replace(/[^\x20-\x7E\n]/g," ");
+            doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(...dxCol);
+            doc.text("Sustentabilidad: ", ML, y);
+            doc.setFont("helvetica","normal"); doc.setTextColor(60,60,60);
+            doc.text(dxSLabel, ML+30, y, { maxWidth: AU-30 }); salto(5);
+          }
+          // Factores limitantes
+          if (dxS?.factoresLimitantes?.length > 0) {
+            chk(6);
+            doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(80,80,80);
+            const limTxt = dxS.factoresLimitantes.slice(0,5).join(" · ").replace(/[^\x20-\x7E\n]/g," ");
+            doc.splitTextToSize("Limitantes: " + limTxt, AU).forEach(ln => { chk(4); doc.text(ln, ML, y); salto(4); });
+          }
+          // Ciclos al colapso
+          if (dxS?.ciclosAlColapso) {
+            chk(6);
+            doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(200,60,40);
+            doc.text(`Ciclos al colapso sin corrección: ${dxS.ciclosAlColapso}`, ML, y); salto(5);
+          }
+          salto(4);
+        }
+      }
+
       // ── INFORME IA (si existe) ───────────────────────────────────────
       if (!result) {
         chk(12);
@@ -1306,9 +1351,38 @@ function CalfAIPro() {
       ...hoja1, ...SEP, ...hoja2, ...SEP, ...hoja3, ...SEP, ...hojaRepro, ...SEP, ...hoja5,
     ];
 
+    // Hoja Potreros
+    const FENOL_NOM = { menor_10:"Rebrote", "10_25":"Crecimiento", "25_50":"Maduración", mayor_50:"Encañado" };
+    const PB_VEG    = { "Pastizal natural":14, "Megatérmicas C4":22, "Pasturas templadas C3":16, "Mixta gramíneas+legum.":18, "Bosque nativo / monte":2.5, "Verdeo de invierno":18 };
+    const hojaPot = [
+      ["POTREROS — RECURSOS FORRAJEROS", "", "", "", "", "", "", "", ""],
+      ["Productor:", form.nombreProductor || "", "", "Fecha:", fecha, "", "", "", ""],
+      ["", "", "", "", "", "", "", "", ""],
+      ["Potrero", "Hectáreas", "Vegetación", "Fenología", "Altura pasto (cm)", "Tipo pasto", "PB (%)", "Disp. MS (kg/ha)", "Verdeo tipo / dispon. MS"],
+    ];
+    (potreros || []).forEach((p, i) => {
+      const esPast = (p.veg || "").includes("Pastizal");
+      const dispP  = esPast && p.altPasto ? calcDisponibilidadMS(p.altPasto, p.tipoPasto || "corto_denso") : null;
+      hojaPot.push([
+        `Potrero ${i + 1}`,
+        parseFloat(p.ha) || "",
+        p.veg || "Pastizal natural",
+        FENOL_NOM[p.fenol] || p.fenol || "",
+        parseFloat(p.altPasto) || "",
+        p.tipoPasto || "",
+        PB_VEG[p.veg] || "",
+        dispP ? Math.round(dispP.msHa) : "",
+        p.verdeoTipo ? `${p.verdeoTipo} · ${p.verdeoDisp || "—"} kg MS/ha` : "",
+      ]);
+    });
+    // Totales
+    const totalHaPot = (potreros||[]).reduce((s,p) => s + (parseFloat(p.ha)||0), 0);
+    hojaPot.push(["TOTAL", totalHaPot || "", "", "", "", "", "", "", ""]);
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsHistorial, "Historial");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaDetalle), "Detalle visita");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaPot), "Potreros");
     XLSX.writeFile(wb, `calfai_historial_${isoDate}.xlsx`);
     showToast(`Excel generado: ${todasVisitas.length} visita${todasVisitas.length!==1?"s":""} ✓`, "ok");
   }
