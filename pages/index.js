@@ -826,50 +826,25 @@ function CalfAIPro() {
       if (!result) {
         chk(12);
         doc.setFontSize(8); doc.setFont("helvetica","italic"); doc.setTextColor(150,150,150);
-        doc.text("Informe de análisis IA no generado — generalo desde el tab Cerebro.", ML, y);
+        doc.text("Informe de analisis IA no generado — generalo desde el tab Cerebro.", ML, y);
         salto(10);
       } else {
         chk(14);
         doc.setFillColor(20, 40, 22);
         doc.roundedRect(ML, y, AU, 9, 2, 2, "F");
         doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-        doc.text("INFORME IA — ANÁLISIS COMPLETO", ML+4, y+6);
+        doc.text("INFORME IA — ANALISIS COMPLETO", ML+4, y+6);
         salto(12);
-
-        const SEC_COLORS_PDF = ["#2d6a1f","#2d6a1f","#d4952a","#d4952a","#c04820"];
-        // Intentar split por secciones numeradas (1️⃣..5️⃣)
-        // El emoji "1️⃣" = "1️⃣" en Unicode
-        const partes = result.split(/(?=\d️⃣)/u);
-        const hasSec = partes.length > 1;
-
-        if (hasSec) {
-          SEC_EMOJIS.forEach((em, si) => {
-            const emUni = `${si+1}️⃣`;
-            const parte = partes.find(p => p.startsWith(emUni) || p.startsWith(em));
-            if (!parte) return;
-            chk(20);
-            const [r, g, b] = SEC_COLORS_PDF[si].match(/\w\w/g).map(h => parseInt(h, 16));
-            doc.setFillColor(r, g, b);
-            doc.roundedRect(ML, y, AU, 9, 2, 2, "F");
-            doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-            doc.text(`${si+1}. ${SEC_TITLES[si]}`, ML+4, y+6);
-            salto(12);
-            const txt = parte.replace(em,"").replace(emUni,"").trim()
-              .replace(/\*\*(.*?)\*\*/g, "$1")
-              .replace(/[^\x20-\x7E\n]/g, " ");
-            doc.setFontSize(8.5); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
-            doc.splitTextToSize(txt, AU).forEach(ln => { chk(5); doc.text(ln, ML, y); salto(4.5); });
-            salto(3);
-          });
-        } else {
-          // Fallback: texto completo sin emojis ni markdown
-          const txt = result
-            .replace(/\*\*(.*?)\*\*/g, "$1")
-            .replace(/[^\x20-\x7E\n\r]/g, " ");
-          doc.setFontSize(8.5); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
-          doc.splitTextToSize(txt, AU).forEach(ln => { chk(5); doc.text(ln, ML, y); salto(4.5); });
-          salto(3);
-        }
+        // Sanitizar: quitar markdown y emojis/caracteres fuera de Latin-1
+        // Latin-1 (0x20-0xFF) incluye á é í ó ú ü ñ Á É Ñ — Helvetica los soporta
+        const cleanIA = result
+          .replace(/\*\*(.*?)\*\*/g, "$1")           // negrita markdown → texto plano
+          .replace(/^#{1,3}\s+/gm, "— ")             // ## Titulo → — Titulo
+          .replace(/[^\x20-\xFF\n\r]/g, " ")         // eliminar emojis y no-Latin1
+          .replace(/[ \t]{2,}/g, " ");               // colapsar espacios múltiples
+        doc.setFontSize(8.5); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
+        doc.splitTextToSize(cleanIA, AU).forEach(ln => { chk(5); doc.text(ln, ML, y); salto(4.5); });
+        salto(3);
       }
 
       // Bloque sanidad + agua

@@ -332,22 +332,8 @@ function GraficoGDP({ datos, titulo, objetivoGDP, objetivoVerano, objetivoInvier
 
 // ─── Trayectoria CC ───
 function TrayectoriaCC({ form, motor }) {
-  const trayFull = useMemo(() => {
-    if (!form?.distribucionCC?.length) return null;
-    try {
-      const cadena = form.iniServ && form.finServ ? calcCadena(form.iniServ, form.finServ) : null;
-      return calcTrayectoriaCC({
-        dist: form.distribucionCC, cadena,
-        destTrad: form.destTrad, destAntic: form.destAntic, destHiper: form.destHiper,
-        supHa: form.supHa, vacasN: form.vacasN,
-        biotipo: form.biotipo, primerParto: form.primerParto,
-        supl1: form.supl1 || "", dosis1: form.dosis1 || "0",
-        supl2: "", dosis2: "0",
-        supl3: form.supl3 || "", dosis3: form.dosis3 || "0",
-        provincia: form.provincia,
-      });
-    } catch(e) { return null; }
-  }, [form]);
+  // Usa motor.tray directamente — mismo cálculo que el dashboard, sin re-computar
+  const trayFull = motor?.tray ?? null;
 
   const [tooltip, setTooltip] = useState(null);
   const containerRef = useRef(null);
