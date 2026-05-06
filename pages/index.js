@@ -122,6 +122,19 @@ function CalfAIPro() {
       ];
       const updates = {};
       campos.forEach(k => { if (datos[k] !== undefined && datos[k] !== "") updates[k] = datos[k]; });
+      // Derivar zona desde provincia si el productor no la envió
+      if (!datos.zona && datos.provincia) {
+        const ZONA_PROV = {
+          "Corrientes":"NEA","Chaco":"NEA","Formosa":"NEA","Misiones":"NEA","Entre Ríos":"NEA",
+          "Salta":"NOA","Jujuy":"NOA","Tucumán":"NOA","Santiago del Estero":"NOA","Catamarca":"NOA",
+          "Buenos Aires":"Pampa Húmeda","Santa Fe":"Pampa Húmeda","Córdoba":"Pampa Húmeda","La Pampa":"Pampa Húmeda",
+          "Paraguay Oriental":"Paraguay Oriental","Chaco Paraguayo":"Chaco Paraguayo",
+          "Mato Grosso do Sul (BR)":"Brasil (Cerrado)","Mato Grosso / Goiás (BR)":"Brasil (Cerrado)",
+          "Santa Cruz / Beni (BO)":"Bolivia (Llanos)","Tarija / Chaco (BO)":"Bolivia (Llanos)",
+        };
+        const zonaDerivada = ZONA_PROV[datos.provincia];
+        if (zonaDerivada) updates.zona = zonaDerivada;
+      }
 
       if (Object.keys(updates).length > 0) {
         setForm(f => ({ ...f, ...updates }));

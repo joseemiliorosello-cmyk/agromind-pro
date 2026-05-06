@@ -35,10 +35,10 @@ const BIOTIPOS = [
 
 const PASTOS = [
   ["Pastizal natural NEA/Chaco", "Pastizal natural"],
-  ["Megatérmicas C4 (gatton panic, brachiaria)", "Gatton panic / Brachiaria"],
-  ["Pasturas templadas C3", "Pasturas templadas"],
-  ["Mixta gramíneas+leguminosas", "Mixta gramíneas + leguminosas"],
-  ["Bosque nativo", "Bosque nativo"],
+  ["Megatérmicas C4 (gatton panic, brachiaria)", "Megatérmicas C4"],
+  ["Pasturas templadas C3", "Pasturas templadas C3"],
+  ["Mixta gramíneas+leguminosas", "Mixta gramíneas+legum."],
+  ["Bosque nativo / monte", "Bosque nativo / monte"],
 ];
 
 const MESES_OPT = [
