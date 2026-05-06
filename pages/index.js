@@ -835,15 +835,35 @@ function CalfAIPro() {
         doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
         doc.text("INFORME IA — ANALISIS COMPLETO", ML+4, y+6);
         salto(12);
-        // Sanitizar: quitar markdown y emojis/caracteres fuera de Latin-1
-        // Latin-1 (0x20-0xFF) incluye á é í ó ú ü ñ Á É Ñ — Helvetica los soporta
-        const cleanIA = result
-          .replace(/\*\*(.*?)\*\*/g, "$1")           // negrita markdown → texto plano
-          .replace(/^#{1,3}\s+/gm, "— ")             // ## Titulo → — Titulo
-          .replace(/[^\x20-\xFF\n\r]/g, " ")         // eliminar emojis y no-Latin1
-          .replace(/[ \t]{2,}/g, " ");               // colapsar espacios múltiples
+        // Secciones del LLM: detectar marcadores emoji ANTES de sanitizar
+        const IA_SEC = [
+          { re: /1️⃣/u,  label: "1. DIAGNOSTICO INTEGRADO", fill:[30, 90, 50]  },
+          { re: /2️⃣/u,  label: "2. PUNTOS CRITICOS",       fill:[150,60, 15]  },
+          { re: /3️⃣/u,  label: "3. ESCENARIOS DE MEJORA",  fill:[20, 65, 130] },
+          { re: /4️⃣/u,  label: "4. PLAN DE ACCION",        fill:[60, 110, 45] },
+        ];
         doc.setFontSize(8.5); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
-        doc.splitTextToSize(cleanIA, AU).forEach(ln => { chk(5); doc.text(ln, ML, y); salto(4.5); });
+        result.split("\n").forEach(rawLn => {
+          const sec = IA_SEC.find(s => s.re.test(rawLn));
+          if (sec) {
+            salto(4); chk(13);
+            doc.setFillColor(...sec.fill);
+            doc.roundedRect(ML, y, AU, 7, 1.5, 1.5, "F");
+            doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+            doc.text(sec.label, ML+4, y+5);
+            salto(10);
+            doc.setFontSize(8.5); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
+            return;
+          }
+          const ln = rawLn
+            .replace(/\*\*(.*?)\*\*/g, "$1")
+            .replace(/^#{1,3}\s+/, "")
+            .replace(/[^\x20-\xFF]/g, " ")
+            .replace(/[ \t]{2,}/g, " ")
+            .trim();
+          if (!ln) { salto(3); return; }
+          doc.splitTextToSize(ln, AU).forEach(l => { chk(5); doc.text(l, ML, y); salto(4.5); });
+        });
         salto(3);
       }
 
