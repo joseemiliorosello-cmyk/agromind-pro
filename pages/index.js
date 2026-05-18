@@ -9,14 +9,14 @@ import { correrMotor, calcCadena, calcConsumoAgua, calcDisp,
          fmtFecha, dZona, dProv, smf, diagnosticarSistema,
          calcImpactoCola, calcFaseCiclo, calcConsumoPasto,
          getBiotipo, FENOLOGIAS, ccAPrenez } from "../lib/motor";
-import { calcCerebro, buildPromptFull, SYS_FULL } from "../lib/cerebro";
+import { calcCerebro, buildPromptBiblio, SYS_BIBLIO } from "../lib/cerebro";
 import { useMotor } from "../lib/useMotor";
 import { usePersistencia, PanelHistorial, calcConfianzaDiagnostico } from "../lib/persistencia";
 import { Pill, Alerta, smf2, DistCC, Input, LoadingPanel,
          MetricCard, SelectF, Slider, Toggle, SuplSelector, Toast } from "../components/ui";
 import { getPasoRenders, GraficoCCEscenarios, PanelAgua, PanelFaseCiclo } from "../components/pasos"
 import GraficosBalance from "../components/GraficosBalance";
-import { TabCerebro, PanelRecomendaciones, RenderInforme } from "../components/tabs";
+import { TabCerebro, PanelRecomendaciones, RenderInforme, PanelInformeCerebro } from "../components/tabs";
 import * as XLSX from "xlsx";
 
 const MSGS = [
@@ -65,6 +65,9 @@ function CalfAIPro() {
   const [loading,     setLoading]     = useState(false);
   const [loadMsg,     setLoadMsg]     = useState("");
   const [result,      setResult]      = useState("");
+  const [cerebroResult, setCerebroResult] = useState(null);
+  const [biblioResult,  setBiblioResult]  = useState("");
+  const [biblioLoading, setBiblioLoading] = useState(false);
   const [tab,         setTab]         = useState("resumen");
   const [modoForraje, setModoForraje] = useState("general");
   const [usaPotreros, setUsaPotreros] = useState(true);
@@ -325,31 +328,16 @@ function CalfAIPro() {
 
   // ── RUN ANALYSIS ──────────────────────────────────────────────
   async function runAnalysis() {
-    setLoading(true); setResult(""); setStep(5);
+    setLoading(true); setResult(""); setCerebroResult(null); setBiblioResult(""); setStep(5);
     let mi = 0;
-    const iv = setInterval(() => { setLoadMsg(MSGS[mi % MSGS.length]); mi++; }, 2200);
+    const iv = setInterval(() => { setLoadMsg(MSGS[mi % MSGS.length]); mi++; }, 800);
     try {
-      // Guardar en historial antes de analizar
       guardarEnHistorial(form, motor, null);
-      let cerebroData, prompt;
-      try {
-        cerebroData = calcCerebro(motor, form, sat, potreros);
-        prompt = buildPromptFull(motor, form, sat, cerebroData, potreros);
-      } catch (buildErr) {
-        console.error("Error generando el análisis:", buildErr);
-        setResult("❌ Error generando el análisis: " + buildErr.message);
-        return;
-      }
-      const res  = await fetch("/api/analyze", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ prompt, systemPrompt:SYS_FULL }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error del servidor");
-      setResult(data.result);
+      const cb = calcCerebro(motor, form, sat, potreros);
+      setCerebroResult(cb);
 
       // Notificar al owner (fire & forget)
+      const resumenCerebro = cb?.diagnostico?.resumen || "";
       fetch("/api/notify-owner", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -363,7 +351,7 @@ function CalfAIPro() {
           prenezEst:    (prenezDisplay !== null ? prenezDisplay : "—") + "% (" + prenezFuente + ")",
           condForr:     sat?.condForr,
           aguaTDS:      form.aguaTDS || "ND",
-          resumenInforme: (data.result || "").slice(0, 600),
+          resumenInforme: resumenCerebro.slice(0, 600),
         }),
       }).catch(() => {});
 
@@ -372,6 +360,26 @@ function CalfAIPro() {
     } finally {
       clearInterval(iv);
       setLoading(false);
+    }
+  }
+
+  async function runBiblio() {
+    if (!cerebroResult) return;
+    setBiblioLoading(true); setBiblioResult("");
+    try {
+      const prompt = buildPromptBiblio(cerebroResult);
+      const res  = await fetch("/api/analyze", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ prompt, systemPrompt: SYS_BIBLIO }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error del servidor");
+      setBiblioResult(data.result);
+    } catch (e) {
+      setBiblioResult("❌ " + e.message);
+    } finally {
+      setBiblioLoading(false);
     }
   }
 
@@ -2934,18 +2942,18 @@ function CalfAIPro() {
       </div>
 
       <div>
-      {/* Análisis IA */}
+      {/* Diagnóstico cerebro */}
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 18px" }}>
         <div style={{ fontFamily:C.font, fontSize:11, color:C.textDim, letterSpacing:1, marginBottom:12 }}>
-          INFORME IA — plan de acción personalizado
+          DIAGNÓSTICO — análisis algorítmico del sistema
         </div>
-        {!result && !loading && (
+        {!cerebroResult && !loading && !result && (
           <button onClick={runAnalysis} style={{
             width:"100%", padding:"14px", borderRadius:10, cursor:"pointer",
             background:C.green, border:"none",
             fontFamily:C.font, fontSize:13, fontWeight:700, color:"#fff",
           }}>
-            Generar informe con IA
+            Generar diagnóstico
           </button>
         )}
         {loading && <LoadingPanel msg={loadMsg} />}
@@ -2964,9 +2972,9 @@ function CalfAIPro() {
             </button>
           </div>
         )}
-        {result && !result.startsWith("❌") && (
+        {cerebroResult && (
           <>
-            <RenderInforme texto={result} />
+            <PanelInformeCerebro cb={cerebroResult} C={C} />
             <details style={{ marginTop:12 }}>
               <summary style={{ fontFamily:C.font, fontSize:10, color:C.textDim,
                 cursor:"pointer", padding:"10px 14px", background:C.card2,
@@ -2980,13 +2988,55 @@ function CalfAIPro() {
                 <PanelRecomendaciones motor={motor} form={form} />
               </div>
             </details>
+
+            {/* Bibliografía opcional vía Claude */}
+            <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+              <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
+                RESPALDO BIBLIOGRÁFICO (opcional)
+              </div>
+              {!biblioResult && !biblioLoading && (
+                <button onClick={runBiblio} style={{
+                  width:"100%", padding:"10px", borderRadius:10, cursor:"pointer",
+                  background:"transparent", border:`1px solid ${C.border}`,
+                  fontFamily:C.font, fontSize:11, color:C.textDim,
+                }}>
+                  Consultar evidencia científica con Claude
+                </button>
+              )}
+              {biblioLoading && (
+                <div style={{ fontFamily:C.fontSans, fontSize:12, color:C.textDim, padding:"10px 0", textAlign:"center" }}>
+                  Consultando literatura...
+                </div>
+              )}
+              {biblioResult && !biblioResult.startsWith("❌") && (
+                <details open style={{ marginTop:6 }}>
+                  <summary style={{ fontFamily:C.font, fontSize:10, color:C.textDim,
+                    cursor:"pointer", padding:"8px 12px", background:C.card2,
+                    borderRadius:8, border:`1px solid ${C.border}`,
+                    listStyle:"none", display:"flex", alignItems:"center",
+                    justifyContent:"space-between" }}>
+                    <span>Evidencia científica — Claude Sonnet</span>
+                    <span>&#9660;</span>
+                  </summary>
+                  <div style={{ marginTop:6 }}>
+                    <RenderInforme texto={biblioResult} />
+                  </div>
+                </details>
+              )}
+              {biblioResult && biblioResult.startsWith("❌") && (
+                <div style={{ fontFamily:C.fontSans, fontSize:11, color:C.red, marginTop:6 }}>
+                  {biblioResult}
+                </div>
+              )}
+            </div>
+
             <button onClick={runAnalysis} style={{
               marginTop:10, width:"100%", padding:10, borderRadius:10,
               cursor:"pointer", background:"transparent",
               border:`1px solid ${C.border}`,
               fontFamily:C.font, fontSize:11, color:C.textDim,
             }}>
-              Regenerar informe
+              Actualizar diagnóstico
             </button>
           </>
         )}

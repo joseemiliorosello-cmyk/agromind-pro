@@ -702,7 +702,125 @@ function PanelRecomendaciones({ motor, form }) {
   );
 }
 
+// ─── Panel de diagnóstico directo del cerebro (sin Claude) ─────────
+function PanelInformeCerebro({ cb }) {
+  if (!cb) return null;
+  const dx  = cb.diagnostico    || {};
+  const px  = cb.prescripciones || {};
+  const lim = px.limitantes     || [];
+  const res = px.resumen        || {};
+
+  const priorColor = { P1: T.red, P2: T.amber || "#e8a030", P3: T.textDim };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+
+      {/* Resumen narrativo */}
+      {dx.resumen && (
+        <div style={{ background:T.card2, borderRadius:10, padding:"14px 16px", border:`1px solid ${T.border}` }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, letterSpacing:1, marginBottom:8 }}>
+            DIAGNÓSTICO INTEGRADO
+          </div>
+          <div style={{ fontFamily:T.fontSans, fontSize:12.5, color:T.text, lineHeight:1.65 }}>
+            {dx.resumen}
+          </div>
+          {dx.faseCiclo && (
+            <div style={{ marginTop:8, fontFamily:T.font, fontSize:10, color:T.textDim }}>
+              Fase del ciclo: <span style={{ color:T.text }}>{dx.faseCiclo}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Alertas climáticas */}
+      {(dx.campoSeco || dx.callorExtremo || dx.faltaAgua) && (
+        <div style={{ background:`${T.red}10`, border:`1px solid ${T.red}30`, borderRadius:10, padding:"10px 14px",
+          display:"flex", flexDirection:"column", gap:4 }}>
+          {dx.campoSeco     && <div style={{ fontFamily:T.fontSans, fontSize:12, color:T.red }}>⚠ Campo seco — impacto en oferta forrajera y consumo voluntario</div>}
+          {dx.callorExtremo && <div style={{ fontFamily:T.fontSans, fontSize:12, color:T.red }}>⚠ Calor extremo — deprime consumo y fertilidad (NRC 2000)</div>}
+          {dx.faltaAgua     && <div style={{ fontFamily:T.fontSans, fontSize:12, color:T.red }}>⚠ Agua crítica — reducción de DMI confirmada</div>}
+        </div>
+      )}
+
+      {/* Proyección */}
+      {res.prenez > 0 && (
+        <div style={{ background:T.card2, borderRadius:10, padding:"14px 16px", border:`1px solid ${T.border}` }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, letterSpacing:1, marginBottom:10 }}>
+            PROYECCIÓN
+          </div>
+          <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"center" }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim }}>Preñez actual</div>
+              <div style={{ fontFamily:T.font, fontSize:22, color:T.text, fontWeight:700 }}>{res.prenez}%</div>
+            </div>
+            {res.prenezPot > res.prenez && (<>
+              <div style={{ fontFamily:T.font, fontSize:18, color:T.textDim }}>→</div>
+              <div>
+                <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim }}>Con mejoras</div>
+                <div style={{ fontFamily:T.font, fontSize:22, color:T.green, fontWeight:700 }}>{res.prenezPot}%</div>
+              </div>
+              {res.ternerosDif > 0 && (
+                <div style={{ background:`${T.green}15`, borderRadius:8, padding:"5px 12px", alignSelf:"center" }}>
+                  <span style={{ fontFamily:T.font, fontSize:13, color:T.green, fontWeight:700 }}>+{res.ternerosDif} terneros</span>
+                </div>
+              )}
+            </>)}
+          </div>
+          {res.ciclosAlColapso > 0 && (
+            <div style={{ marginTop:10, fontFamily:T.fontSans, fontSize:11, color:T.red }}>
+              ⚠ Sin corrección: en {res.ciclosAlColapso} ciclo{res.ciclosAlColapso > 1 ? "s" : ""} la CC al servicio colapsa a 3.5 y la preñez se derrumba
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Limitantes jerarquizados */}
+      {lim.length > 0 && (
+        <div style={{ background:T.card2, borderRadius:10, padding:"14px 16px", border:`1px solid ${T.border}` }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, letterSpacing:1, marginBottom:10 }}>
+            LIMITANTES JERARQUIZADOS
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {lim.slice(0, 8).map((l, i) => (
+              <div key={i} style={{
+                borderLeft:`3px solid ${priorColor[l.prioridad] || T.textDim}`,
+                paddingLeft:12, paddingTop:4, paddingBottom:4,
+              }}>
+                <div style={{ display:"flex", gap:5, alignItems:"center", marginBottom:3 }}>
+                  <span style={{ fontFamily:T.font, fontSize:9,
+                    color: priorColor[l.prioridad] || T.textDim,
+                    background:`${priorColor[l.prioridad] || T.textDim}18`,
+                    borderRadius:4, padding:"1px 6px" }}>
+                    {l.prioridad}
+                  </span>
+                  <span style={{ fontFamily:T.font, fontSize:9, color:T.textDim,
+                    background:T.card, borderRadius:4, padding:"1px 6px" }}>
+                    {l.categoria}
+                  </span>
+                </div>
+                <div style={{ fontFamily:T.fontSans, fontSize:12.5, color:T.text, fontWeight:600, marginBottom:2 }}>
+                  {l.titulo}
+                </div>
+                {l.impacto && (
+                  <div style={{ fontFamily:T.fontSans, fontSize:11.5, color:T.textDim }}>
+                    {l.impacto}
+                  </div>
+                )}
+                {l.solucion && (
+                  <div style={{ fontFamily:T.fontSans, fontSize:11.5, color:T.green, marginTop:2 }}>
+                    → {l.solucion}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export {
   RenderInforme, SimuladorEscenarios,
-  TabCerebro, PanelRecomendaciones,
+  TabCerebro, PanelRecomendaciones, PanelInformeCerebro,
 };
