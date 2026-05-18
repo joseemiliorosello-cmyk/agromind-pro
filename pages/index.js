@@ -250,7 +250,7 @@ function CalfAIPro() {
     fetchSat(refCoords.lat, refCoords.lon, form.zona || "NEA", form.provincia, form.enso, (data) => {
       setSat(data);
     });
-  }, [coords, form.enso, form.zona, form.provincia, form.localidad]);
+  }, [coords, form.enso, form.zona, form.provincia]);
 
   // ── Keyboard navigation ─────────────────────────────────────────
   useEffect(() => {
@@ -291,13 +291,17 @@ function CalfAIPro() {
         set("provincia", prov);
         // Reverse geocoding para obtener localidad
         try {
-          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json&accept-language=es`);
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json&accept-language=es&zoom=10`);
           const d = await r.json();
           const addr = d.address || {};
-          const loc = addr.city || addr.town || addr.village || addr.municipality || addr.county || addr.state_district || "";
-          if (loc) {
-            set("localidad", loc);
-            showToast(`📍 ${loc} · ${prov}`, "ok");
+          // Orden de preferencia: ciudad > pueblo > aldea > municipio > localidad > paraje > departamento > provincia
+          const loc = addr.city || addr.town || addr.village || addr.hamlet
+                   || addr.locality || addr.municipality || addr.suburb
+                   || addr.county || addr.state_district || "";
+          const locFinal = loc || d.display_name?.split(",")[0]?.trim() || "";
+          if (locFinal) {
+            set("localidad", locFinal);
+            showToast(`📍 ${locFinal} · ${prov}`, "ok");
           } else {
             showToast(`📍 ${prov} (${la.toFixed(3)}°, ${lo.toFixed(3)}°)`, "ok");
           }
