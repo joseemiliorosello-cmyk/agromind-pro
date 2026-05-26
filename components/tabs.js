@@ -842,6 +842,128 @@ function PanelInformeCerebro({ cb, confianza }) {
         </div>
       )}
 
+      {/* Potreros individuales */}
+      {cb.diagnostico?.potreros && !cb.diagnostico.potreros.sinDatos && (
+        <details>
+          <summary style={{ fontFamily:T.font, fontSize:10, color:T.textDim, letterSpacing:1,
+            cursor:"pointer", padding:"10px 14px", background:T.card2,
+            borderRadius:10, border:`1px solid ${T.border}`,
+            listStyle:"none", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <span>POTREROS — diagnóstico forrajero por lote</span>
+            <span>&#9660;</span>
+          </summary>
+          <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:8 }}>
+            {(cb.diagnostico.potreros.potrerosDx || []).map((p, i) => (
+              <div key={i} style={{ background:T.card2, borderRadius:8, padding:"10px 14px",
+                border:`1px solid ${T.border}`, borderLeft:`3px solid ${p.colorEstado}` }}>
+                <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:4, flexWrap:"wrap" }}>
+                  <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.text }}>
+                    P{p.idx} — {p.ha} ha
+                  </span>
+                  <span style={{ fontFamily:T.fontSans, fontSize:10, color:p.colorEstado,
+                    background:`${p.colorEstado}18`, borderRadius:4, padding:"1px 7px" }}>
+                    {p.estado}
+                  </span>
+                  <span style={{ fontFamily:T.font, fontSize:10, color:T.textDim }}>
+                    PB {p.pb}% · EM {p.em} Mcal/kg · ~{p.msHa} kg MS/ha
+                  </span>
+                </div>
+                <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.textDim }}>{p.veg}</div>
+                <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.text, marginTop:3 }}>→ {p.recom}</div>
+              </div>
+            ))}
+            <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.textDim,
+              background:T.card2, borderRadius:8, padding:"8px 12px",
+              border:`1px solid ${T.border}` }}>
+              {cb.diagnostico.potreros.conclusion}
+            </div>
+          </div>
+        </details>
+      )}
+
+      {/* Vaquillona */}
+      {cb.diagnostico?.vaquillona && (cb.diagnostico.vaquillona.hayVaq1 || cb.diagnostico.vaquillona.hayVaq2) && (
+        <details>
+          <summary style={{ fontFamily:T.font, fontSize:10, color:T.textDim, letterSpacing:1,
+            cursor:"pointer", padding:"10px 14px", background:T.card2,
+            borderRadius:10, border:`1px solid ${T.border}`,
+            listStyle:"none", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <span>REPOSICIÓN — vaquillona 1° y 2° invierno</span>
+            <span>&#9660;</span>
+          </summary>
+          <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:8 }}>
+            {cb.diagnostico.vaquillona.vaq1 && (() => {
+              const v = cb.diagnostico.vaquillona.vaq1;
+              const col = !v.llega ? T.red : v.gdpReal < v.gdpMin ? T.amber || "#e8a030" : T.green;
+              return (
+                <div style={{ background:T.card2, borderRadius:8, padding:"10px 14px",
+                  border:`1px solid ${T.border}`, borderLeft:`3px solid ${col}` }}>
+                  <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim, letterSpacing:1, marginBottom:6 }}>
+                    VAQUILLONA 1° INVIERNO ({v.n} cab)
+                  </div>
+                  <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:6 }}>
+                    <div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>GDP real</div>
+                      <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:col }}>{v.gdpReal} g/d</div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>mín {v.gdpMin} g/d</div>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>PV salida</div>
+                      <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:col }}>{v.pvSalida} kg</div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>obj {v.pvObjetivo} kg</div>
+                    </div>
+                    <div style={{ alignSelf:"center", fontFamily:T.font, fontSize:12,
+                      color:v.llega ? T.green : T.red, fontWeight:700 }}>
+                      {v.llega ? "✓ Llega" : "✗ No llega"}
+                    </div>
+                  </div>
+                  <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.textDim, lineHeight:1.5 }}>
+                    {v.conclusion}
+                  </div>
+                </div>
+              );
+            })()}
+            {cb.diagnostico.vaquillona.vaq2 && (() => {
+              const v = cb.diagnostico.vaquillona.vaq2;
+              const col = !v.llega ? T.red : T.green;
+              return (
+                <div style={{ background:T.card2, borderRadius:8, padding:"10px 14px",
+                  border:`1px solid ${T.border}`, borderLeft:`3px solid ${col}` }}>
+                  <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim, letterSpacing:1, marginBottom:6 }}>
+                    VAQUILLONA 2° INVIERNO — ENTORE ({v.n} cab)
+                  </div>
+                  <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:6 }}>
+                    <div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>PV al entore</div>
+                      <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:col }}>{v.pvEntore} kg</div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>mín {v.pvMinEntore} kg</div>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>% PV adulto</div>
+                      <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:col }}>{v.pct}%</div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>mín 75%</div>
+                    </div>
+                    <div style={{ alignSelf:"center", fontFamily:T.font, fontSize:12,
+                      color:v.llega ? T.green : T.red, fontWeight:700 }}>
+                      {v.llega ? "✓ Llega" : "✗ No llega"}
+                    </div>
+                    {v.aptaEntoreAntic && (
+                      <div style={{ alignSelf:"center", fontFamily:T.font, fontSize:11,
+                        color:T.green, background:`${T.green}18`, borderRadius:6, padding:"2px 8px" }}>
+                        Apta entore anticipado
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.textDim, lineHeight:1.5 }}>
+                    {v.conclusion}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </details>
+      )}
+
       {/* Aviso legal */}
       <div style={{ fontFamily:T.fontSans, fontSize:10, color:T.textDim, lineHeight:1.5,
         borderTop:`1px solid ${T.border}`, paddingTop:10, marginTop:4 }}>
