@@ -941,74 +941,84 @@ function PanelInformeCerebro({ cb, confianza }) {
             <span>&#9660;</span>
           </summary>
           <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:8 }}>
-            {cb.diagnostico.vaquillona.vaq1 && (() => {
-              const v = cb.diagnostico.vaquillona.vaq1;
-              const col = !v.llega ? T.red : v.gdpReal < v.gdpMin ? T.amber || "#e8a030" : T.green;
-              return (
-                <div style={{ background:T.card2, borderRadius:8, padding:"10px 14px",
-                  border:`1px solid ${T.border}`, borderLeft:`3px solid ${col}` }}>
-                  <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim, letterSpacing:1, marginBottom:6 }}>
-                    VAQUILLONA 1° INVIERNO ({v.n} cab)
+            {[
+              { v: cb.diagnostico.vaquillona.vaq1, titulo: "VAQUILLONA 1° INVIERNO", pvLabel: "PV agosto" },
+              { v: cb.diagnostico.vaquillona.vaq2, titulo: "VAQUILLONA 2° INVIERNO — ENTORE", pvLabel: "PV entore" },
+            ].map(({ v, titulo, pvLabel }) => v && (
+              <div key={titulo} style={{ background:T.card2, borderRadius:8, padding:"12px 14px",
+                border:`1px solid ${T.border}` }}>
+
+                {/* Encabezado */}
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim, letterSpacing:1 }}>
+                    {titulo} ({v.n} cab)
                   </div>
-                  <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:6 }}>
-                    <div>
-                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>GDP real</div>
-                      <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:col }}>{v.gdpReal} g/d</div>
-                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>mín {v.gdpMin} g/d</div>
-                    </div>
-                    <div>
-                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>PV salida</div>
-                      <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:col }}>{v.pvSalida} kg</div>
-                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>obj {v.pvObjetivo} kg</div>
-                    </div>
-                    <div style={{ alignSelf:"center", fontFamily:T.font, fontSize:12,
-                      color:v.llega ? T.green : T.red, fontWeight:700 }}>
-                      {v.llega ? "✓ Llega" : "✗ No llega"}
-                    </div>
-                  </div>
-                  <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.textDim, lineHeight:1.5 }}>
-                    {v.conclusion}
+                  <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700,
+                    color: v.llega ? T.green : T.red }}>
+                    {v.llega ? "En objetivo" : `Brecha ${v.balance?.brechaPV ?? 0} kg`}
                   </div>
                 </div>
-              );
-            })()}
-            {cb.diagnostico.vaquillona.vaq2 && (() => {
-              const v = cb.diagnostico.vaquillona.vaq2;
-              const col = !v.llega ? T.red : T.green;
-              return (
-                <div style={{ background:T.card2, borderRadius:8, padding:"10px 14px",
-                  border:`1px solid ${T.border}`, borderLeft:`3px solid ${col}` }}>
-                  <div style={{ fontFamily:T.font, fontSize:10, color:T.textDim, letterSpacing:1, marginBottom:6 }}>
-                    VAQUILLONA 2° INVIERNO — ENTORE ({v.n} cab)
+
+                {/* Balance: demanda / oferta / resultado */}
+                {v.balance && (
+                  <div style={{ background:T.bg, borderRadius:6, padding:"8px 10px", marginBottom:10,
+                    fontFamily:T.fontSans, fontSize:11 }}>
+                    <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, letterSpacing:1, marginBottom:4 }}>
+                      BALANCE INVERNAL
+                    </div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr auto", rowGap:2, columnGap:16 }}>
+                      <span style={{ color:T.textDim }}>Demanda GDP</span>
+                      <span style={{ textAlign:"right", color:T.text }}>+{v.balance.gdpDemanda} g/d</span>
+                      <span style={{ color:T.textDim }}>Oferta pasto</span>
+                      <span style={{ textAlign:"right", color: v.balance.gdpPasto < 0 ? T.red : T.text }}>
+                        {v.balance.gdpPasto >= 0 ? "+" : ""}{v.balance.gdpPasto} g/d
+                      </span>
+                      <span style={{ color:T.textDim }}>Oferta suplemento</span>
+                      <span style={{ textAlign:"right", color: v.balance.gdpSuplAporte > 0 ? T.green : T.textDim }}>
+                        +{v.balance.gdpSuplAporte} g/d
+                      </span>
+                      <span style={{ color:T.textDim, borderTop:`1px solid ${T.border}`, paddingTop:3, marginTop:2 }}>
+                        GDP resultante
+                      </span>
+                      <span style={{ textAlign:"right", fontWeight:700,
+                        color: v.balance.gdpReal >= v.balance.gdpDemanda ? T.green : T.red,
+                        borderTop:`1px solid ${T.border}`, paddingTop:3, marginTop:2 }}>
+                        {v.balance.gdpReal >= 0 ? "+" : ""}{v.balance.gdpReal} g/d
+                      </span>
+                      <span style={{ color:T.textDim }}>{pvLabel}</span>
+                      <span style={{ textAlign:"right", color:T.text }}>
+                        {v.balance.pvActual} kg
+                        <span style={{ color:T.textDim }}> / obj {v.balance.pvObjetivo} kg</span>
+                      </span>
+                    </div>
                   </div>
-                  <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:6 }}>
-                    <div>
-                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>PV al entore</div>
-                      <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:col }}>{v.pvEntore} kg</div>
-                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>mín {v.pvMinEntore} kg</div>
-                    </div>
-                    <div>
-                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>% PV adulto</div>
-                      <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:col }}>{v.pct}%</div>
-                      <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim }}>mín 75%</div>
-                    </div>
-                    <div style={{ alignSelf:"center", fontFamily:T.font, fontSize:12,
-                      color:v.llega ? T.green : T.red, fontWeight:700 }}>
-                      {v.llega ? "✓ Llega" : "✗ No llega"}
-                    </div>
-                    {v.aptaEntoreAntic && (
-                      <div style={{ alignSelf:"center", fontFamily:T.font, fontSize:11,
-                        color:T.green, background:`${T.green}18`, borderRadius:6, padding:"2px 8px" }}>
-                        Apta entore anticipado
-                      </div>
-                    )}
+                )}
+
+                {/* Diagnóstico: limitante */}
+                <div style={{ marginBottom:8 }}>
+                  <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, letterSpacing:1, marginBottom:3 }}>
+                    DIAGNÓSTICO
                   </div>
-                  <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.textDim, lineHeight:1.5 }}>
-                    {v.conclusion}
+                  <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.text, lineHeight:1.4 }}>
+                    {v.limitanteDetalle}
+                  </div>
+                  <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.textDim, lineHeight:1.4, marginTop:3 }}>
+                    {v.escenario}
                   </div>
                 </div>
-              );
-            })()}
+
+                {/* Recomendación */}
+                <div>
+                  <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, letterSpacing:1, marginBottom:3 }}>
+                    RECOMENDACIÓN
+                  </div>
+                  <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.text, lineHeight:1.5 }}>
+                    {v.recomendacion}
+                  </div>
+                </div>
+
+              </div>
+            ))}
           </div>
         </details>
       )}
