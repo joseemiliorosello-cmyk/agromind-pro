@@ -703,7 +703,7 @@ function PanelRecomendaciones({ motor, form }) {
 }
 
 // ─── Panel de diagnóstico directo del cerebro (sin Claude) ─────────
-function PanelInformeCerebro({ cb }) {
+function PanelInformeCerebro({ cb, confianza }) {
   if (!cb) return null;
   const dx  = cb.diagnostico    || {};
   const px  = cb.prescripciones || {};
@@ -714,6 +714,31 @@ function PanelInformeCerebro({ cb }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+
+      {/* Badge de confianza del diagnóstico */}
+      {confianza && (
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap",
+          background:T.card2, borderRadius:10, padding:"10px 14px", border:`1px solid ${T.border}` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ width:36, height:36, borderRadius:"50%",
+              background:`${confianza.color}22`, border:`2px solid ${confianza.color}`,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontFamily:T.font, fontSize:13, fontWeight:700, color:confianza.color }}>
+              {confianza.score}
+            </div>
+            <div>
+              <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, letterSpacing:1 }}>CONFIANZA</div>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:confianza.color }}>{confianza.label}</div>
+            </div>
+          </div>
+          {confianza.faltantes && confianza.faltantes.length > 0 && (
+            <div style={{ fontFamily:T.fontSans, fontSize:10.5, color:T.textDim, flex:1, minWidth:160 }}>
+              Completar para mayor precisión: {confianza.faltantes.slice(0, 3).join(", ")}
+              {confianza.faltantes.length > 3 ? ` +${confianza.faltantes.length - 3}` : ""}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Resumen narrativo */}
       {dx.resumen && (
@@ -816,6 +841,12 @@ function PanelInformeCerebro({ cb }) {
           </div>
         </div>
       )}
+
+      {/* Aviso legal */}
+      <div style={{ fontFamily:T.fontSans, fontSize:10, color:T.textDim, lineHeight:1.5,
+        borderTop:`1px solid ${T.border}`, paddingTop:10, marginTop:4 }}>
+        Las recomendaciones tienen carácter orientativo y no reemplazan el criterio del profesional que asiste al establecimiento.
+      </div>
     </div>
   );
 }

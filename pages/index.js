@@ -211,6 +211,11 @@ function CalfAIPro() {
   const confianza      = React.useMemo(() =>
     calcConfianzaDiagnostico(form, motor), [form, motor]);
 
+  const cerebroMemo    = useMemo(() => {
+    if (!motor) return null;
+    try { return calcCerebro(motor, form, sat, potreros); } catch { return null; }
+  }, [motor, form, sat, potreros]);
+
   const score          = React.useMemo(() =>
     motor ? calcScore(motor, form, null) : null,
   [motor, form]);
@@ -333,11 +338,10 @@ function CalfAIPro() {
     const iv = setInterval(() => { setLoadMsg(MSGS[mi % MSGS.length]); mi++; }, 800);
     try {
       guardarEnHistorial(form, motor, null);
-      const cb = calcCerebro(motor, form, sat, potreros);
-      setCerebroResult(cb);
+      setCerebroResult(cerebroMemo);
 
       // Notificar al owner (fire & forget)
-      const resumenCerebro = cb?.diagnostico?.resumen || "";
+      const resumenCerebro = cerebroMemo?.diagnostico?.resumen || "";
       fetch("/api/notify-owner", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -473,7 +477,7 @@ function CalfAIPro() {
       }
 
       // ── PUNTOS CRÍTICOS DEL MOTOR ────────────────────────────────────
-      const cerebPDF = motor ? calcCerebro(motor, form, sat, potreros) : null;
+      const cerebPDF = cerebroMemo;
       const critiPDF = cerebPDF ? (cerebPDF.prescripciones?.tarjetas||[]).filter(t => t.prioridad==="P1"||t.prioridad==="URGENTE").slice(0,3) : [];
       if (critiPDF.length > 0) {
         chk(15);
@@ -968,7 +972,7 @@ function CalfAIPro() {
     const fecha   = new Date().toLocaleDateString("es-AR");
     const isoDate = new Date().toISOString().slice(0,10);
     const dispMS  = calcDisponibilidadMS(form.altPasto, form.tipoPasto);
-    const cb      = calcCerebro(motor, form, sat, potreros);
+    const cb      = cerebroMemo;
     const sc      = calcScore(motor, form, null);
 
     // Datos derivados reutilizables
@@ -2694,7 +2698,7 @@ function CalfAIPro() {
     potreros, setPotreros, runAnalysis,
     pvEntVaq1, pvSalidaVaq1, pvEntradaVaq2,
     nVacas, nToros, nV2s, nVaq1, nVaq2, cadena, disponMS, tcSave,
-    PASOS, C, cerebro: calcCerebro(motor, form, sat, potreros),
+    PASOS, C, cerebro: cerebroMemo,
   });
 
   // ── 6 pasos de planilla de carga ───────────────────────────────
@@ -2972,9 +2976,15 @@ function CalfAIPro() {
             </button>
           </div>
         )}
+        {form.zona && form.zona !== "NEA" && (
+          <div style={{ background:`#e8a03018`, border:`1px solid #e8a03060`, borderRadius:10,
+            padding:"10px 14px", fontFamily:C.fontSans, fontSize:12, color:"#e8a030", marginBottom:4 }}>
+            ⚠ Sistema calibrado para NEA/Chaco — los resultados para otras zonas son orientativos y requieren validación local.
+          </div>
+        )}
         {cerebroResult && (
           <>
-            <PanelInformeCerebro cb={cerebroResult} C={C} />
+            <PanelInformeCerebro cb={cerebroResult} C={C} confianza={confianza} />
             <details style={{ marginTop:12 }}>
               <summary style={{ fontFamily:C.font, fontSize:10, color:C.textDim,
                 cursor:"pointer", padding:"10px 14px", background:C.card2,
@@ -2993,6 +3003,11 @@ function CalfAIPro() {
             <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
               <div style={{ fontFamily:C.font, fontSize:10, color:C.textDim, letterSpacing:1, marginBottom:8 }}>
                 RESPALDO BIBLIOGRÁFICO (opcional)
+              </div>
+              <div style={{ fontFamily:C.fontSans, fontSize:10.5, color:C.textDim,
+                background:C.card2, borderRadius:8, padding:"7px 12px", marginBottom:8,
+                borderLeft:`3px solid ${C.textDim}` }}>
+                ⚠ Las citas son generadas por IA y pueden contener errores o referencias inexistentes. Verificar toda fuente antes de usar en informes técnicos.
               </div>
               {!biblioResult && !biblioLoading && (
                 <button onClick={runBiblio} style={{
