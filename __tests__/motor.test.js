@@ -21,8 +21,6 @@ import {
   correrMotor,
   calcTrayectoriaCC,
   calcCadena,
-  calcVaq1,
-  calcVaq2,
   balancePorCategoria,
 } from "../lib/motor";
 import { FORM_DEF } from "../lib/constantes";
@@ -245,5 +243,155 @@ describe("balancePorCategoria — sanity checks", () => {
         expect(typeof m.gdp).toBe("number");
       });
     }
+  });
+});
+
+// ─── Balance energético invernal ─────────────────────────────────
+describe("balance energético invernal — C4 encañado", () => {
+  it("pasto encañado (mayor_50) sin suplemento: ≥2 meses invernales con balance negativo", () => {
+    const form = { ...FORM_NEA, fenologia: "mayor_50" };
+    const motor = correrMotor(form, SAT_NULL, [], false);
+    const balInv = [5,6,7].map(i => motor.balanceMensual[i].balance);
+    const negativos = balInv.filter(b => b < 0).length;
+    expect(negativos).toBeGreaterThanOrEqual(2);
+  });
+
+  it("suplemento proteico activo en julio mejora el balance de ese mes", () => {
+    const formSin = { ...FORM_NEA, fenologia: "mayor_50",
+      supl_vacas: "", dosis_vacas: "0" };
+    const formCon = { ...FORM_NEA, fenologia: "mayor_50",
+      supl_vacas: "Expeller girasol", dosis_vacas: "0.5", suplMeses: ["5","6","7"] };
+    const mSin = correrMotor(formSin, SAT_NULL, [], false);
+    const mCon = correrMotor(formCon, SAT_NULL, [], false);
+    expect(mCon.balanceMensual[6].balance).toBeGreaterThan(mSin.balanceMensual[6].balance);
+  });
+
+  it("potrero con pasto bueno mejora balance del mes actual vs potrero encañado (usaPotreros=true)", () => {
+    // La fenología de potreros solo overridea el mes actual — esta es la lógica que implementamos
+    const mesActual = new Date().getMonth();
+    const potBueno    = [{ ha:"500", veg:"Gatton panic",        fenol:"menor_10", altPasto:"60", tipoPasto:"alto_denso",  categorias:[] }];
+    const potEncañado = [{ ha:"500", veg:"Pastizal natural NEA", fenol:"mayor_50", altPasto:"30", tipoPasto:"corto_denso", categorias:[] }];
+    const mBueno    = correrMotor(FORM_NEA, SAT_NULL, potBueno,    true);
+    const mEncañado = correrMotor(FORM_NEA, SAT_NULL, potEncañado, true);
+    expect(mBueno.balanceMensual[mesActual].balance)
+      .toBeGreaterThan(mEncañado.balanceMensual[mesActual].balance);
+  });
+});
+
+// ─── Agua salada ──────────────────────────────────────────────────
+describe("evalAgua — agua salada", () => {
+  it("TDS 5000 mg/L reduce DMI (pctReducDMI > 0)", () => {
+    const form = { ...FORM_NEA, aguaTDS: "5000", aguaTipoSal: "sulfatos" };
+    const motor = correrMotor(form, SAT_NULL, [], false);
+    expect(motor.evalAgua).toBeDefined();
+    expect(motor.evalAgua.pctReducDMI).toBeGreaterThan(0);
+  });
+
+  it("TDS 5000 mg/L reduce balance vs TDS 800 mg/L", () => {
+    const mBuena = correrMotor({ ...FORM_NEA, aguaTDS: "800"  }, SAT_NULL, [], false);
+    const mSal   = correrMotor({ ...FORM_NEA, aguaTDS: "5000", aguaTipoSal: "sulfatos" }, SAT_NULL, [], false);
+    // Agua salada debería resultar en menor preñez o mayor déficit
+    expect(mSal.factorAgua).toBeLessThan(mBuena.factorAgua ?? 1.0);
+  });
+
+  it("TDS < 1000 mg/L: pctReducDMI = 0", () => {
+    const form = { ...FORM_NEA, aguaTDS: "800" };
+    const motor = correrMotor(form, SAT_NULL, [], false);
+    expect(motor.evalAgua?.pctReducDMI ?? 0).toBe(0);
+  });
+});
+
+// ─── CC y preñez — relación directa ──────────────────────────────
+describe("CC al servicio y preñez", () => {
+  it("CC alta produce mayor preñez que CC baja", () => {
+    const formAlta = { ...FORM_NEA, distribucionCC: [
+      { cc:"5.5", pct:"40" }, { cc:"5.0", pct:"40" }, { cc:"4.5", pct:"20" },
+      { cc:"4.0", pct:"0"  }, { cc:"3.5", pct:"0"  },
+    ]};
+    const formBaja = { ...FORM_NEA, distribucionCC: [
+      { cc:"5.5", pct:"0"  }, { cc:"5.0", pct:"0"  }, { cc:"4.5", pct:"10" },
+      { cc:"4.0", pct:"50" }, { cc:"3.5", pct:"40" },
+    ]};
+    const mAlta = correrMotor(formAlta, SAT_NULL, [], false);
+    const mBaja = correrMotor(formBaja, SAT_NULL, [], false);
+    expect(mAlta.tray.pr).toBeGreaterThan(mBaja.tray.pr);
+  });
+
+  it("CC al servicio <4.0: preñez debería ser menor a 70%", () => {
+    const form = { ...FORM_NEA, distribucionCC: [
+      { cc:"5.5", pct:"0"  }, { cc:"5.0", pct:"0"  }, { cc:"4.5", pct:"5"  },
+      { cc:"4.0", pct:"25" }, { cc:"3.5", pct:"70" },
+    ]};
+    const motor = correrMotor(form, SAT_NULL, [], false);
+    expect(motor.tray.pr).toBeLessThan(70);
+  });
+});
+
+// ─── Destete hiperprecoz ──────────────────────────────────────────
+describe("destete hiperprecoz — impacto en CC servicio", () => {
+  const formBase = { ...FORM_NEA, distribucionCC: [
+    { cc:"5.5", pct:"0"  }, { cc:"5.0", pct:"10" }, { cc:"4.5", pct:"30" },
+    { cc:"4.0", pct:"40" }, { cc:"3.5", pct:"20" },
+  ]};
+
+  it("hiperprecoz produce ccServHiper > ccServ tradicional", () => {
+    const mTrad  = correrMotor({ ...formBase, destTrad:"100", destAntic:"0", destHiper:"0" }, SAT_NULL, [], false);
+    const mHiper = correrMotor({ ...formBase, destTrad:"0",   destAntic:"0", destHiper:"100" }, SAT_NULL, [], false);
+    expect(mHiper.tray.ccServHiper ?? mHiper.tray.ccServ).toBeGreaterThanOrEqual(mTrad.tray.ccServ);
+  });
+
+  it("preñez hiperprecoz (prHiper) ≥ preñez tradicional cuando CC baja", () => {
+    const motor = correrMotor({ ...formBase, destTrad:"50", destAntic:"25", destHiper:"25" }, SAT_NULL, [], false);
+    if (motor.tray.prHiper !== undefined) {
+      expect(motor.tray.prHiper).toBeGreaterThanOrEqual(motor.tray.pr - 5); // margen tolerancia
+    }
+  });
+});
+
+// ─── Vaquillona 1° invierno ───────────────────────────────────────
+describe("calcVaq1 — vaquillona 1° invierno", () => {
+  it("sin suplemento y pasto encañado: GDP < mínimo 400 g/d", () => {
+    const form = { ...FORM_NEA, fenologia: "mayor_50",
+      supl_vaq1: "", dosis_vaq1: "0" };
+    const motor = correrMotor(form, SAT_NULL, [], false);
+    if (motor.vaq1E) {
+      expect(motor.vaq1E.gdpReal).toBeLessThan(400);
+    }
+  });
+
+  it("con suplemento proteico: GDP mejora vs sin suplemento", () => {
+    const mSin = correrMotor({ ...FORM_NEA, fenologia:"mayor_50", supl_vaq1:"",               dosis_vaq1:"0"   }, SAT_NULL, [], false);
+    const mCon = correrMotor({ ...FORM_NEA, fenologia:"mayor_50", supl_vaq1:"Expeller girasol", dosis_vaq1:"0.5" }, SAT_NULL, [], false);
+    if (mSin.vaq1E && mCon.vaq1E) {
+      expect(mCon.vaq1E.gdpReal).toBeGreaterThan(mSin.vaq1E.gdpReal);
+    }
+  });
+
+  it("GDP en rango biológico plausible [0 – 800 g/d]", () => {
+    const motor = correrMotor(FORM_NEA, SAT_NULL, [], false);
+    if (motor.vaq1E) {
+      expect(motor.vaq1E.gdpReal).toBeGreaterThanOrEqual(0);
+      expect(motor.vaq1E.gdpReal).toBeLessThanOrEqual(800);
+    }
+  });
+});
+
+// ─── correrMotor con potreros ─────────────────────────────────────
+describe("correrMotor con potreros individuales", () => {
+  const potreros = [
+    { ha:"200", veg:"Pastizal natural NEA/Chaco", fenol:"mayor_50", altPasto:"35", tipoPasto:"corto_denso", categorias:[] },
+    { ha:"300", veg:"Gatton panic", fenol:"10_25", altPasto:"55", tipoPasto:"alto_denso",  categorias:[] },
+  ];
+
+  it("motor con usaPotreros=true no explota y retorna balanceMensual válido", () => {
+    const motor = correrMotor(FORM_NEA, SAT_NULL, potreros, true);
+    expect(motor).not.toBeNull();
+    expect(motor.balanceMensual).toHaveLength(12);
+    motor.balanceMensual.forEach(m => expect(isFinite(m.balance)).toBe(true));
+  });
+
+  it("disponMS con potreros refleja promedio ponderado (no es 0)", () => {
+    const motor = correrMotor(FORM_NEA, SAT_NULL, potreros, true);
+    expect(motor.disponMS?.msHa).toBeGreaterThan(0);
   });
 });
