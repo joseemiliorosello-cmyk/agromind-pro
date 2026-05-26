@@ -750,8 +750,15 @@ function PanelInformeCerebro({ cb, confianza }) {
             {dx.resumen}
           </div>
           {dx.faseCiclo && (
-            <div style={{ marginTop:8, fontFamily:T.font, fontSize:10, color:T.textDim }}>
-              Fase del ciclo: <span style={{ color:T.text }}>{dx.faseCiclo}</span>
+            <div style={{ marginTop:8, fontFamily:T.font, fontSize:10, color:T.textDim,
+              display:"flex", alignItems:"center", gap:6 }}>
+              <span>{dx.faseCiclo.icono}</span>
+              <span style={{ color:dx.faseCiclo.color || T.text, fontWeight:600 }}>
+                {dx.faseCiclo.label || dx.faseCiclo.fase}
+              </span>
+              {dx.faseCiclo.descripcion && (
+                <span style={{ color:T.textDim }}>— {dx.faseCiclo.descripcion}</span>
+              )}
             </div>
           )}
         </div>
