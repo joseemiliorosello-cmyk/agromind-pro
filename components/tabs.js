@@ -847,6 +847,50 @@ function PanelInformeCerebro({ cb, confianza }) {
         </div>
       )}
 
+      {/* Ventanas de acción — cuándo actuar */}
+      {cb.diagnostico?.momento?.ventanas?.length > 0 && (
+        <div style={{ background:T.card2, borderRadius:10, padding:"14px 16px", border:`1px solid ${T.border}` }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textDim, letterSpacing:1, marginBottom:10 }}>
+            VENTANAS DE ACCIÓN
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {cb.diagnostico.momento.ventanas.slice(0, 4).map((v, i) => {
+              const urgCol = v.urgencia === "URGENTE" ? T.red : v.urgencia === "PRÓXIMO" ? T.amber || "#e8a030" : T.textDim;
+              return (
+                <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                  <div style={{ minWidth:72, fontFamily:T.font, fontSize:9, fontWeight:700,
+                    color:urgCol, background:`${urgCol}18`, borderRadius:4, padding:"2px 7px",
+                    textAlign:"center", marginTop:2, flexShrink:0 }}>
+                    {v.urgencia}
+                  </div>
+                  <div>
+                    <div style={{ fontFamily:T.font, fontSize:12, color:T.text, fontWeight:600 }}>
+                      {v.accion}
+                    </div>
+                    <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.textDim, marginTop:1 }}>
+                      {v.detalle}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Eficiencia reproductiva — cola de parición */}
+      {cb.diagnostico?.eficiencia?.kgPerdidos > 5 && (
+        <div style={{ background:`${T.amber || "#e8a030"}10`, border:`1px solid ${T.amber || "#e8a030"}30`,
+          borderRadius:10, padding:"10px 14px" }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.amber || "#e8a030", letterSpacing:1, marginBottom:6 }}>
+            EFICIENCIA REPRODUCTIVA
+          </div>
+          <div style={{ fontFamily:T.fontSans, fontSize:12, color:T.text, lineHeight:1.55 }}>
+            {cb.diagnostico.eficiencia.conclusion}
+          </div>
+        </div>
+      )}
+
       {/* Potreros individuales */}
       {cb.diagnostico?.potreros && !cb.diagnostico.potreros.sinDatos && (
         <details>
@@ -858,7 +902,7 @@ function PanelInformeCerebro({ cb, confianza }) {
             <span>&#9660;</span>
           </summary>
           <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:8 }}>
-            {(cb.diagnostico.potreros.potrerosDx || []).map((p, i) => (
+            {(cb.diagnostico?.potreros?.potrerosDx || []).map((p, i) => (
               <div key={i} style={{ background:T.card2, borderRadius:8, padding:"10px 14px",
                 border:`1px solid ${T.border}`, borderLeft:`3px solid ${p.colorEstado}` }}>
                 <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:4, flexWrap:"wrap" }}>
@@ -880,7 +924,7 @@ function PanelInformeCerebro({ cb, confianza }) {
             <div style={{ fontFamily:T.fontSans, fontSize:11, color:T.textDim,
               background:T.card2, borderRadius:8, padding:"8px 12px",
               border:`1px solid ${T.border}` }}>
-              {cb.diagnostico.potreros.conclusion}
+              {cb.diagnostico?.potreros?.conclusion}
             </div>
           </div>
         </details>
