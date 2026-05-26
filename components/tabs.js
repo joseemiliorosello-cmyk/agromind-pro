@@ -6,12 +6,11 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { calcTrayectoriaCC, diagnosticarSistema } from "../lib/motor";
-import { calcCerebro, analizarMargenOptimizacion } from "../lib/cerebro";
+import { calcCerebro } from "../lib/cerebro";
 import React from "react";
-import { T as C, MESES_NOM } from "../lib/constantes"
+import { T as C } from "../lib/constantes"
 const T = C;
 const DISCLAIMER = "Las recomendaciones generadas por AgroMind Pro tienen carácter orientativo y deben ser validadas por un profesional veterinario o ingeniero agrónomo habilitado antes de su implementación. Los resultados dependen de la calidad y completitud de los datos ingresados.";
-import { Pill, Alerta, smf } from "./ui";
 
 const SEC_EMOJIS = ["1️⃣","2️⃣","3️⃣","4️⃣"];
 const SEC_TITLES = ["Diagnóstico integrado","Puntos críticos","Escenarios de mejora","Plan de acción"];
@@ -591,7 +590,6 @@ function PanelRecomendaciones({ motor, form }) {
             const clave  = claves[0];
             if (!clave) return null;
             const vB = base[clave], vC = conP[clave];
-            const mejor = typeof vB === "number" ? vC > vB : vC;
             return (
               <div style={{ textAlign:"right", flexShrink:0 }}>
                 <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, marginBottom:2 }}>
