@@ -367,10 +367,10 @@ describe("calcVaq1 — vaquillona 1° invierno", () => {
     }
   });
 
-  it("GDP en rango biológico plausible [0 – 800 g/d]", () => {
+  it("GDP en rango biológico plausible [-150 – 800 g/d] (pérdida invernal sin suplemento es válida)", () => {
     const motor = correrMotor(FORM_NEA, SAT_NULL, [], false);
     if (motor.vaq1E) {
-      expect(motor.vaq1E.gdpReal).toBeGreaterThanOrEqual(0);
+      expect(motor.vaq1E.gdpReal).toBeGreaterThanOrEqual(-150);
       expect(motor.vaq1E.gdpReal).toBeLessThanOrEqual(800);
     }
   });
