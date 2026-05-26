@@ -391,567 +391,700 @@ function CalfAIPro() {
   function descargarPDF() {
     const gen = (jsPDF) => { try {
       const doc = new jsPDF({ orientation:"portrait", unit:"mm", format:"a4" });
-      const W = 210, ML = 15, MR = 15, AU = W - ML - MR;
-      let y = 15;
+      const W = 210, ML = 14, MR = 14, AU = W - ML - MR;
+      let y = 14;
       const salto = (n = 5) => { y += n; };
-      const chk   = (n = 15) => { if (y + n > 285) { doc.addPage(); y = 15; } };
+      const chk   = (n = 15) => { if (y + n > 284) { doc.addPage(); y = 14; } };
+      const txt   = (s) => String(s||"").replace(/[^\x20-\xFF]/g, " ").replace(/\s{2,}/g, " ").trim();
+      const G  = [45,106,31],  Gl = [230,248,230], Gd = [20,40,22];
+      const R  = [204,60,40],  Rl = [255,242,240];
+      const Am = [200,140,20], Al = [255,250,230];
+      const Bl = [50,100,180], Bll= [230,240,255];
+      const Gr = [100,100,100];
 
-      // Header
-      doc.setFillColor(45, 106, 31);
-      doc.roundedRect(ML, y, AU, 14, 3, 3, "F");
-      doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-      doc.text("CALF AI — Informe Técnico de Cría", ML+4, y+9);
-      salto(18);
-
-      // Subtítulo
-      doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(80,80,80);
-      doc.text(`${form.nombreProductor||"—"} · ${form.zona||form.provincia||"—"} · ${new Date().toLocaleDateString("es-AR")} · Biotipo: ${form.biotipo||"—"}`, ML, y);
-      salto(4);
-      doc.setDrawColor(45,106,31); doc.setLineWidth(0.5); doc.line(ML, y, ML+AU, y);
-      salto(7);
-
-      // ── CONTEXTO — MOMENTO DEL CICLO ────────────────────────────────────
-      const faseCicloPDF = (motor?.cadena || (form.iniServ && form.finServ))
-        ? (() => { try { return calcFaseCiclo(
-            motor?.cadena ?? calcCadena(form.iniServ, form.finServ), form, {
-              ccServ: parseFloat(tray?.ccServ || 0),
-              mesesDeficit: (motor?.balanceMensual ?? []).filter(m=>[5,6,7].includes(m.i)&&m.balance<0).length,
-            }); } catch(e) { return null; } })()
-        : null;
-      if (faseCicloPDF && faseCicloPDF.fase !== "SIN_FECHA") {
-        chk(14);
-        const [fcR,fcG,fcB] = (faseCicloPDF.color||"#888888").match(/[\da-fA-F]{2}/g)?.map(h=>parseInt(h,16)) ?? [80,130,80];
-        doc.setFillColor(fcR+Math.round((255-fcR)*0.82), fcG+Math.round((255-fcG)*0.82), fcB+Math.round((255-fcB)*0.82));
-        doc.roundedRect(ML, y, AU, 9, 2, 2, "F");
-        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(fcR,fcG,fcB);
-        const sigTxt = faseCicloPDF.siguiente ? `  |  prox: ${faseCicloPDF.siguiente.label} en ${faseCicloPDF.siguiente.diasFaltan}d` : "";
-        doc.text(`MOMENTO DEL CICLO: ${(faseCicloPDF.label||"").toUpperCase()}${sigTxt}`, ML+3, y+5.5, {maxWidth:AU-6});
-        salto(12);
-        if (faseCicloPDF.descripcion) {
-          doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(70,70,70);
-          doc.text(faseCicloPDF.descripcion.split(".")[0] + ".", ML, y, {maxWidth:AU}); salto(6);
-        }
-      }
-
-      // KPIs
-      const kpis = [
-        ["CC hoy",      ccPondVal > 0 ? ccPondVal.toFixed(1) : "sin dato"],
-        ["CC serv.",    tray?.ccServ  || "—"],
-        ["Preñez " + prenezFuente, (prenezDisplay !== null ? prenezDisplay : "—") + "%"],
-        ["Anestro",     (tray?.anestro?.dias || "—") + "d"],
-        ["Agua",        form.aguaTDS ? (form.aguaTDS + "mg/L") : "ND"],
-      ];
-      const kW = AU / kpis.length;
-      kpis.forEach(([l, v], ki) => {
-        const kx = ML + ki * kW;
-        doc.setFillColor(240,248,235); doc.roundedRect(kx, y, kW-2, 14, 2, 2, "F");
-        doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
-        doc.text(l, kx + kW/2-1, y+5, { align:"center" });
-        doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(45,106,31);
-        doc.text(String(v), kx + kW/2-1, y+11, { align:"center" });
-      });
-      salto(20);
-
-
-      // ── SCORE POR DIMENSIÓN ──────────────────────────────────────────
-      const scoreData = motor ? calcScore(motor, form, null) : null;
-      if (scoreData) {
-        chk(30);
-        doc.setFillColor(20, 40, 22);
-        doc.roundedRect(ML, y, AU, 9, 2, 2, "F");
-        doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-        doc.text("SCORE: " + scoreData.total + "/100 — " + scoreData.labelTotal, ML+4, y+6);
-        salto(12);
-        const dimW = AU / scoreData.dim.length;
-        scoreData.dim.forEach((d, di) => {
-          const dx = ML + di * dimW;
-          const col = d.score >= 75 ? [126,200,80] : d.score >= 50 ? [232,160,48] : [224,85,48];
-          doc.setFillColor(240,245,240);
-          doc.roundedRect(dx, y, dimW-2, 14, 1, 1, "F");
-          doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
-          doc.text(d.nombre, dx + (dimW-2)/2, y+5, { align:"center", maxWidth: dimW-4 });
-          doc.setFontSize(10); doc.setFont("helvetica","bold"); doc.setTextColor(col[0],col[1],col[2]);
-          doc.text(String(d.score), dx + (dimW-2)/2, y+11, { align:"center" });
+      // ── helpers ──────────────────────────────────────────────────
+      const seccion = (titulo, fillRGB = Gd, textRGB = [255,255,255], h = 8) => {
+        chk(h + 4);
+        doc.setFillColor(...fillRGB);
+        doc.roundedRect(ML, y, AU, h, 2, 2, "F");
+        doc.setFontSize(8.5); doc.setFont("helvetica","bold"); doc.setTextColor(...textRGB);
+        doc.text(titulo, ML+4, y + h/2 + 1.5);
+        salto(h + 4);
+      };
+      const subsec = (titulo, colorRGB = G) => {
+        chk(7);
+        doc.setDrawColor(...colorRGB); doc.setLineWidth(0.4);
+        doc.line(ML, y, ML+5, y);
+        doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(...colorRGB);
+        doc.text(titulo.toUpperCase(), ML+7, y+0.5);
+        salto(5);
+      };
+      const dato = (label, valor, col = Gr) => {
+        chk(5);
+        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...Gr);
+        doc.text(txt(label)+":", ML, y);
+        doc.setFont("helvetica","bold"); doc.setTextColor(...col);
+        doc.text(txt(valor), ML+52, y);
+        salto(4.5);
+      };
+      const dato2 = (l1,v1,l2,v2) => {
+        chk(5);
+        const hw = AU/2;
+        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...Gr);
+        doc.text(txt(l1)+":", ML, y);
+        doc.setFont("helvetica","bold"); doc.setTextColor(...Gd);
+        doc.text(txt(v1), ML+40, y);
+        doc.setFont("helvetica","normal"); doc.setTextColor(...Gr);
+        doc.text(txt(l2)+":", ML+hw, y);
+        doc.setFont("helvetica","bold"); doc.setTextColor(...Gd);
+        doc.text(txt(v2), ML+hw+40, y);
+        salto(4.5);
+      };
+      const parrafo = (texto, indent=0, color=Gd, fs=7.5) => {
+        const lines = doc.splitTextToSize(txt(texto), AU-indent);
+        lines.forEach(ln => { chk(5); doc.setFontSize(fs); doc.setFont("helvetica","normal"); doc.setTextColor(...color); doc.text(ln, ML+indent, y); salto(4.5); });
+      };
+      const kpiRow = (items) => {
+        const kW = AU/items.length;
+        items.forEach(([label,val,col=[45,140,60]], ki) => {
+          const kx = ML+ki*kW;
+          doc.setFillColor(245,250,245); doc.roundedRect(kx,y,kW-2,15,2,2,"F");
+          doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(110,110,110);
+          doc.text(txt(label), kx+kW/2-1, y+4.5, {align:"center"});
+          doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(...col);
+          doc.text(txt(val), kx+kW/2-1, y+11.5, {align:"center"});
         });
         salto(18);
+      };
+      const barChart = (values, labels, h, zero, scaleLabel="Mcal/d") => {
+        chk(h+10);
+        const n = values.length;
+        const bW = AU/n;
+        const absMax = Math.max(1, ...values.map(Math.abs));
+        const scale  = (h/2 - 2) / absMax;
+        const zy     = y + h/2;
+        doc.setDrawColor(200,200,200); doc.setLineWidth(0.15);
+        doc.line(ML, zy, ML+AU, zy);
+        values.forEach((v, i) => {
+          const bx  = ML + i*bW + 0.5;
+          const bH  = Math.max(0.3, Math.abs(v)*scale);
+          const by  = v >= 0 ? zy - bH : zy;
+          const col = v >= 0 ? [29,158,117] : [220,65,65];
+          if (zero && zero.includes(i)) { doc.setFillColor(255,250,230); doc.rect(ML+i*bW, y, bW, h, "F"); }
+          doc.setFillColor(...col); doc.rect(bx, by, bW-1, bH, "F");
+          if (labels) {
+            doc.setFontSize(4.5); doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120);
+            doc.text(labels[i]||"", ML+i*bW+bW/2, y+h+3, {align:"center"});
+          }
+          if (Math.abs(v) > absMax*0.05) {
+            doc.setFontSize(4); doc.setTextColor(...col);
+            const vStr = (v>=0?"+":"")+Math.round(v);
+            doc.text(vStr, bx+bW/2-1, v>=0?by-1:by+bH+3, {align:"center"});
+          }
+        });
+        if (scaleLabel) {
+          doc.setFontSize(4.5); doc.setTextColor(160,160,160);
+          doc.text(scaleLabel, ML+AU, y, {align:"right"});
+        }
+        salto(h+7);
+      };
+      const ccChart = (ccLine, mesParto, mesDestete, mesServ, h=28) => {
+        chk(h+8);
+        const PL=12,PR=4,PT=3,PB=8, DW=AU-PL-PR, DH=h-PT-PB;
+        const LO=2.5, HI=7.0;
+        const yCC = cc => y+PT+DH-((Math.min(HI,Math.max(LO,cc))-LO)/(HI-LO))*DH;
+        const xM  = i  => ML+PL+(i/11)*DW;
+        [3.0,3.5,4.0,4.5,5.0,5.5,6.0,6.5].forEach(v => {
+          const gy = yCC(v); const isKey = v===4.5||v===5.0;
+          doc.setDrawColor(isKey?180:220, isKey?180:220, isKey?220:220); doc.setLineWidth(isKey?0.25:0.12);
+          if (isKey) doc.setLineDashPattern([1,1],0);
+          doc.line(ML+PL, gy, ML+PL+DW, gy);
+          doc.setLineDashPattern([],0);
+          doc.setFontSize(4); doc.setFont("helvetica","normal");
+          doc.setTextColor(isKey?150:180, isKey?100:180, isKey?40:180);
+          doc.text(v.toFixed(1), ML+PL-1.5, gy+1.2, {align:"right"});
+        });
+        const xJun=ML+PL+(5/11)*DW, xAgo=ML+PL+(7/11)*DW;
+        doc.setFillColor(255,250,225); doc.rect(xJun, y+PT, xAgo-xJun, DH, "F");
+        const col = (ccLine[mesServ%12]||4.5) >= 5.0 ? G : (ccLine[mesServ%12]||4.5) >= 4.5 ? Am : R;
+        doc.setDrawColor(...col); doc.setLineWidth(1.0);
+        for (let i=0;i<11;i++) doc.line(xM(i),yCC(ccLine[i]),xM(i+1),yCC(ccLine[i+1]));
+        [[mesParto,"P"],[mesDestete,"D"],[mesServ,"S"]].forEach(([mi,lbl]) => {
+          const cc = ccLine[mi%12]; const xi=xM(mi%12), yi=yCC(cc);
+          doc.setFillColor(...col); doc.circle(xi,yi,1.2,"F");
+          doc.setFontSize(4.5); doc.setFont("helvetica","bold"); doc.setTextColor(...col);
+          doc.text(lbl, xi, yi-2.5, {align:"center"});
+        });
+        ["E","F","M","A","M","J","J","A","S","O","N","D"].forEach((m,i) => {
+          doc.setFontSize(4.5); doc.setFont("helvetica","normal"); doc.setTextColor(130,130,130);
+          doc.text(m, xM(i), y+PT+DH+PB-1, {align:"center"});
+        });
+        doc.setFontSize(5); doc.setTextColor(100,100,100);
+        doc.text(`P=Parto  D=Destete  S=Servicio  |  Invierno=fondo ambar  |  Umbrales: CC4.5 (amarillo)  CC5.0 (verde)`, ML+PL, y+PT+DH+PB+2.5);
+        salto(h+7);
+      };
+      const tarjeta = (titulo, impacto, solucion, cuando, prioridad) => {
+        const isP1 = prioridad==="P1"||prioridad==="URGENTE";
+        const isP2 = prioridad==="P2";
+        const [fillC,borderC,titC] = isP1?[Rl,R,R]:isP2?[Al,Am,Am]:[Gl,G,G];
+        chk(22);
+        doc.setFillColor(...fillC);
+        doc.roundedRect(ML, y, AU, 3, 0.5, 0.5, "F");
+        doc.setFillColor(255,255,255);
+        doc.roundedRect(ML, y+3, AU, 1, 0,0,"F");
+        doc.setFillColor(...fillC);
+        doc.roundedRect(ML, y, AU, 1, 0.5,0.5,"F");
+        // Borde izquierdo de color
+        doc.setFillColor(...borderC); doc.rect(ML, y, 2.5, 99, "F");
+        // Fondo total
+        doc.setFillColor(...fillC); doc.roundedRect(ML, y, AU, 99, 1,1,"F");
+        doc.setFillColor(...borderC); doc.rect(ML, y, 2.5, 99, "F");
+        // Título
+        chk(8);
+        doc.setFillColor(...fillC); doc.roundedRect(ML, y, AU, 8, 1,1,"F");
+        doc.setFillColor(...borderC); doc.rect(ML, y, 2.5, 8,"F");
+        doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(...titC);
+        doc.text(`[${prioridad}] ${txt(titulo)}`, ML+5, y+5.5, {maxWidth:AU-8});
+        salto(10);
+        if (impacto) {
+          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(...Gd);
+          doc.splitTextToSize(txt(impacto), AU-8).slice(0,2).forEach(ln => { chk(4); doc.text(ln, ML+5, y); salto(4); });
+        }
+        if (solucion) {
+          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(...Bl);
+          doc.splitTextToSize("Como: "+txt(solucion), AU-8).slice(0,2).forEach(ln => { chk(4); doc.text(ln, ML+5, y); salto(4); });
+        }
+        if (cuando) {
+          doc.setFontSize(6.5); doc.setFont("helvetica","italic"); doc.setTextColor(...Gr);
+          chk(4); doc.text("Cuando: "+txt(cuando), ML+5, y, {maxWidth:AU-8}); salto(4);
+        }
+        salto(3);
+      };
+
+      // ── DATOS DERIVADOS ──────────────────────────────────────────
+      const cerebPDF  = cerebroMemo;
+      const scoreData = motor ? calcScore(motor, form, null) : null;
+      const nVacas    = parseInt(form.vacasN)||0;
+      const cadena    = motor?.cadena ?? null;
+      const faseCicloPDF = cadena ? (() => { try { return calcFaseCiclo(cadena, form, { ccServ: parseFloat(tray?.ccServ||0), mesesDeficit: (motor?.balanceMensual??[]).filter(m=>[5,6,7].includes(m.i)&&m.balance<0).length }); } catch(e){return null;} })() : null;
+      const MESES12 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+      const dispMS  = calcDisponibilidadMS(form.altPasto, form.tipoPasto);
+
+      // ════════════════════════════════════════════════════════════
+      // SECCIÓN 1 — PORTADA + DATOS DEL ESTABLECIMIENTO
+      // ════════════════════════════════════════════════════════════
+      doc.setFillColor(...Gd);
+      doc.roundedRect(ML, y, AU, 16, 3, 3, "F");
+      doc.setFontSize(13); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+      doc.text("AGROMIND PRO — Informe Tecnico de Cria", ML+5, y+8);
+      doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(180,220,180);
+      doc.text(`${txt(form.nombreProductor)||"Establecimiento"} · ${txt(form.localidad)||txt(form.provincia)||""} · ${new Date().toLocaleDateString("es-AR")} · Biotipo: ${txt(form.biotipo)||"—"}`, ML+5, y+13);
+      salto(20);
+
+      // KPIs fila 1
+      const prenezPDF = tray?.pr ?? null;
+      const scoreTot  = scoreData?.total ?? null;
+      const ccServPDF = tray?.ccServ || 0;
+      kpiRow([
+        ["CC al Servicio", ccServPDF>0 ? ccServPDF.toFixed(1) : "—", ccServPDF>=5?G:ccServPDF>=4.5?Am:R],
+        ["Prenez estimada", prenezPDF!==null ? prenezPDF+"%" : "—", prenezPDF>=75?G:prenezPDF>=55?Am:R],
+        ["Score sistema", scoreTot!==null ? scoreTot+"/100" : "—", scoreTot>=75?G:scoreTot>=50?Am:R],
+        ["Anestro", tray?.anestro?.dias ? tray.anestro.dias+"d" : "—", tray?.anestro?.dias<=45?G:tray?.anestro?.dias<=75?Am:R],
+        ["NDVI", sat?.ndvi || "—", sat?.ndviDelta>0?G:sat?.ndviDelta>-0.08?Am:R],
+      ]);
+
+      // Momento del ciclo
+      if (faseCicloPDF && faseCicloPDF.fase !== "SIN_FECHA") {
+        chk(12);
+        const [fcR,fcG,fcB] = (faseCicloPDF.color||"#3d7a2f").match(/[\da-fA-F]{2}/g)?.map(h=>parseInt(h,16))??G;
+        doc.setFillColor(fcR+Math.round((255-fcR)*0.85), fcG+Math.round((255-fcG)*0.85), fcB+Math.round((255-fcB)*0.85));
+        doc.roundedRect(ML,y,AU,9,2,2,"F");
+        doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(fcR,fcG,fcB);
+        const sigTxt = faseCicloPDF.siguiente ? `  |  Prox: ${txt(faseCicloPDF.siguiente.label)} en ${faseCicloPDF.siguiente.diasFaltan}d` : "";
+        doc.text(`Momento del ciclo: ${txt(faseCicloPDF.label||"").toUpperCase()}${sigTxt}`, ML+3, y+5.5, {maxWidth:AU-6});
+        salto(12);
+        if (faseCicloPDF.descripcion) { parrafo(faseCicloPDF.descripcion.split(".")[0]+".", 0, Gr, 7); }
       }
 
-      // ── PUNTOS CRÍTICOS DEL MOTOR ────────────────────────────────────
-      const cerebPDF = cerebroMemo;
-      const critiPDF = cerebPDF ? (cerebPDF.prescripciones?.tarjetas||[]).filter(t => t.prioridad==="P1"||t.prioridad==="URGENTE").slice(0,3) : [];
-      if (critiPDF.length > 0) {
-        chk(15);
-        doc.setFillColor(224, 85, 48);
-        doc.roundedRect(ML, y, AU, 8, 2, 2, "F");
-        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-        doc.text("PUNTOS CRÍTICOS — ACCIÓN ANTES DEL SERVICIO", ML+4, y+5.5);
-        salto(11);
-        critiPDF.forEach(t => {
-          chk(12);
-          doc.setFillColor(255,245,242);
-          doc.roundedRect(ML, y, AU, 8, 1, 1, "F");
-          doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(180,60,30);
-          doc.text("▶ " + t.titulo, ML+3, y+5.5, { maxWidth: AU-6 });
-          salto(10);
-          if (t.que) {
-            doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(60,60,60);
-            doc.splitTextToSize(t.que.slice(0,120), AU-6).slice(0,2).forEach(ln => {
-              chk(4); doc.text("  " + ln, ML+3, y); salto(4);
-            });
+      // Datos del campo — 2 columnas
+      seccion("DATOS DEL ESTABLECIMIENTO", Gd);
+      dato2("Productor",       form.nombreProductor||"—",       "Localidad",    form.localidad||form.provincia||"—");
+      dato2("Zona",            form.zona||"—",                  "Provincia",    form.provincia||"—");
+      dato2("Coordenadas GPS", coords ? `${coords.lat.toFixed(4)}°, ${coords.lon.toFixed(4)}°` : "Sin GPS", "ENSO",  form.enso||"neutro");
+      dato2("Superficie total (ha)", form.supHa||"—",           "Superficie gan. (ha)", form.supHa ? Math.round(parseFloat(form.supHa)*(1-((parseFloat(form.pctMonte)||0)+(parseFloat(form.pctNGan)||0))/100))+"" : "—");
+      dato2("Vegetacion",      form.vegetacion||"—",            "Fenologia",    {menor_10:"Rebrote <10%","10_25":"Crecimiento 10-25%","25_50":"Maduracion 25-50%",mayor_50:"Encaniado >50%"}[form.fenologia]||form.fenologia||"—");
+      dato2("Monte (%)",       form.pctMonte||"0",              "No ganadero (%)", form.pctNGan||"0");
+      dato2("Vacas",           form.vacasN||"—",                "Toros",        form.torosN||"—");
+      dato2("PV vaca (kg)",    form.pvVacaAdulta||"—",          "Biotipo",      form.biotipo||"—");
+      dato2("Prenez historica (%)", form.prenez||"—",           "Destete historico (%)", form.pctDestete||"—");
+      dato2("Carga (EV/ha)",   motor?.cargaEV_ha ? motor.cargaEV_ha.toFixed(2) : "—", "Disp. MS (kg/ha)", dispMS?.msHa||"—");
+      salto(2);
+
+      // Datos satelitales
+      if (sat && !sat.error) {
+        seccion("CAMPO HOY — CLIMA Y NDVI ESTIMADO", [30,80,50]);
+        dato2("Temperatura media 7d",""+sat.temp+"C",   "Lluvia 30d",sat.p30+" mm");
+        dato2("Lluvia 90d",          sat.p90+" mm",      "Balance hidrico 30d",(sat.deficit>=0?"+":"")+sat.deficit+" mm");
+        dato2("NDVI estimado",       sat.ndvi+" ("+txt(sat.condForr)+")", "NDVI vs historico", (sat.ndviDelta>=0?"+":"")+sat.ndviDelta+" ("+txt(sat.ndviCateg)+")");
+        dato2("Lluvia proximos 7d",  sat.lluviaProx7+" mm", "Temp. media prox 7d", sat.tempMediaProx7+"C");
+        if (sat.helada7) { chk(5); doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(...R); doc.text("Alerta: helada probable en proximos 7 dias", ML, y); salto(5); }
+        salto(2);
+      }
+
+      // ════════════════════════════════════════════════════════════
+      // SECCIÓN 2 — DIAGNÓSTICO
+      // ════════════════════════════════════════════════════════════
+      seccion("DIAGNOSTICO DEL SISTEMA", Gd);
+
+      // Score por dimensiones — barras visuales
+      if (scoreData) {
+        chk(8);
+        doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(...G);
+        doc.text(`Score global: ${scoreData.total}/100 — ${txt(scoreData.labelTotal)}`, ML, y); salto(6);
+        scoreData.dim.forEach(d => {
+          chk(7);
+          const bW = (AU-50) * Math.min(1, d.score/100);
+          const col = d.score>=75?G:d.score>=50?Am:R;
+          doc.setFillColor(235,240,235); doc.roundedRect(ML+50, y-4, AU-50, 5, 1,1,"F");
+          doc.setFillColor(...col); doc.roundedRect(ML+50, y-4, Math.max(2,bW), 5, 1,1,"F");
+          doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...Gr);
+          doc.text(txt(d.nombre)+":", ML, y);
+          doc.setFont("helvetica","bold"); doc.setTextColor(...col);
+          doc.text(""+d.score+"/100", ML+44, y, {align:"right"});
+          if (d.desc) {
+            doc.setFontSize(5.5); doc.setFont("helvetica","normal"); doc.setTextColor(140,140,140);
+            doc.text(txt(d.desc), ML+50+Math.min(bW+2,AU-56), y, {maxWidth:60});
           }
-          salto(2);
+          salto(6);
         });
         salto(3);
       }
 
-      // ── BALANCE ANUAL — 12 MESES ────────────────────────────────────────
-      if (motor && motor.balanceMensual) {
-        chk(30);
-        doc.setFillColor(230,248,230);
-        doc.roundedRect(ML, y, AU, 8, 2, 2, "F");
-        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(45,106,31);
-        doc.text("BALANCE FORRAJERO — 12 MESES (Mcal/d)", ML+4, y+5.5);
-        salto(11);
-        const MESES_PDF12 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-        const colW12 = AU / 6;
-        [[0,1,2,3,4,5],[6,7,8,9,10,11]].forEach(fila => {
-          fila.forEach((mi, ci) => {
-            const bm = motor.balanceMensual.find(m => m.i === mi);
-            const bv = bm ? Math.round(bm.balance) : null;
-            const bx = ML + ci * colW12;
-            const esInv = [5,6,7].includes(mi);
-            const col = bv === null ? [180,180,180] : bv >= 0 ? [45,106,31] : [200,60,40];
-            doc.setFillColor(esInv ? 255 : 245, esInv ? 248 : 250, esInv ? 235 : 245);
-            doc.roundedRect(bx, y, colW12-2, 12, 1, 1, "F");
-            if (esInv) { doc.setDrawColor(200,140,20); doc.setLineWidth(0.3); doc.roundedRect(bx, y, colW12-2, 12, 1, 1, "S"); }
-            doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
-            doc.text(MESES_PDF12[mi], bx + (colW12-2)/2, y+4, { align:"center" });
-            doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(col[0],col[1],col[2]);
-            doc.text(bv !== null ? (bv >= 0 ? "+" : "") + bv : "—", bx + (colW12-2)/2, y+10, { align:"center" });
-          });
-          salto(15);
-        });
-        const mDef = motor.balanceMensual.filter(m=>[5,6,7].includes(m.i)&&m.balance<0).length;
-        doc.setFontSize(6.5); doc.setFont("helvetica","normal");
-        doc.setTextColor(mDef>0?180:80, mDef>0?60:130, mDef>0?40:60);
-        doc.text(`Invierno: ${mDef===0?"sin deficit":mDef+" mes"+(mDef>1?"es":"")+" en deficit"} · fondo ambar = meses invernales`, ML, y); salto(5);
-
-        // ── GRÁFICO DE BARRAS — balance visual ──
-        chk(30);
-        const bals12 = motor.balanceMensual.map(m => m.balance || 0);
-        const maxBalAbs = Math.max(10, ...bals12.map(Math.abs));
-        const bChH = 20;
-        const bBarW = AU / 12 - 1;
-        const bZeroY = y + bChH / 2;
-        const bScale = (bChH / 2 - 1.5) / maxBalAbs;
-        doc.setDrawColor(180,180,180); doc.setLineWidth(0.2);
-        doc.line(ML, bZeroY, ML + AU, bZeroY);
-        bals12.forEach((bal, mi) => {
-          const bx = ML + mi * (AU / 12);
-          const barH = Math.max(0.4, Math.abs(bal) * bScale);
-          const barY = bal >= 0 ? bZeroY - barH : bZeroY;
-          if ([5,6,7].includes(mi)) { doc.setFillColor(255,248,225); doc.rect(bx, y, AU/12, bChH, "F"); }
-          const [br,bg,bb] = bal >= 0 ? [29,158,117] : [226,75,74];
-          doc.setFillColor(br,bg,bb); doc.rect(bx+0.5, barY, bBarW, barH, "F");
-          doc.setFontSize(4.5); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
-          doc.text(["E","F","M","A","M","J","J","A","S","O","N","D"][mi], bx+bBarW/2+0.5, y+bChH+3, {align:"center"});
-        });
-        salto(bChH + 6);
+      // Diagnóstico texto
+      const dxResumen = cerebPDF?.diagnostico?.resumen;
+      if (dxResumen) {
+        chk(10);
+        doc.setFillColor(...Gl);
+        doc.roundedRect(ML, y, AU, 6, 1,1,"F");
+        doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(...G);
+        doc.text("Conclusion tecnica:", ML+3, y+4.5);
+        salto(8);
+        parrafo(dxResumen, 0, Gd, 7.5);
+        salto(2);
       }
 
-      // ── GRÁFICO TRAYECTORIA CC — 12 MESES ───────────────────────────────
-      if (tray && tray.ccHoy && tray.ccParto && tray.ccServ) {
-        chk(42);
-        doc.setFillColor(230,248,230);
-        doc.roundedRect(ML, y, AU, 8, 2, 2, "F");
-        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(45,106,31);
-        doc.text("TRAYECTORIA CC — CICLO ANUAL", ML+4, y+5.5);
-        salto(11);
-        const tCH = 26, tPL = 12, tPR = 4, tPT = 3, tPB = 8;
-        const tDW = AU - tPL - tPR, tDH = tCH - tPT - tPB;
-        const CC_LO = 3.0, CC_HI = 6.5;
-        const yCC = (cc) => y + tPT + tDH - ((Math.min(CC_HI, Math.max(CC_LO, cc)) - CC_LO) / (CC_HI - CC_LO)) * tDH;
-        const xM  = (i)  => ML + tPL + (i / 11) * tDW;
-        // Grid lines
-        [3.5, 4.0, 4.5, 5.0, 5.5, 6.0].forEach(v => {
-          const gy = yCC(v);
-          doc.setDrawColor(220,220,220); doc.setLineWidth(0.15);
-          doc.line(ML + tPL, gy, ML + tPL + tDW, gy);
-          doc.setFontSize(4.5); doc.setFont("helvetica","normal"); doc.setTextColor(160,160,160);
-          doc.text(v.toFixed(1), ML + tPL - 2, gy + 1.5, {align:"right"});
-        });
-        // Winter background
-        const xJun = ML + tPL + (5/11)*tDW, xAgo = ML + tPL + (7/11)*tDW;
-        doc.setFillColor(255,248,225); doc.rect(xJun, y+tPT, xAgo-xJun, tDH, "F");
-        // Build CC line using interpCC logic from GraficosBalance
-        const ccHoyP = parseFloat(tray.ccHoy) || CC_LO;
-        const ccPartoP = parseFloat(tray.ccParto) || ccHoyP;
-        const ccMinP = parseFloat(tray.ccMinLact) || ccPartoP;
-        const ccServP = parseFloat(tray.ccServ) || ccMinP;
-        const mesParto = typeof tray.mesParto === "number" ? tray.mesParto : 2;
-        const mesesLactP = Math.ceil(parseFloat(tray.mesesLact)||6);
-        const mesDestN = (mesParto + mesesLactP) % 12;
-        const mesServN = typeof tray.mesServ === "number" ? tray.mesServ : (mesDestN+2)%12;
-        const ccLine = Array.from({length:12},(_,i) => {
-          let cc;
-          if (i < mesParto)     cc = ccHoyP  + (ccPartoP - ccHoyP) * (i / Math.max(1,mesParto));
-          else if (i < mesDestN || mesDestN <= mesParto) cc = ccPartoP + (ccMinP - ccPartoP) * Math.min(1,(i-mesParto)/Math.max(1,mesesLactP));
-          else if (i < mesServN || mesServN < mesDestN) cc = ccMinP  + (ccServP - ccMinP) * Math.min(1,(i-mesDestN)/Math.max(1,(mesServN-mesDestN+12)%12||3));
-          else cc = ccServP + (ccHoyP - ccServP) * Math.min(1,(i-mesServN)/Math.max(1,12-mesServN));
-          return Math.max(CC_LO, Math.min(CC_HI, cc));
-        });
-        // Threshold lines 4.5 and 5.0
-        const y45T = yCC(4.5), y50T = yCC(5.0);
-        doc.setDrawColor(200,140,20); doc.setLineWidth(0.3); doc.setLineDashPattern([1,1],0);
-        doc.line(ML+tPL, y45T, ML+tPL+tDW, y45T);
-        doc.setDrawColor(45,140,60);
-        doc.line(ML+tPL, y50T, ML+tPL+tDW, y50T);
-        doc.setLineDashPattern([],0);
-        doc.setFontSize(4); doc.setTextColor(200,140,20);
-        doc.text("4.5", ML+tPL+tDW+1, y45T+1);
-        doc.setTextColor(45,140,60);
-        doc.text("5.0", ML+tPL+tDW+1, y50T+1);
-        // CC line
-        const lineCol = ccServP >= 5.0 ? [45,140,60] : ccServP >= 4.5 ? [200,140,20] : [180,60,40];
-        doc.setDrawColor(...lineCol); doc.setLineWidth(1.2);
-        for (let i=0;i<11;i++) {
-          doc.line(xM(i), yCC(ccLine[i]), xM(i+1), yCC(ccLine[i+1]));
+      // Sustentabilidad
+      const dxS = cerebPDF?.diagnostico?.diagnosticoSustentabilidad;
+      if (dxS) {
+        if (dxS.ciclosAlColapso && dxS.ciclosAlColapso <= 4) {
+          chk(8);
+          doc.setFillColor(...Rl);
+          doc.roundedRect(ML,y,AU,6,1,1,"F");
+          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(...R);
+          doc.text(`SUSTENTABILIDAD: ${txt(dxS.resumen||"")} — Ciclos al colapso sin correccion: ${dxS.ciclosAlColapso}`, ML+3, y+4, {maxWidth:AU-6});
+          salto(9);
         }
-        // Dots at key milestones
-        [[mesParto,"P"],[mesDestN,"D"],[mesServN,"S"]].forEach(([mi,lbl]) => {
-          doc.setFillColor(...lineCol);
-          doc.circle(xM(mi%12), yCC(ccLine[mi%12]), 1.2, "F");
-          doc.setFontSize(4); doc.setFont("helvetica","bold"); doc.setTextColor(...lineCol);
-          doc.text(lbl, xM(mi%12), yCC(ccLine[mi%12])-2.5, {align:"center"});
-        });
-        // Month labels
-        ["E","F","M","A","M","J","J","A","S","O","N","D"].forEach((m,i) => {
-          doc.setFontSize(4.5); doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120);
-          doc.text(m, xM(i), y+tPT+tDH+tPB-1, {align:"center"});
-        });
-        // Legend
-        doc.setFontSize(5); doc.setTextColor(100,100,100);
-        doc.text(`P=parto CC${ccPartoP.toFixed(1)}  D=destete CC${ccMinP.toFixed(1)}  S=servicio CC${ccServP.toFixed(1)}  Invierno=fondo ambar`, ML+tPL, y+tPT+tDH+tPB+1);
-        salto(tCH + 5);
-      }
-
-      // ── NDVI Y CAMPO ─────────────────────────────────────────────────────
-      if (sat?.ndvi || sat?.temp || sat?.p30) {
-        chk(26);
-        doc.setFillColor(30,80,50);
-        doc.roundedRect(ML, y, AU, 7, 2, 2, "F");
-        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-        doc.text("CAMPO HOY — NDVI Y CLIMA", ML+4, y+5);
-        salto(10);
-        const ndviVal = parseFloat(sat.ndvi||0);
-        const ndviCol = ndviVal < 0.35 ? [200,60,40] : ndviVal < 0.50 ? [200,140,20] : [45,140,60];
-        doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(...ndviCol);
-        doc.text("NDVI: "+(sat.ndvi||"—")+" ("+(sat.condForr||"—")+")  |  Temp: "+(sat.temp||"—")+"°C  |  Lluvia 30d: "+(sat.p30||"—")+"mm", ML, y); salto(5);
-        // Comparación NDVI vs histórico
-        if (sat.ndviHist !== undefined) {
-          const deltaVal = sat.ndviDelta || 0;
-          const deltaCol = deltaVal > 0 ? [45,106,31] : deltaVal > -0.08 ? [180,120,20] : [180,40,40];
-          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(...deltaCol);
-          const deltaStr = deltaVal >= 0 ? "+" + deltaVal.toFixed(2) : deltaVal.toFixed(2);
-          doc.text(`NDVI vs historico (${sat.ndviHist}): ${deltaStr} — ${sat.ndviCateg||""}`, ML, y); salto(5);
-        }
-        doc.setTextColor(60,60,60);
-        const fenNom = {menor_10:"Rebrote",["10_25"]:"Crecimiento","25_50":"Maduración",mayor_50:"Encañado"}[form.fenologia]||form.fenologia||"—";
-        doc.text("Vegetacion: "+(form.vegetacion||"—")+"  |  Fenologia: "+fenNom+"  |  Lluvia 90d: "+(sat.p90||"—")+"mm", ML, y); salto(8);
-      }
-
-      // ── ESCENARIOS ────────────────────────────────────────────────────────
-      if (tray) {
-        chk(35);
-        doc.setFillColor(30,80,50);
-        doc.roundedRect(ML, y, AU, 7, 2, 2, "F");
-        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-        doc.text("ESCENARIOS — IMPACTO DEL DESTETE EN PREÑEZ", ML+4, y+5);
-        salto(10);
-        const ccS2 = tray?.ccServ || 0;
-        const prB2 = tray?.pr || 0;
-        const nV2p = parseInt(form.vacasN)||0;
-        const iP2 = ccAPrenez;
-        const escs2 = [
-          { l:"Sin cambios",    cc:+ccS2.toFixed(1), pr:prB2, col:[180,60,40] },
-          { l:"Anticipado 90d", cc:+(tray?.ccServAntic ?? Math.min(9,ccS2+0.4)).toFixed(1), pr:tray?.prAntic ?? iP2(tray?.ccServAntic ?? ccS2+0.4), col:[200,140,20] },
-          { l:"Hiperprecoz 50d",cc:+(tray?.ccServHiper ?? Math.min(9,ccS2+0.7)).toFixed(1), pr:tray?.prHiper ?? iP2(tray?.ccServHiper ?? ccS2+0.7), col:[45,140,60] },
-        ];
-        const eW2 = AU/3-2;
-        escs2.forEach((e,i) => {
-          const ex2=ML+i*(eW2+3); const diff2=e.pr-prB2;
-          doc.setFillColor(245,245,240); doc.roundedRect(ex2,y,eW2,24,2,2,"F");
-          doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(100,100,100);
-          doc.text(e.l, ex2+eW2/2, y+5, {align:"center",maxWidth:eW2-2});
-          doc.setFontSize(12); doc.setFont("helvetica","bold"); doc.setTextColor(...e.col);
-          doc.text(e.pr+"%", ex2+eW2/2, y+14, {align:"center"});
-          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(80,80,80);
-          doc.text("CC serv. "+e.cc, ex2+eW2/2, y+19.5, {align:"center"});
-          if(diff2>0&&nV2p>0){doc.setTextColor(...e.col); doc.text("+"+diff2+"pp = +"+Math.round(nV2p*diff2/100*.95)+" tern.", ex2+eW2/2, y+24, {align:"center"});}
-        });
-        salto(30);
-      }
-
-      // ── MANEJO DEL SERVICIO Y LA VACA DE CRÍA ────────────────────────────
-      if (cadena || tray) {
-        chk(20);
-        doc.setFillColor(30,80,50);
-        doc.roundedRect(ML, y, AU, 7, 2, 2, "F");
-        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-        doc.text("MANEJO DEL SERVICIO Y LA VACA DE CRÍA", ML+4, y+5);
-        salto(10);
-
-        // 1. Duración del servicio
-        const dS = cadena?.diasServ || 0;
-        if (dS > 0) {
-          const [dLab, dCol] = dS <= 90  ? ["Óptimo",                                [45,140,60]]
-                             : dS <= 120 ? ["Aceptable — acortar al próximo ciclo",   [200,140,20]]
-                             : dS <= 179 ? ["Excesivo — acortar con urgencia",         [200,80,20]]
-                             :             ["Servicio continuo — sin concentración de partos", [180,40,20]];
-          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(60,60,60);
-          doc.text("1. Duración del servicio", ML, y); salto(4);
-          doc.setFont("helvetica","normal"); doc.setTextColor(60,60,60);
-          doc.text(`   ${dS} días`, ML, y);
-          doc.setTextColor(...dCol);
-          doc.text(`→ ${dLab}`, ML+22, y); salto(4);
-          if (dS > 90) {
-            doc.setTextColor(100,100,100); doc.setFontSize(6.5);
-            const recTxt = dS >= 180
-              ? "   Sin estacionar. Meta intermedia: 120 días → objetivo final 90 días. Habilita el manejo diferenciado por categorías."
-              : dS > 120
-              ? "   Acortar a 90 días concentra los partos y sincroniza la demanda forrajera con la oferta estival."
-              : "   Acortar a 90 días al próximo ciclo para reducir la cola de preñez.";
-            doc.text(recTxt, ML, y, {maxWidth: AU}); salto(7);
-          } else {
-            salto(3);
-          }
-        }
-
-        // 2. CC de la vaca y destete recomendado
-        if (tray) {
-          chk(16);
-          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(60,60,60);
-          doc.text("2. CC de la vaca y manejo de destete", ML, y); salto(4);
-          doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(80,80,80);
-          doc.text(
-            `   CC tacto: ${(tray.ccHoy||0).toFixed(1)}  →  parto: ${(tray.ccParto||0).toFixed(1)}  →  mín. lact.: ${(tray.ccMinLact||0).toFixed(1)}  →  al servicio: ${(tray.ccServ||0).toFixed(1)}`,
-            ML, y, {maxWidth: AU}
-          ); salto(4);
-          const recD = tray.recDestete || "tradicional";
-          const [dLabel, dLCol] = recD === "hiperprecoz" ? ["Hiperprecoz (50d) — urgente",        [180,40,20]]
-                                : recD === "anticipado"  ? ["Anticipado (90d) — recomendado",      [200,140,20]]
-                                :                          ["Tradicional (180d) — CC adecuada",    [45,140,60]];
-          doc.setFont("helvetica","bold"); doc.setTextColor(...dLCol);
-          doc.text(`   Destete recomendado: ${dLabel}`, ML, y); salto(4);
-          if (tray.recDesteTardio && tray.recDesteTardio.tipo !== recD) {
-            const [tLab, tCol] = tray.recDesteTardio.tipo === "hiperprecoz" ? ["Vacas tardías: Hiperprecoz (50d)", [180,40,20]]
-                               : tray.recDesteTardio.tipo === "anticipado"  ? ["Vacas tardías: Anticipado (90d)", [200,140,20]]
-                               :                                              ["Vacas tardías: Tradicional OK",   [45,140,60]];
-            doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(...tCol);
-            doc.text(`   ⚠ ${tLab} (servicio largo: ${cadena?.diasServ}d)`, ML, y, {maxWidth: AU}); salto(5);
-          } else { salto(2); }
-
-          // 3. Proyección CC al próximo servicio (manejo actual vs recomendado)
-          chk(16);
-          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(60,60,60);
-          doc.text("3. Proyección CC al próximo servicio", ML, y); salto(4);
-          doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(80,80,80);
-          const prActual = tray.pr || 0;
-          const ccRecD   = recD === "hiperprecoz" ? (tray.ccServHiper||0)
-                         : recD === "anticipado"  ? (tray.ccServAntic||0)
-                         :                          (tray.ccServTrad||0);
-          const prRecD   = recD === "hiperprecoz" ? (tray.prHiper || ccAPrenez(ccRecD))
-                         : recD === "anticipado"  ? (tray.prAntic || ccAPrenez(ccRecD))
-                         :                          ccAPrenez(ccRecD);
-          const deltapr  = prRecD - prActual;
-          const nVacasPDF = parseInt(form.vacasN)||0;
-          doc.text(`   Manejo actual:            CC ${(tray.ccServ||0).toFixed(1)} → preñez ${prActual}%`, ML, y); salto(4);
-          doc.setTextColor(...dLCol);
-          doc.text(`   ${dLabel}:  CC ${ccRecD.toFixed(1)} → preñez ${prRecD}%${deltapr>0?`  (+${deltapr} pp${nVacasPDF>0?` = +${Math.round(nVacasPDF*deltapr/100*.95)} terneros`:""})` : ""}`, ML, y, {maxWidth: AU}); salto(6);
-
-          // 4. Impacto en balance forrajero
-          chk(14);
-          doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(60,60,60);
-          doc.text("4. Impacto en balance forrajero", ML, y); salto(4);
-          doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(100,100,100);
-          const mL = parseFloat(tray.mesesLact)||6;
-          const impacto = recD === "hiperprecoz"
-            ? `   Adelantar a 50d acorta la lactación ~${Math.round((mL-1.7)*30)} días. Reduce la demanda energética en el invierno.`
-            : recD === "anticipado"
-            ? `   Destete a 90d recorta ~${Math.round((mL-3)*30)} días de lactación. Libera CC para recuperar antes del servicio.`
-            : `   Destete tradicional adecuado. Verificar que el balance invernal sea positivo en los meses de lactancia.`;
-          doc.text(impacto, ML, y, {maxWidth: AU}); salto(8);
+        if (dxS.factoresLimitantes?.length) {
+          chk(6); doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(...Gr);
+          parrafo("Factores limitantes: "+dxS.factoresLimitantes.join(" · "), 0, Gr, 7);
         }
         salto(2);
       }
 
-      // ── VAQUILLONA ────────────────────────────────────────────────────────
-      if (motor?.vaq1E && !motor.vaq1E.mensaje) {
-        chk(20);
-        doc.setFillColor(30,80,50);
-        doc.roundedRect(ML, y, AU, 7, 2, 2, "F");
-        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-        doc.text("VAQUILLONA", ML+4, y+5);
-        salto(10);
-        const v1x=motor.vaq1E; const pvAd=parseFloat(form.pvVacaAdulta)||380;
-        const obj1x=Math.round(pvAd*0.40); const ok1x=(v1x.pvSal||0)>=obj1x;
-        doc.setFontSize(7.5); doc.setFont("helvetica","normal");
-        doc.setTextColor(ok1x?45:180,ok1x?140:60,ok1x?60:40);
-        doc.text("1°inv: PV entrada "+(motor.pvEntVaq1||"ND")+"kg → GDP "+(v1x.gdpPasto||0)+"g/d → PV salida "+(v1x.pvSal||0)+"kg (obj "+obj1x+"kg) "+(ok1x?"✓":"⚠ no llega"), ML, y, {maxWidth:AU}); salto(5);
-        if(motor?.vaq2E){
-          const v2x=motor.vaq2E; const ok2x=v2x.llegas;
-          doc.setTextColor(ok2x?45:180,ok2x?140:60,ok2x?60:40);
-          doc.text("2°inv: PV entore "+(v2x.pvEntore||0)+"kg (mín "+(v2x.pvMinEntore||0)+"kg) "+(ok2x?"✓":"⚠ no llega")+" · Flushing 25d pre-serv.: siempre", ML, y, {maxWidth:AU}); salto(5);
-        }
-        salto(4);
+      // ── Trayectoria CC ──────────────────────────────────────────
+      if (tray?.ccHoy && tray?.ccParto && tray?.ccServ) {
+        subsec("Trayectoria de Condicion Corporal — Ciclo Anual", G);
+        const mesParto  = typeof tray.mesParto==="number" ? tray.mesParto : 2;
+        const mesesLact = Math.ceil(parseFloat(tray.mesesLact)||6);
+        const mesDestete= (mesParto+mesesLact)%12;
+        const mesServCC = typeof tray.mesServ==="number" ? tray.mesServ : (mesDestete+2)%12;
+        const ccH=parseFloat(tray.ccHoy)||3.5, ccP=parseFloat(tray.ccParto)||ccH, ccM=parseFloat(tray.ccMinLact)||ccP, ccS=parseFloat(tray.ccServ)||ccM;
+        const LO=2.5, HI=7.0;
+        const ccLine = Array.from({length:12},(_,i) => {
+          let cc;
+          if (i<mesParto)     cc = ccH +(ccP-ccH)*(i/Math.max(1,mesParto));
+          else if (i<mesDestete||mesDestete<=mesParto) cc = ccP+(ccM-ccP)*Math.min(1,(i-mesParto)/Math.max(1,mesesLact));
+          else if (i<mesServCC||mesServCC<mesDestete)  cc = ccM+(ccS-ccM)*Math.min(1,(i-mesDestete)/Math.max(1,(mesServCC-mesDestete+12)%12||3));
+          else cc = ccS+(ccH-ccS)*Math.min(1,(i-mesServCC)/Math.max(1,12-mesServCC));
+          return Math.max(LO,Math.min(HI,cc));
+        });
+        ccChart(ccLine, mesParto, mesDestete, mesServCC, 30);
+        dato2("CC tacto hoy", ccH.toFixed(1), "CC al parto", ccP.toFixed(1));
+        dato2("CC min. lactacion", ccM.toFixed(1), "CC al servicio", ccS.toFixed(1));
+        dato2("Prenez estimada", (tray.pr||0)+"%", "Dias anestro", (tray.anestro?.dias||"—")+"d");
+        salto(3);
       }
 
-      // ── DIAGNÓSTICO TÉCNICO ────────────────────────────────────────────
-      if (cerebPDF) {
-        const dx  = cerebPDF.diagnostico;
-        const dxS = dx?.diagnosticoSustentabilidad;
-        if (dx?.resumen) {
-          const dxCol = dxS?.esSustentable  ? [45,106,31]
-                      : dxS?.ciclosAlColapso && dxS.ciclosAlColapso <= 2 ? [200,60,40]
-                      : [200,140,20];
-          chk(14);
-          doc.setFillColor(...dxCol);
-          doc.roundedRect(ML, y, AU, 8, 2, 2, "F");
-          doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-          doc.text("DIAGNÓSTICO TÉCNICO", ML+4, y+5.5);
-          salto(11);
-          // Párrafo ejecutivo
-          const dxTxt = dx.resumen.replace(/[^\x20-\x7E\n]/g," ");
-          doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
-          doc.splitTextToSize(dxTxt, AU).forEach(ln => { chk(5); doc.text(ln, ML, y); salto(4.5); });
+      // ════════════════════════════════════════════════════════════
+      // SECCIÓN 3 — BALANCE FORRAJERO
+      // ════════════════════════════════════════════════════════════
+      seccion("BALANCE FORRAJERO ANUAL", Gd);
+
+      if (motor?.balanceMensual) {
+        const bals = motor.balanceMensual.map(m => m.balance||0);
+        const dems = motor.balanceMensual.map(m => m.demanda||0);
+        const ofer = motor.balanceMensual.map(m => (m.ofPastoTotal||0)+(m.ofSuplTotal||0));
+        const mDef = motor.balanceMensual.filter(m=>[5,6,7].includes(m.i)&&m.balance<0).length;
+        const peorBMes = [5,6,7].reduce((mn,i)=>bals[i]<bals[mn]?i:mn, 5);
+
+        // Tabla 12 meses
+        subsec("Balance mensual (Demanda vs Oferta vs Balance)", G);
+        chk(28);
+        const colW = AU/6;
+        const thBg = [40,80,42]; const thTxt = [255,255,255];
+        [[0,1,2,3,4,5],[6,7,8,9,10,11]].forEach(fila => {
+          fila.forEach((mi,ci) => {
+            const bm   = motor.balanceMensual[mi];
+            const bv   = bm ? Math.round(bm.balance)  : null;
+            const dem  = bm ? Math.round(bm.demanda)  : null;
+            const ofr  = bm ? Math.round((bm.ofPastoTotal||0)+(bm.ofSuplTotal||0)) : null;
+            const bx   = ML+ci*colW;
+            const esInv= [5,6,7].includes(mi);
+            const col  = bv===null?Gr:bv>=0?G:R;
+            doc.setFillColor(esInv?255:248, esInv?248:252, esInv?225:248);
+            doc.roundedRect(bx, y, colW-1.5, 18, 1,1,"F");
+            if (esInv) { doc.setDrawColor(...Am); doc.setLineWidth(0.3); doc.roundedRect(bx, y, colW-1.5, 18, 1,1,"S"); }
+            doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(60,60,60);
+            doc.text(MESES12[mi], bx+(colW-1.5)/2, y+4.5, {align:"center"});
+            doc.setFontSize(5.5); doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120);
+            if (dem!==null) doc.text("D:"+dem, bx+(colW-1.5)/2, y+8.5, {align:"center"});
+            if (ofr!==null) doc.text("O:"+ofr, bx+(colW-1.5)/2, y+12, {align:"center"});
+            doc.setFontSize(6.5); doc.setFont("helvetica","bold"); doc.setTextColor(...col);
+            doc.text(bv!==null?(bv>=0?"+":"")+bv:"—", bx+(colW-1.5)/2, y+17, {align:"center"});
+          });
+          salto(20);
+        });
+        doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(110,110,110);
+        doc.text("D=Demanda  O=Oferta  Balance=Mcal/d  |  Fondo ambar = meses invernales", ML, y); salto(5);
+        if (mDef>0) {
+          doc.setTextColor(...R); doc.setFont("helvetica","bold");
+          doc.text(`Invierno: ${mDef}/3 meses en deficit — peor mes: ${MESES12[peorBMes]} (${Math.round(bals[peorBMes])} Mcal/d)`, ML, y); salto(5);
+        } else {
+          doc.setTextColor(...G); doc.setFont("helvetica","bold");
+          doc.text("Invierno: sin deficit — balance positivo los 3 meses criticos", ML, y); salto(5);
+        }
+        salto(2);
+
+        // Gráfico de barras balance mensual
+        subsec("Grafico de balance mensual", G);
+        barChart(bals, ["E","F","M","A","M","J","J","A","S","O","N","D"], 24, [5,6,7], "Mcal/d");
+
+        // Balance por categoría — tabla invierno
+        if (motor.vaq1E || motor.vaq2E) {
+          subsec("Balance por categoria — invierno (Jun/Jul/Ago)", G);
+          chk(35);
+          const cats = [
+            ["Vacas",         motor.balanceMensual[6]?.ofPastoPerVacasV2s, motor.balanceMensual[6]?.demanda,  null],
+            ["Vaq 1er inv.",  motor.balanceMensual[6]?.ofPastoPerVaq1,      motor.vaq1E?.gdpNecesario ? motor.vaq1E.gdpNecesario/10 : null, motor.vaq1E?.gdpReal],
+            ["Vaq 2do inv.",  motor.balanceMensual[6]?.ofPastoPerVaq2,      motor.vaq2E?.gdpNecesario ? motor.vaq2E.gdpNecesario/10 : null, motor.vaq2E?.gdpReal],
+          ].filter(([,o]) => o !== undefined && o !== null);
+          const cW3 = AU/(cats.length||1);
+          const hdrs = ["Categoria","Oferta pasto (Mcal/d)","Demanda (Mcal/d)","GDP real (g/d)"];
+          // encabezado
+          [["Categoria",60],["Oferta pasto",40],["Dem./GDP nec.",40],["GDP real",40]].forEach(([h,w],i) => {
+            doc.setFillColor(...thBg); doc.rect(ML+i*38, y, 38, 6, "F");
+            doc.setFontSize(6); doc.setFont("helvetica","bold"); doc.setTextColor(...thTxt);
+            doc.text(h, ML+i*38+19, y+4, {align:"center"});
+          });
+          salto(7);
+          const catRows = [
+            ["Vacas",       motor.balanceMensual[6]?.ofPastoPerVacasV2s, "—", "—"],
+            ["Vaq. 1er inv",motor.balanceMensual[6]?.ofPastoPerVaq1, motor.vaq1E?.gdpNecesario, motor.vaq1E?.gdpReal],
+            ["Vaq. 2do inv",motor.balanceMensual[6]?.ofPastoPerVaq2, motor.vaq2E?.gdpNecesario, motor.vaq2E?.gdpReal],
+          ];
+          catRows.forEach(([cat, oferta, dem, gdp], ri) => {
+            doc.setFillColor(ri%2===0?248:255, ri%2===0?252:255, ri%2===0?248:255);
+            doc.rect(ML, y, AU, 6, "F");
+            const vals = [cat, oferta!==null&&oferta!==undefined?Math.round(oferta):"—", dem!==null&&dem!==undefined?dem+"":"—", gdp!==null&&gdp!==undefined?gdp+" g/d":"—"];
+            vals.forEach((v,i) => {
+              const isOk = i===3 && typeof gdp==="number" && typeof dem==="number" && gdp>=dem*0.85;
+              doc.setFontSize(6.5); doc.setFont("helvetica", i===0?"bold":"normal");
+              doc.setTextColor(isOk?G[0]:typeof gdp==="number"&&i===3&&gdp<(dem||0)*0.85?R[0]:60, isOk?G[1]:60, isOk?G[2]:60);
+              doc.text(txt(v)+"", ML+i*38+19, y+4, {align:"center"});
+            });
+            salto(7);
+          });
+          salto(2);
+        }
+      }
+
+      // ════════════════════════════════════════════════════════════
+      // SECCIÓN 4 — VAQUILLONA
+      // ════════════════════════════════════════════════════════════
+      const hayVaq = motor?.vaq1E || motor?.vaq2E;
+      if (hayVaq) {
+        seccion("VAQUILLONA — BALANCE Y PROGRESION", Gd);
+        const pvAd = parseFloat(form.pvVacaAdulta)||380;
+
+        // Vaq 1er invierno
+        if (motor.vaq1E) {
+          const v1 = motor.vaq1E;
+          const v1Dx = (cerebPDF?.vaquillona||[]).find(d=>d.cat==="vaq1");
+          subsec("1er Invierno (recria)", G);
+          dato2("PV entrada 1er inv.", (motor.pvEntVaq1||"—")+" kg", "GDP pasto", (v1.gdpPasto||0)+" g/d");
+          dato2("Supl. aporte GDP",    (v1.gdpSuplAporte||0)+" g/d","GDP real",  (v1.gdpReal||0)+" g/d (min "+(v1.gdpNecesario||300)+" g/d)");
+          dato2("PV salida invierno",  (v1.pvSal||"—")+" kg",       "Objetivo 1er entore", Math.round(pvAd*0.65)+" kg");
+          const v1ok = (v1.pvSal||0) >= Math.round(pvAd*0.40);
+          chk(7); doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(...(v1ok?G:R));
+          doc.text(v1ok?"Estado: LLEGA al objetivo de recria":"Estado: NO llega — suplementar", ML, y); salto(6);
+          if (v1Dx?.escenario) { parrafo(v1Dx.escenario, 0, Gd, 7); salto(1); }
+          if (v1Dx?.recomendacion) { parrafo("Rec: "+v1Dx.recomendacion, 0, Bl, 7); }
           salto(3);
-          // Sustentabilidad resumen
-          if (dxS?.resumen) {
-            chk(8);
-            const dxSLabel = (dxS.resumen||"").replace(/[^\x20-\x7E\n]/g," ");
-            doc.setFontSize(7.5); doc.setFont("helvetica","bold"); doc.setTextColor(...dxCol);
-            doc.text("Sustentabilidad: ", ML, y);
-            doc.setFont("helvetica","normal"); doc.setTextColor(60,60,60);
-            doc.text(dxSLabel, ML+30, y, { maxWidth: AU-30 }); salto(5);
-          }
-          // Factores limitantes
-          if (dxS?.factoresLimitantes?.length > 0) {
-            chk(6);
-            doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(80,80,80);
-            const limTxt = dxS.factoresLimitantes.slice(0,5).join(" · ").replace(/[^\x20-\x7E\n]/g," ");
-            doc.splitTextToSize("Limitantes: " + limTxt, AU).forEach(ln => { chk(4); doc.text(ln, ML, y); salto(4); });
-          }
-          // Ciclos al colapso
-          if (dxS?.ciclosAlColapso) {
-            chk(6);
-            doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(200,60,40);
-            doc.text(`Ciclos al colapso sin corrección: ${dxS.ciclosAlColapso}`, ML, y); salto(5);
-          }
-          salto(4);
         }
+
+        // Vaq 2do invierno
+        if (motor.vaq2E) {
+          const v2 = motor.vaq2E;
+          const v2Dx = (cerebPDF?.vaquillona||[]).find(d=>d.cat==="vaq2");
+          subsec("2do Invierno (hacia el entore)", G);
+          if (v2.gdpVeranoProm) {
+            dato2("GDP promedio verano", v2.gdpVeranoProm+" g/d", "Ganancia estacion", (v2.gananciaVerano||0)+" kg");
+          }
+          dato2("PV entrada 2do inv.", (v2.pvMayo2Inv||motor.pvEntradaVaq2||"—")+" kg", "GDP real inv.", (v2.gdpReal||v2.gdpInv||0)+" g/d");
+          dato2("PV al entore",        (v2.pvEntore||"—")+" kg",       "PV minimo entore",  (v2.pvMinEntore||"—")+" kg ("+Math.round(pvAd*0.65)+"kg=65% PVA)");
+          dato2("GDP con supl.",        (v2.gdpConSuplReal||v2.gdpReal||0)+" g/d", "Llega al entore", v2.llegas?"SI":"NO");
+          chk(7); doc.setFontSize(7); doc.setFont("helvetica","bold"); doc.setTextColor(...(v2.llegas?G:R));
+          doc.text(v2.llegas?"Estado: LLEGA al peso de entore":"Estado: NO llega — revisar suplementacion", ML, y); salto(6);
+          if (v2Dx?.escenario) { parrafo(v2Dx.escenario, 0, Gd, 7); salto(1); }
+          if (v2Dx?.recomendacion) { parrafo("Rec: "+v2Dx.recomendacion, 0, Bl, 7); }
+          salto(3);
+
+          // Gráfico de progresión PV vaquillona
+          const etapas = [
+            ["Destete",       motor.pvEntVaq1||150],
+            ["Ent.1er inv.",  motor.pvEntVaq1||150],
+            ["Sal.1er inv.",  motor.vaq1E?.pvSal||170],
+            ["Ent.2do inv.",  motor.pvEntradaVaq2||200],
+            ["Al entore",     v2.pvEntore||230],
+            ["Adulta",        pvAd],
+          ];
+          const pvVals = etapas.map(([,v])=>v);
+          const pvMin  = Math.min(...pvVals)-10, pvMax = Math.max(pvAd+20,...pvVals);
+          const nPts   = etapas.length;
+          const chH    = 28, chPL=12, chPR=4, chPT=3, chPB=10;
+          const chDW   = AU-chPL-chPR, chDH=chH-chPT-chPB;
+          subsec("Progresion de Peso Vivo — Vaquillona", G);
+          chk(chH+8);
+          const yPV  = v => y+chPT+chDH-((Math.min(pvMax,Math.max(pvMin,v))-pvMin)/(pvMax-pvMin))*chDH;
+          const xPt  = i => ML+chPL+(i/(nPts-1))*chDW;
+          // grid
+          [100,150,200,250,300,350].filter(v=>v>pvMin&&v<pvMax).forEach(v => {
+            const gy=yPV(v);
+            doc.setDrawColor(220,220,220); doc.setLineWidth(0.1); doc.line(ML+chPL,gy,ML+chPL+chDW,gy);
+            doc.setFontSize(4); doc.setTextColor(180,180,180); doc.text(""+v,ML+chPL-1.5,gy+1,{align:"right"});
+          });
+          // línea objetivo
+          const pvObj65 = Math.round(pvAd*0.65);
+          const yObj = yPV(pvObj65);
+          doc.setDrawColor(...Am); doc.setLineWidth(0.3); doc.setLineDashPattern([1.5,1],0);
+          doc.line(ML+chPL,yObj,ML+chPL+chDW,yObj);
+          doc.setLineDashPattern([],0);
+          doc.setFontSize(4.5); doc.setTextColor(...Am); doc.text("Objetivo entore "+pvObj65+"kg", ML+chPL+chDW+1, yObj+1);
+          // línea PV
+          doc.setDrawColor(...G); doc.setLineWidth(1.0);
+          for (let i=0;i<nPts-1;i++) doc.line(xPt(i),yPV(pvVals[i]),xPt(i+1),yPV(pvVals[i+1]));
+          // puntos y etiquetas
+          pvVals.forEach((v,i) => {
+            const isOk = v >= pvObj65;
+            doc.setFillColor(...(isOk?G:R)); doc.circle(xPt(i),yPV(v),1.5,"F");
+            doc.setFontSize(4.5); doc.setFont("helvetica","normal"); doc.setTextColor(60,60,60);
+            doc.text(""+v+"kg", xPt(i), yPV(v)-3, {align:"center"});
+            doc.setFontSize(4); doc.setTextColor(120,120,120);
+            doc.text(etapas[i][0], xPt(i), y+chPT+chDH+chPB-1, {align:"center"});
+          });
+          salto(chH+8);
+        }
+
+        // Suplementación vaquillona
+        const suplVaq1 = form.supl_vaq1 ? `${form.supl_vaq1} ${form.dosis_vaq1} kg/d` : "Sin suplemento";
+        const suplVaq2 = form.supl_vaq2 ? `${form.supl_vaq2} ${form.dosis_vaq2} kg/d` : "Sin suplemento";
+        dato2("Supl. Vaquillona 1er inv.", suplVaq1, "Supl. Vaquillona 2do inv.", suplVaq2);
+        salto(3);
       }
 
-      // ── INFORME IA (si existe) ───────────────────────────────────────
-      if (!result) {
-        chk(12);
-        doc.setFontSize(8); doc.setFont("helvetica","italic"); doc.setTextColor(150,150,150);
-        doc.text("Informe de analisis IA no generado — generalo desde el tab Cerebro.", ML, y);
-        salto(10);
-      } else {
-        chk(14);
-        doc.setFillColor(20, 40, 22);
-        doc.roundedRect(ML, y, AU, 9, 2, 2, "F");
-        doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-        doc.text("INFORME IA — ANALISIS COMPLETO", ML+4, y+6);
-        salto(12);
-        // Secciones del LLM: detectar marcadores emoji ANTES de sanitizar
-        const IA_SEC = [
-          { re: /1️⃣/u,  label: "1. DIAGNOSTICO INTEGRADO", fill:[30, 90, 50]  },
-          { re: /2️⃣/u,  label: "2. PUNTOS CRITICOS",       fill:[150,60, 15]  },
-          { re: /3️⃣/u,  label: "3. ESCENARIOS DE MEJORA",  fill:[20, 65, 130] },
-          { re: /4️⃣/u,  label: "4. PLAN DE ACCION",        fill:[60, 110, 45] },
-        ];
-        doc.setFontSize(8.5); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
-        result.split("\n").forEach(rawLn => {
-          const sec = IA_SEC.find(s => s.re.test(rawLn));
-          if (sec) {
-            salto(4); chk(13);
-            doc.setFillColor(...sec.fill);
-            doc.roundedRect(ML, y, AU, 7, 1.5, 1.5, "F");
-            doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
-            doc.text(sec.label, ML+4, y+5);
-            salto(10);
-            doc.setFontSize(8.5); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
-            return;
-          }
-          const ln = rawLn
-            .replace(/\*\*(.*?)\*\*/g, "$1")
-            .replace(/^#{1,3}\s+/, "")
-            .replace(/[^\x20-\xFF]/g, " ")
-            .replace(/[ \t]{2,}/g, " ")
-            .trim();
-          if (!ln) { salto(3); return; }
-          doc.splitTextToSize(ln, AU).forEach(l => { chk(5); doc.text(l, ML, y); salto(4.5); });
+      // ════════════════════════════════════════════════════════════
+      // SECCIÓN 5 — SUPLEMENTACIÓN ACTUAL POR CATEGORÍA
+      // ════════════════════════════════════════════════════════════
+      const catSupl = [
+        ["Vacas",            form.supl_vacas,   form.dosis_vacas,   form.supl2_vacas,  form.dosis2_vacas],
+        ["V2S",              form.supl_v2s,     form.dosis_v2s,     form.supl2_v2s,    form.dosis2_v2s],
+        ["Toros",            form.supl_toros,   form.dosis_toros,   form.supl2_toros,  form.dosis2_toros],
+        ["Vaquillona 2inv.", form.supl_vaq2,    form.dosis_vaq2,    form.supl2_vaq2,   form.dosis2_vaq2],
+        ["Vaquillona 1inv.", form.supl_vaq1,    form.dosis_vaq1,    form.supl2_vaq1,   form.dosis2_vaq1],
+        ["Ternero",          form.supl_ternero, form.dosis_ternero, form.supl2_ternero,form.dosis2_ternero],
+      ].filter(([,s1,,s2]) => s1||s2);
+      if (catSupl.length) {
+        seccion("SUPLEMENTACION ACTUAL POR CATEGORIA", [30,60,100]);
+        chk(8);
+        [["Categoria",38],["Suplemento 1",50],["Dosis 1",28],["Suplemento 2",50],["Dosis 2",28]].forEach(([h,w],i,arr) => {
+          const ox = ML+arr.slice(0,i).reduce((a,[,w2])=>a+w2,0);
+          doc.setFillColor(...thBg); doc.rect(ox, y, w, 6, "F");
+          doc.setFontSize(6); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+          doc.text(h, ox+w/2, y+4, {align:"center"});
+        });
+        salto(7);
+        catSupl.forEach(([cat,s1,d1,s2,d2],ri) => {
+          chk(6);
+          doc.setFillColor(ri%2===0?248:255, ri%2===0?252:255, ri%2===0?248:255);
+          const rw = AU;
+          doc.rect(ML,y,rw,6,"F");
+          const vals = [cat, s1||"—", (s1?(d1||0)+" kg/d":"—"), s2||"—", (s2?(d2||0)+" kg/d":"—")];
+          const ws   = [38,50,28,50,28];
+          vals.forEach((v,i) => {
+            const ox = ML+ws.slice(0,i).reduce((a,w)=>a+w,0);
+            doc.setFontSize(6.5); doc.setFont("helvetica",i===0?"bold":"normal"); doc.setTextColor(60,60,60);
+            doc.text(txt(v), ox+ws[i]/2, y+4, {align:"center"});
+          });
+          salto(7);
         });
         salto(3);
       }
 
-      // Bloque sanidad + agua
-      chk(30);
-      doc.setFillColor(240,248,235);
-      doc.roundedRect(ML, y, AU, 9, 2, 2, "F");
-      doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(45,106,31);
-      doc.text("SANIDAD", ML+3, y+6);
-      salto(12);
-      doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
-      const sanLinea = [
-        `Aftosa: ${form.sanAftosa==="si"?"Al dia":"SIN VACUNAR"}`,
-        `Brucelosis: ${form.sanBrucelosis==="si"?"Al dia":"SIN VACUNAR"}`,
-        `IBR/DVB: ${form.sanVacunas==="si"?"Al dia":"SIN VACUNAR"}`,
-        "Rev. toros: " + (form.sanToros==="con_control"?"Con revision":"SIN REVISION"),
-        `Abortos: ${form.sanAbortos==="si"?"Si":"No"}`,
-        `Programa: ${form.sanPrograma==="si"?"Si":"No"}`,
-      ].join("  ·  ");
-      doc.splitTextToSize(sanLinea, AU).forEach(ln => { chk(5); doc.text(ln, ML, y); salto(4.5); });
-      salto(4);
+      // ════════════════════════════════════════════════════════════
+      // SECCIÓN 6 — PROPUESTAS DE MEJORA
+      // ════════════════════════════════════════════════════════════
+      const tarjetas = cerebPDF?.prescripciones?.tarjetas || [];
+      if (tarjetas.length) {
+        seccion("PROPUESTAS DE MEJORA — PLAN DE ACCION", [160,50,20]);
+        const p1 = tarjetas.filter(t=>t.prioridad==="P1"||t.prioridad==="URGENTE");
+        const p2 = tarjetas.filter(t=>t.prioridad==="P2");
+        const p3 = tarjetas.filter(t=>t.prioridad==="P3");
+        if (p1.length) { subsec("CRITICO — Accion inmediata antes del proximo servicio", R); p1.forEach(t=>tarjeta(t.titulo||"",t.impacto||"",t.solucion||"",t.cuandoActuar||"","P1")); }
+        if (p2.length) { subsec("IMPORTANTE — Implementar este ciclo", Am); p2.forEach(t=>tarjeta(t.titulo||"",t.impacto||"",t.solucion||"",t.cuandoActuar||"","P2")); }
+        if (p3.length) { subsec("OPTIMIZACION — Para el siguiente ciclo", G); p3.forEach(t=>tarjeta(t.titulo||"",t.impacto||"",t.solucion||"",t.cuandoActuar||"","P3")); }
+      }
 
-      // Bloque agua
-      if (form.aguaTDS || form.aguaFuente) {
+      // ════════════════════════════════════════════════════════════
+      // SECCIÓN 7 — ESCENARIOS Y RESULTADOS ESPERADOS
+      // ════════════════════════════════════════════════════════════
+      seccion("ESCENARIOS Y RESULTADOS ESPERADOS", Gd);
+
+      // Tabla escenarios destete
+      if (tray) {
+        subsec("Impacto del manejo de destete en prenez y terneros", G);
+        const ccS2    = tray.ccServ||0;
+        const prBase  = tray.pr||0;
+        const escs = [
+          { l:"Manejo actual",     cc:+ccS2.toFixed(1),  pr:prBase,                            col:R  },
+          { l:"Destete anticipado 90d",cc:+(tray.ccServAntic||Math.min(9,ccS2+0.4)).toFixed(1),pr:tray.prAntic||ccAPrenez(tray.ccServAntic||ccS2+0.4), col:Am },
+          { l:"Destete hiperprecoz 50d",cc:+(tray.ccServHiper||Math.min(9,ccS2+0.7)).toFixed(1),pr:tray.prHiper||ccAPrenez(tray.ccServHiper||ccS2+0.7),col:G },
+        ];
+        chk(30);
+        const eW = AU/3-2;
+        escs.forEach((e,i) => {
+          const ex=ML+i*(eW+3); const diff=e.pr-prBase;
+          doc.setFillColor(248,252,248); doc.roundedRect(ex,y,eW,32,2,2,"F");
+          doc.setFillColor(...e.col); doc.roundedRect(ex,y,eW,5,2,2,"F"); doc.rect(ex,y+3,eW,2,"F");
+          doc.setFontSize(6); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+          doc.text(e.l, ex+eW/2, y+3.8, {align:"center",maxWidth:eW-2});
+          doc.setFontSize(14); doc.setFont("helvetica","bold"); doc.setTextColor(...e.col);
+          doc.text(e.pr+"%", ex+eW/2, y+16, {align:"center"});
+          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(80,80,80);
+          doc.text("CC serv: "+e.cc, ex+eW/2, y+21.5, {align:"center"});
+          if (diff>0&&nVacas>0) {
+            doc.setFontSize(6.5); doc.setFont("helvetica","bold"); doc.setTextColor(...e.col);
+            doc.text("+"+diff+"pp = +"+Math.round(nVacas*diff/100*0.95)+" terneros", ex+eW/2, y+27, {align:"center"});
+          } else if (i===0) {
+            doc.setFontSize(6.5); doc.setFont("helvetica","normal"); doc.setTextColor(...Gr);
+            doc.text("Base actual", ex+eW/2, y+27, {align:"center"});
+          }
+        });
+        salto(36);
+
+        // Tabla resumen de mejora
+        subsec("Tabla resumen de resultados por escenario", G);
         chk(20);
-        doc.setFillColor(230,240,255);
-        doc.roundedRect(ML, y, AU, 9, 2, 2, "F");
-        doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.setTextColor(50,80,160);
-        doc.text("CALIDAD DEL AGUA", ML+3, y+6);
-        salto(12);
-        doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(44,62,45);
+        const hdrs2 = ["Escenario","CC serv.","Prenez","Terneros/100 vacas","Diferencia vs actual"];
+        const cws2  = [55,22,20,38,35];
+        hdrs2.forEach((h,i) => {
+          const ox=ML+cws2.slice(0,i).reduce((a,w)=>a+w,0);
+          doc.setFillColor(...thBg); doc.rect(ox,y,cws2[i],6,"F");
+          doc.setFontSize(5.5); doc.setFont("helvetica","bold"); doc.setTextColor(255,255,255);
+          doc.text(h, ox+cws2[i]/2, y+4, {align:"center"});
+        });
+        salto(7);
+        const terBase = Math.round(nVacas*prBase/100*0.95);
+        escs.forEach(({l,cc,pr,col},ri) => {
+          chk(6); doc.setFillColor(ri%2===0?248:255,ri%2===0?252:255,ri%2===0?248:255);
+          doc.rect(ML,y,AU,6,"F");
+          const tern = Math.round(nVacas*pr/100*0.95);
+          const diff = tern-terBase;
+          const row = [l, cc+"", pr+"%", ""+tern, ri===0?"Base":(diff>0?"+"+diff:""+diff)+" terneros"];
+          row.forEach((v,i) => {
+            const ox=ML+cws2.slice(0,i).reduce((a,w)=>a+w,0);
+            doc.setFontSize(6.5); doc.setFont("helvetica",i===0||i===4?"bold":"normal");
+            doc.setTextColor(...(i===4&&diff>0?G:i===4&&diff<0?R:Gd));
+            doc.text(txt(v), ox+cws2[i]/2, y+4.5, {align:"center"});
+          });
+          salto(7);
+        });
+        salto(3);
+      }
+
+      // Amplitud de parición
+      if (cadena && cadena.diasServ > 0) {
+        subsec("Analisis del servicio", G);
+        const dS = cadena.diasServ;
+        const [dLab,dCol] = dS<=60?["Concentrado — optimo",[45,140,60]]:dS<=90?["Optimo",[45,140,60]]:dS<=120?["Aceptable",[200,140,20]]:dS<=179?["Excesivo",[200,80,20]]:["Servicio continuo",[180,40,20]];
+        dato2("Duracion del servicio", dS+" dias  →  "+dLab, "Meta recomendada", "60-90 dias");
+        if (dS > 90) {
+          chk(8);
+          doc.setFontSize(7); doc.setFont("helvetica","normal"); doc.setTextColor(...Gr);
+          const recSrv = dS>=180?"Sin estacionar. Meta: reducir a 120d y luego a 90d. Cada mes que dura el servicio distribuye partos y dificulta el manejo.":"Acortar "+Math.round(dS-90)+"d adicionales concentra partos. La cola de paricion pierde "+Math.round((dS-90)/30)+" semanas de recuperacion antes del servicio.";
+          parrafo(recSrv, 0, Gr, 7);
+        }
+        salto(3);
+      }
+
+      // ════════════════════════════════════════════════════════════
+      // SECCIÓN FINAL — SANIDAD + AGUA + AVISO LEGAL
+      // ════════════════════════════════════════════════════════════
+      seccion("SANIDAD", [40,100,50]);
+      const sanLinea = [
+        "Aftosa: "+(form.sanAftosa==="si"?"Al dia":"SIN VACUNAR"),
+        "Brucelosis: "+(form.sanBrucelosis==="si"?"Al dia":"SIN VACUNAR"),
+        "IBR/DVB: "+(form.sanVacunas==="si"?"Al dia":"SIN VACUNAR"),
+        "Rev. toros: "+(form.sanToros==="con_control"?"Con revision":"SIN REVISION"),
+        "Abortos: "+(form.sanAbortos==="si"?"Si":"No"),
+        "Programa San.: "+(form.sanPrograma==="si"?"Si":"No"),
+      ].join("  ·  ");
+      parrafo(sanLinea, 0, Gd, 7.5);
+      salto(3);
+
+      if (form.aguaTDS || form.aguaFuente) {
+        seccion("CALIDAD DEL AGUA", [40,80,160]);
+        const evalAguaPDF = evalAgua;
         const aguaLinea = [
-          form.aguaTDS     ? `TDS: ${form.aguaTDS} mg/L` : "",
-          form.aguaTipoSal ? `Tipo sal: ${form.aguaTipoSal}` : "",
-          form.aguaFuente  ? `Fuente: ${form.aguaFuente}` : "",
-          evalAgua?.pctReducDMI > 0 ? `Reduccion DMI: ${evalAgua.pctReducDMI.toFixed(1)}%` : "",
+          form.aguaTDS     ? "TDS: "+form.aguaTDS+" mg/L" : "",
+          form.aguaTipoSal ? "Tipo sal: "+txt(form.aguaTipoSal) : "",
+          form.aguaFuente  ? "Fuente: "+txt(form.aguaFuente) : "",
+          evalAguaPDF?.label   ? "Estado: "+txt(evalAguaPDF.label) : "",
+          evalAguaPDF?.pctReducDMI>0 ? "Reduccion DMI: "+evalAguaPDF.pctReducDMI.toFixed(1)+"%" : "",
         ].filter(Boolean).join("  ·  ");
-        doc.splitTextToSize(aguaLinea, AU).forEach(ln => { chk(5); doc.text(ln, ML, y); salto(4.5); });
-        salto(4);
+        parrafo(aguaLinea, 0, Gd, 7.5);
+        salto(3);
       }
 
       // Disclaimer
-      chk(20);
-      doc.setDrawColor(200,180,100); doc.setLineWidth(0.3); doc.line(ML, y, ML+AU, y);
-      salto(5);
-      doc.setFontSize(7); doc.setFont("helvetica","italic"); doc.setTextColor(150,130,60);
-      doc.splitTextToSize("AVISO LEGAL: " + DISCLAIMER, AU).forEach(ln => { chk(4); doc.text(ln, ML, y); salto(3.5); });
+      chk(16);
+      doc.setDrawColor(200,180,100); doc.setLineWidth(0.3); doc.line(ML, y, ML+AU, y); salto(5);
+      doc.setFontSize(6.5); doc.setFont("helvetica","italic"); doc.setTextColor(140,120,50);
+      doc.splitTextToSize("AVISO LEGAL: "+txt(DISCLAIMER), AU).forEach(ln => { chk(4); doc.text(ln,ML,y); salto(3.5); });
+      salto(3);
+      doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(160,160,160);
+      doc.text("Referencias: Peruchena 2003 · Selk 1988 · Short et al. 1990 · NASSEM 2010 · NRC 2000 · Detmann/NASSEM 2010", ML, y); salto(4);
 
       // Numeración páginas
       const tot = doc.getNumberOfPages();
-      for (let p = 1; p <= tot; p++) {
+      for (let p=1;p<=tot;p++) {
         doc.setPage(p);
         doc.setFontSize(6); doc.setFont("helvetica","normal"); doc.setTextColor(180,180,180);
-        doc.text("Calf AI · Peruchena 2003 · Selk 1988 · Short et al. 1990 · NASSEM 2010 · NRC 2000", ML, 292);
-        doc.text(`${p}/${tot}`, W-MR, 292, { align:"right" });
+        doc.text("AGROMIND PRO — Informe Tecnico de Cria", ML, 293);
+        doc.text(`Pag. ${p}/${tot}`, W-MR, 293, {align:"right"});
       }
 
-      doc.save(`calfai_${(form.nombreProductor||"informe").replace(/\s/g,"_")}_${new Date().toISOString().slice(0,10)}.pdf`);
-      showToast("PDF generado y descargado ✓", "ok");
+      doc.save(`agromind_${(form.nombreProductor||"informe").replace(/\s/g,"_")}_${new Date().toISOString().slice(0,10)}.pdf`);
+      showToast("PDF generado correctamente", "ok");
     } catch(pdfErr) { console.error("PDF error:", pdfErr); showToast("Error al generar el PDF. Intentá de nuevo.", "error", 5000); }
     };
 
