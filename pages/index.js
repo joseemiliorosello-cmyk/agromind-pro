@@ -401,6 +401,7 @@ function CalfAIPro() {
       const Am = [200,140,20], Al = [255,250,230];
       const Bl = [50,100,180], Bll= [230,240,255];
       const Gr = [100,100,100];
+      const thBg = [40,80,42]; const thTxt = [255,255,255];
 
       // ── helpers ──────────────────────────────────────────────────
       const seccion = (titulo, fillRGB = Gd, textRGB = [255,255,255], h = 8) => {
@@ -731,7 +732,6 @@ function CalfAIPro() {
         subsec("Balance mensual (Demanda vs Oferta vs Balance)", G);
         chk(28);
         const colW = AU/6;
-        const thBg = [40,80,42]; const thTxt = [255,255,255];
         [[0,1,2,3,4,5],[6,7,8,9,10,11]].forEach(fila => {
           fila.forEach((mi,ci) => {
             const bm   = motor.balanceMensual[mi];
@@ -1389,7 +1389,30 @@ function CalfAIPro() {
       });
     }
 
-    // ── HOJA 1: HISTORIAL ANCHO (variables = columnas, visitas = filas) ──
+    // ── HOJA HISTORIAL — única hoja, variables como columnas, visitas como filas ──
+    const FENOL_NOM_XL = { menor_10:"Rebrote", "10_25":"Crecimiento", "25_50":"Maduracion", mayor_50:"Encanado" };
+
+    const histVisitas = leerHistorial();
+    const hoyIso = isoDate;
+    const potrerosAct = potreros || [];
+    const currentAlreadyInHist = histVisitas.some(h =>
+      h.productor === (form.nombreProductor || "") && h.fecha?.slice(0,10) === hoyIso
+    );
+    const todasVisitas = currentAlreadyInHist ? histVisitas : [
+      { id: Date.now(), fecha: new Date().toISOString(), productor: form.nombreProductor || "", form,
+        prenezEst: tray?.pr, ccServ: tray?.ccServ, mesesDeficit: motor?.balanceMensual
+          ? [4,5,6].filter(i => (motor.balanceMensual[i]?.balance ?? 0) < 0).length : 0,
+        nivelRiesgo: "—", potreros: potrerosAct },
+      ...histVisitas,
+    ];
+
+    // Calcular numero maximo de potreros para dimensionar encabezados
+    const maxPots = Math.max(1, ...todasVisitas.map(e => (e.potreros || []).length));
+    const potHeaders = [];
+    for (let pi = 1; pi <= maxPots; pi++) {
+      potHeaders.push(`P${pi} Ha`, `P${pi} Vegetacion`, `P${pi} Fenologia`, `P${pi} Alt pasto (cm)`, `P${pi} Tipo pasto`, `P${pi} Disp MS (kg/ha)`);
+    }
+
     const HEADERS_WIDE = [
       "Fecha","Productor","Localidad","Provincia",
       "Vacas (cab)","Toros (cab)","V2S (cab)","Vaq2 (cab)",
@@ -1403,20 +1426,7 @@ function CalfAIPro() {
       "Meses suplementacion","Meses deficit inv (Jun-Ago)","Nivel riesgo","ENSO",
       "Lluvia 30d (mm)","NDVI","Condicion forrajera",
       "Score total","Score CC","Score balance","Score repro",
-    ];
-
-    const histVisitas = leerHistorial();
-    // Incluir la visita actual al inicio (si aún no está guardada en el historial de hoy)
-    const hoyIso = isoDate;
-    const currentAlreadyInHist = histVisitas.some(h =>
-      h.productor === (form.nombreProductor || "") && h.fecha?.slice(0,10) === hoyIso
-    );
-    const todasVisitas = currentAlreadyInHist ? histVisitas : [
-      { id: Date.now(), fecha: new Date().toISOString(), productor: form.nombreProductor || "", form,
-        prenezEst: tray?.pr, ccServ: tray?.ccServ, mesesDeficit: motor?.balanceMensual
-          ? [4,5,6].filter(i => (motor.balanceMensual[i]?.balance ?? 0) < 0).length : 0,
-        nivelRiesgo: "—" },
-      ...histVisitas,
+      ...potHeaders,
     ];
 
     const filas = todasVisitas.map(entrada => {
@@ -1448,6 +1458,25 @@ function CalfAIPro() {
       const diasServF = fCadena?.diasServ || 0;
       const scF = (() => { try { return calcScore(null, f, null); } catch { return null; } })();
       const cbF = (() => { try { return calcCerebro(null, f, null); } catch { return null; } })();
+      const entPotreros = entrada.potreros || [];
+      const potCols = [];
+      for (let pi = 0; pi < maxPots; pi++) {
+        const p = entPotreros[pi];
+        if (p) {
+          const esPast = (p.veg || "").includes("Pastizal");
+          const dispP  = esPast && p.altPasto ? calcDisponibilidadMS(p.altPasto, p.tipoPasto || "corto_denso") : null;
+          potCols.push(
+            parseFloat(p.ha) || "",
+            p.veg || "",
+            FENOL_NOM_XL[p.fenol] || p.fenol || "",
+            parseFloat(p.altPasto) || "",
+            p.tipoPasto || "",
+            dispP ? Math.round(dispP.msHa) : "",
+          );
+        } else {
+          potCols.push("","","","","","");
+        }
+      }
 
       return [
         entrada.fecha?.slice(0,10) || fecha,
@@ -1495,51 +1524,15 @@ function CalfAIPro() {
         scF?.dim?.find(d=>d.id==="cc")?.score || "",
         scF?.dim?.find(d=>d.id==="balance")?.score || "",
         scF?.dim?.find(d=>d.id==="repro")?.score || "",
+        ...potCols,
       ];
     });
 
     const wsHistorial = XLSX.utils.aoa_to_sheet([HEADERS_WIDE, ...filas]);
-    // Congelar fila de encabezados
     wsHistorial["!freeze"] = { xSplit: 0, ySplit: 1 };
-
-    // ── HOJA 2: DETALLE VISITA ACTUAL (formato original) ──
-    const SEP = [["","","","","","","","","",""]];
-    const hojaDetalle = [
-      ...hoja1, ...SEP, ...hoja2, ...SEP, ...hoja3, ...SEP, ...hojaRepro, ...SEP, ...hoja5,
-    ];
-
-    // Hoja Potreros
-    const FENOL_NOM = { menor_10:"Rebrote", "10_25":"Crecimiento", "25_50":"Maduración", mayor_50:"Encañado" };
-    const PB_VEG    = { "Pastizal natural":14, "Megatérmicas C4":22, "Pasturas templadas C3":16, "Mixta gramíneas+legum.":18, "Bosque nativo / monte":2.5, "Verdeo de invierno":18 };
-    const hojaPot = [
-      ["POTREROS — RECURSOS FORRAJEROS", "", "", "", "", "", "", "", ""],
-      ["Productor:", form.nombreProductor || "", "", "Fecha:", fecha, "", "", "", ""],
-      ["", "", "", "", "", "", "", "", ""],
-      ["Potrero", "Hectáreas", "Vegetación", "Fenología", "Altura pasto (cm)", "Tipo pasto", "PB (%)", "Disp. MS (kg/ha)", "Verdeo tipo / dispon. MS"],
-    ];
-    (potreros || []).forEach((p, i) => {
-      const esPast = (p.veg || "").includes("Pastizal");
-      const dispP  = esPast && p.altPasto ? calcDisponibilidadMS(p.altPasto, p.tipoPasto || "corto_denso") : null;
-      hojaPot.push([
-        `Potrero ${i + 1}`,
-        parseFloat(p.ha) || "",
-        p.veg || "Pastizal natural",
-        FENOL_NOM[p.fenol] || p.fenol || "",
-        parseFloat(p.altPasto) || "",
-        p.tipoPasto || "",
-        PB_VEG[p.veg] || "",
-        dispP ? Math.round(dispP.msHa) : "",
-        p.verdeoTipo ? `${p.verdeoTipo} · ${p.verdeoDisp || "—"} kg MS/ha` : "",
-      ]);
-    });
-    // Totales
-    const totalHaPot = (potreros||[]).reduce((s,p) => s + (parseFloat(p.ha)||0), 0);
-    hojaPot.push(["TOTAL", totalHaPot || "", "", "", "", "", "", "", ""]);
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, wsHistorial, "Historial");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaDetalle), "Detalle visita");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaPot), "Potreros");
     XLSX.writeFile(wb, `calfai_historial_${isoDate}.xlsx`);
     showToast(`Excel generado: ${todasVisitas.length} visita${todasVisitas.length!==1?"s":""} ✓`, "ok");
   }
