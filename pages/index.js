@@ -1088,14 +1088,7 @@ function CalfAIPro() {
     } catch(pdfErr) { console.error("PDF error:", pdfErr); showToast("Error al generar el PDF. Intentá de nuevo.", "error", 5000); }
     };
 
-    if (window.jspdf?.jsPDF) {
-      gen(window.jspdf.jsPDF);
-    } else {
-      const s = document.createElement("script");
-      s.src     = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      s.onload  = () => gen(window.jspdf.jsPDF);
-      document.head.appendChild(s);
-    }
+    import('jspdf').then(({ jsPDF }) => gen(jsPDF)).catch(() => showToast("Error al cargar jsPDF. Intentá de nuevo.", "error", 5000));
   }
 
   // ── DESCARGAR EXCEL ───────────────────────────────────────────
