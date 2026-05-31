@@ -337,7 +337,7 @@ function CalfAIPro() {
     let mi = 0;
     const iv = setInterval(() => { setLoadMsg(MSGS[mi % MSGS.length]); mi++; }, 800);
     try {
-      guardarEnHistorial(form, motor, null);
+      guardarEnHistorial(form, motor, null, potreros);
       setCerebroResult(cerebroMemo);
 
       // Notificar al owner (fire & forget)
