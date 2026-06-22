@@ -302,6 +302,25 @@ export function getPasoRenders(scope) {
     PASOS, gpsClick, tcSave,
   } = scope;
 
+  // Alertas filtradas por paso — misma lógica que el punto de color de las pestañas (pages/index.js)
+  const FILTRO_ALERTAS_PASO = {
+    rodeo:    a => ["cc_serv_bajo","cc_desvio_campo"].includes(a.id),
+    sanidad:  a => a.id?.startsWith("agua") || a.id?.startsWith("carga"),
+  };
+
+  const BannerAlertasPaso = ({ paso }) => {
+    const filtro = FILTRO_ALERTAS_PASO[paso];
+    const lista = filtro ? (alertasMotor || []).filter(filtro) : [];
+    if (!lista.length) return null;
+    return (
+      <div style={{ marginBottom:10 }}>
+        {lista.map((a,i) => (
+          <Alerta key={i} tipo={a.tipo === "P1" ? "error" : "warn"}>{a.msg}</Alerta>
+        ))}
+      </div>
+    );
+  };
+
 const renderUbicacion = () => {
   const paises = Object.keys(UBICACIONES);
   const zonas  = form.pais ? Object.keys(UBICACIONES[form.pais] || {}) : [];
@@ -368,6 +387,7 @@ const renderUbicacion = () => {
 }
   const renderRodeo = () => (
     <div>
+      <BannerAlertasPaso paso="rodeo" />
       <SelectF label="BIOTIPO" value={form.biotipo} onChange={v=>set("biotipo",v)}
         placeholder="Seleccioná el biotipo..."
         groups={[
@@ -1711,6 +1731,7 @@ const renderUbicacion = () => {
   // ── PASO 7: SANIDAD ───────────────────────────────────────────
   const renderSanidad = () => (
     <div>
+      <BannerAlertasPaso paso="sanidad" />
       <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, letterSpacing:1, marginBottom:4 }}>🏥 SANIDAD REPRODUCTIVA</div>
 
       {/* Vacunas obligatorias */}
