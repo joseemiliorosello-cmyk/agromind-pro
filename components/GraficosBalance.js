@@ -814,6 +814,19 @@ function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
         ))}
         {/* trayectoria real */}
         <polyline points={pts} fill="none" stroke={DG} strokeWidth={2} />
+        {/* GDP (g/día) por tramo, para entender qué impulsa cada cambio de pendiente */}
+        {pvTray.slice(0, -1).map((v, i) => {
+          const dias = xDays[i+1] - xDays[i];
+          const gdp  = dias > 0 ? Math.round((pvTray[i+1] - v) * 1000 / dias) : 0;
+          const xMid = (xPos[i] + xPos[i+1]) / 2;
+          const yMid = (yPV(v) + yPV(pvTray[i+1])) / 2;
+          return (
+            <text key={i} x={xMid} y={yMid - 8} textAnchor="middle"
+              style={{ fontFamily: C.font, fontSize: "6.5px", fill: C.textDim }}>
+              {gdp >= 0 ? "+" : ""}{gdp} g/d
+            </text>
+          );
+        })}
         {/* puntos en hitos */}
         {pvTray.map((v, i) => (
           <circle key={i} cx={xPos[i]} cy={yPV(v)} r={3} fill={DG} />
@@ -838,7 +851,7 @@ function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
         ))}
       </svg>
       <div style={{ fontFamily: C.font, fontSize: 8, color: C.textDim, marginTop: 4 }}>
-        Trayectoria real con forraje y suplemento cargados · fondo ámbar = invierno
+        Trayectoria proyectada en 5 hitos (no día a día) · fondo ámbar = invierno · g/d = ganancia diaria de peso en cada tramo
       </div>
     </div>
   );

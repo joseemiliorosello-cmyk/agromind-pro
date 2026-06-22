@@ -1443,6 +1443,15 @@ const renderUbicacion = () => {
           const freq    = calcFreq(s1, s2);
           const tieneSupl = d1 > 0 || d2 > 0;
 
+          // ── Oferta de pasto (NDVI/GPS) para esta categoría, promediada sobre los meses de suplementación ──
+          const ofPastoKey = { vaq1:"ofPastoPerVaq1", vaq2:"ofPastoPerVaq2", v2s:"ofPastoPerV2s" }[cat.key];
+          const mesesSuplSel = (form.suplMeses || ["5","6","7"]).map(Number);
+          const ofPastoMeses = ofPastoKey
+            ? mesesSuplSel.map(i => motorEfectivo?.balanceMensual?.[i]?.[ofPastoKey]).filter(v => typeof v === "number")
+            : [];
+          const ofPastoProm = ofPastoMeses.length ? ofPastoMeses.reduce((a,b)=>a+b,0)/ofPastoMeses.length : null;
+          const ndviActual  = parseFloat(sat?.ndvi);
+
           // Alertas específicas
           const alertas = [];
           if (cat.key === "vaq1" && s1 === "Semilla algodón" && d1 > cat.pv * 0.004)
@@ -1542,6 +1551,24 @@ const renderUbicacion = () => {
                   </div>
                 ))}
               </div>
+
+              {/* ── Oferta de pasto (NDVI/GPS) + consumo posible total ── */}
+              {ofPastoKey && (
+                <div style={{ marginBottom:10, padding:"7px 9px", borderRadius:8, background:`${cat.color}08`, border:`1px solid ${cat.color}20` }}>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1, marginBottom:3 }}>
+                    OFERTA DE PASTO (NDVI/GPS) — meses de suplementación
+                  </div>
+                  {ofPastoProm !== null ? (
+                    <div style={{ fontFamily:C.font, fontSize:10, color:C.text }}>
+                      {ofPastoProm.toFixed(1)} Mcal/d pasto
+                      {Number.isFinite(ndviActual) && <span style={{ color:C.textFaint }}> · NDVI {ndviActual.toFixed(2)}</span>}
+                      {tieneSupl && <span style={{ color:cat.color, fontWeight:700 }}> · {(ofPastoProm + mcalTot).toFixed(1)} Mcal/d consumo posible (pasto+suplemento)</span>}
+                    </div>
+                  ) : (
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>Sin datos de oferta de pasto — corré el motor para esta categoría</div>
+                  )}
+                </div>
+              )}
 
               {/* ── CUADRANTE 4: Resultados ── */}
               {tieneSupl && (
