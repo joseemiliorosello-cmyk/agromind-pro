@@ -40,10 +40,12 @@ Next.js 14 · React · Vercel · Repo: https://github.com/joseemiliorosello-cmyk
 - Parición: ago–oct · Servicio: nov–dic · Tacto: mar–abr
 - Usuario: veterinario asesor, usa la app en consulta con el productor
 
-## Trabajo pendiente (próxima sesión)
+## Trabajo pendiente
 
-- Fix gestación temprana: usar edad gestacional desde concepción, no desde parto (`lib/motor.js`)
-- Fix demanda por grupos: calcular mes a mes cuántas vacas lactan por tipo de destete (`lib/motor.js`)
-- Gráfico de barras: altura refleja estado fisiológico real por categoría (`components/GraficosBalance.js`)
-- Capa 2: alertas contextuales al momento de la consulta
-- Capa 3: calidad de preñez (% cabeza/cuerpo/cola)
+Sin pendientes abiertos al cierre de esta sesión (junio 2026). Última tanda completada:
+
+- ✅ Fix gestación temprana: edad gestacional desde concepción, no desde parto (`lib/motor.js`)
+- ✅ Fix demanda por grupos: `reqVacaI` pondera mes a mes por `fracLact` y grupo de destete (`lib/motor.js`)
+- ✅ Gráfico de barras: tooltip muestra `estadoVaca` (estado fisiológico real) por mes (`components/GraficosBalance.js`)
+- ✅ Capa 2: alertas P1/P2 contextuales en pasos Rodeo y Sanidad (`components/pasos.js`)
+- ✅ Capa 3: `calcCalidadPrenez` — % cabeza/cuerpo/cola por ciclos de servicio de 21d (`lib/motor.js`, panel en `components/GraficosBalance.js`)
