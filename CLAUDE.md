@@ -49,3 +49,8 @@ Sin pendientes abiertos al cierre de esta sesión (junio 2026). Última tanda co
 - ✅ Gráfico de barras: tooltip muestra `estadoVaca` (estado fisiológico real) por mes (`components/GraficosBalance.js`)
 - ✅ Capa 2: alertas P1/P2 contextuales en pasos Rodeo y Sanidad (`components/pasos.js`)
 - ✅ Capa 3: `calcCalidadPrenez` — % cabeza/cuerpo/cola por ciclos de servicio de 21d (`lib/motor.js`, panel en `components/GraficosBalance.js`)
+- ✅ Fix `calcMovilizacionCC`: umbral `CC_MINIMA_MOVILIZACION` invertido anulaba la movilización en escenarios normales (`lib/motor.js`)
+- ✅ Fix `balancePorCategoria`: slot "complemento" (`supl2_*`) de suplementos no se sumaba al Mcal — solo se leía el principal (`lib/motor.js`)
+- ✅ Fix verdeo "rodeo general": divisor per-animal de `vacas_v2s` usaba solo `v2sN` en vez de `C.n` (`lib/motor.js`)
+- ✅ Panel suplementación: agrega oferta de pasto NDVI/GPS + consumo posible total (`components/pasos.js`)
+- ✅ Gráfico trayectoria PV vaquillona: agrega GDP (g/d) por tramo (`components/GraficosBalance.js`)
