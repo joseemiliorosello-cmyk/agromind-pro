@@ -77,6 +77,7 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
       d.oferta.verdeo > 0 ? `  Verdeo: ${d.oferta.verdeo.toFixed(1)}` : null,
       mostrarMovCC && d.oferta.movilizacionCC > 0 ? `  Mov.CC: ${d.oferta.movilizacionCC.toFixed(1)}` : null,
       `Demanda: ${d.demanda?.toFixed(1)} Mcal/d`,
+      d.estadoVaca ? `  Estado: ${d.estadoVaca}` : null,
       d.dTerneros > 0 ? `  Terneros: ${d.dTerneros?.toFixed(1)} Mcal/d` : null,
       `Balance: ${bal >= 0 ? "+" : ""}${bal?.toFixed(1)} Mcal/d`,
     ].filter(Boolean);
