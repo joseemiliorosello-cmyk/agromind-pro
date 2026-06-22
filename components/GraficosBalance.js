@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useRef } from "react";
-import { balancePorCategoria, calcTrayectoriaCC, calcCadena } from "../lib/motor";
+import { balancePorCategoria, calcTrayectoriaCC, calcCadena, calcCalidadPrenez } from "../lib/motor";
 import { calcCerebro } from "../lib/cerebro";
 import { T as C } from "../lib/constantes";
 
@@ -581,6 +581,50 @@ function GraficoDistribucionPartos({ cadena }) {
   );
 }
 
+// ─── Calidad de preñez: cabeza / cuerpo / cola ───
+function PanelCalidadPrenez({ ccServ, diasServ }) {
+  const cal = calcCalidadPrenez(ccServ, diasServ);
+  if (!cal) return null;
+
+  const COL = { bajo: DG, medio: "#F39C12", alto: DR };
+  const segs = [
+    { k: "cabeza", label: "Cabeza", ...cal.cabeza },
+    { k: "cuerpo", label: "Cuerpo", ...cal.cuerpo },
+    { k: "cola",   label: "Cola",   ...cal.cola   },
+  ];
+
+  return (
+    <div style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <div style={{ fontFamily: C.font, fontSize: 11, color: C.text, fontWeight: 700 }}>
+          Calidad de preñez — distribución cabeza / cuerpo / cola
+        </div>
+        <div style={{ fontFamily: C.font, fontSize: 8, color: C.textFaint }}>
+          Preñez estimada: {cal.prenezTotalPct}% · CC servicio {ccServ?.toFixed(1)} · {cal.nCiclos} ciclos de 21d
+        </div>
+      </div>
+      <div style={{ display: "flex", height: 22, borderRadius: 6, overflow: "hidden", marginBottom: 6 }}>
+        {segs.map(s => (
+          <div key={s.k} style={{ width: `${s.pct}%`, background: COL[s.riesgo], opacity: 0.85,
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {s.pct >= 10 && (
+              <span style={{ fontFamily: C.font, fontSize: 9, color: "#0d1a0b", fontWeight: 700 }}>{s.pct}%</span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontFamily: C.font, fontSize: 8.5, color: C.textDim }}>
+        {segs.map(s => (
+          <span key={s.k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ display: "inline-block", width: 10, height: 10, background: COL[s.riesgo], borderRadius: 2 }} />
+            {s.label} {s.pct}% — {s.nota}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Cronograma anual ───
 function CronogramaAnual({ motor, form, sat, potreros = [] }) {
   const cerebro = useMemo(() => {
@@ -867,6 +911,8 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
       )}
 
       <TrayectoriaCC form={form} motor={motor} />
+
+      <PanelCalidadPrenez ccServ={motor?.tray?.ccServ} diasServ={cadena?.diasServ} />
 
       {datos.vacas_v2s && (
         <GraficoMcal
