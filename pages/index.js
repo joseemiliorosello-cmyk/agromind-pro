@@ -337,7 +337,7 @@ function CalfAIPro() {
     let mi = 0;
     const iv = setInterval(() => { setLoadMsg(MSGS[mi % MSGS.length]); mi++; }, 800);
     try {
-      guardarEnHistorial(form, motor, null, potreros);
+      guardarEnHistorial(form, motor, null, potreros, sat);
       setCerebroResult(cerebroMemo);
 
       // Notificar al owner (fire & forget)
@@ -1510,9 +1510,9 @@ function CalfAIPro() {
         typeof entrada.mesesDeficit === "number" ? entrada.mesesDeficit : "",
         cbF?.resumen?.nivelRiesgo || entrada.nivelRiesgo || "",
         f.enso || "neutro",
-        "",  // lluvia 30d — no disponible en historial
-        "",  // NDVI — no disponible en historial
-        "",  // condición forrajera — no disponible en historial
+        entrada.sat?.p30 ?? "",
+        entrada.sat?.ndvi ?? "",
+        entrada.sat?.condForr || "",
         scF?.total || "",
         scF?.dim?.find(d=>d.id==="cc")?.score || "",
         scF?.dim?.find(d=>d.id==="balance")?.score || "",

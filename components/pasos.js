@@ -341,7 +341,7 @@ const renderUbicacion = () => {
       {sat && !sat.error && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
           <MetricCard label="TEMPERATURA" value={sat.temp+"°C"} color={C.amber} />
-          <MetricCard label="NDVI" value={sat.ndvi} color={C.green} sub={sat.condForr} />
+          <MetricCard label="NDVI (estimado)" value={sat.ndvi} color={C.green} sub={sat.condForr + " · proxy por lluvia, no imagen satelital"} />
           <MetricCard label="LLUVIA 30D" value={sat.p30+"mm"} color={"#4a9eff"} />
           <MetricCard label="BALANCE" value={(sat.deficit>0?"+":"")+sat.deficit+"mm"} color={sat.deficit>0?C.green:C.red} />
         </div>
