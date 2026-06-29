@@ -54,3 +54,4 @@ Sin pendientes abiertos al cierre de esta sesión (junio 2026). Última tanda co
 - ✅ Fix verdeo "rodeo general": divisor per-animal de `vacas_v2s` usaba solo `v2sN` en vez de `C.n` (`lib/motor.js`)
 - ✅ Panel suplementación: agrega oferta de pasto NDVI/GPS + consumo posible total (`components/pasos.js`)
 - ✅ Gráfico trayectoria PV vaquillona: agrega GDP (g/d) por tramo (`components/GraficosBalance.js`)
+- ✅ Fix `dZona`: el fallback `lat>-32 → "NEA"` clasificaba mal Pampa Húmeda/NOA — ahora la zona se deriva de `PROV_A_ZONA[provincia]` (misma provincia que ya calcula `nearestProv`) (`pages/index.js`)

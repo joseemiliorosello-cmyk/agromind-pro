@@ -283,6 +283,20 @@ function CalfAIPro() {
     }
     return best;
   }
+  // Zona agroclimática por provincia — más confiable que el bounding-box de lat/lon
+  // porque usa la misma provincia ya determinada por nearestProv (evita que el
+  // fallback de dZona() clasifique Pampa Húmeda/NOA como NEA)
+  const PROV_A_ZONA = {
+    "Corrientes":"NEA", "Chaco":"NEA", "Formosa":"NEA", "Misiones":"NEA",
+    "Entre Ríos":"Pampa Húmeda", "Santa Fe":"Pampa Húmeda",
+    "Buenos Aires":"Pampa Húmeda", "Córdoba":"Pampa Húmeda", "La Pampa":"Pampa Húmeda",
+    "Santiago del Estero":"NOA", "Salta":"NOA", "Jujuy":"NOA",
+    "Tucumán":"NOA", "Catamarca":"NOA", "Tarija / Chaco (BO)":"NOA",
+    "Paraguay Oriental":"Paraguay Oriental", "Chaco Paraguayo":"Chaco Paraguayo",
+    "Mato Grosso do Sul (BR)":"Brasil (Cerrado)", "Mato Grosso / Goiás (BR)":"Brasil (Cerrado)",
+    "Rio Grande do Sul (BR)":"Brasil (Cerrado)", "Pantanal (BR)":"Brasil (Cerrado)",
+    "Santa Cruz / Beni (BO)":"Brasil (Cerrado)",
+  };
   async function gpsClick() {
     if (!navigator.geolocation) {
       showToast("GPS no disponible en este navegador", "error");
@@ -294,9 +308,9 @@ function CalfAIPro() {
         const la = +pos.coords.latitude.toFixed(5);
         const lo = +pos.coords.longitude.toFixed(5);
         setCoords({ lat:la, lon:lo });
-        set("zona",      dZona(la, lo));
         const prov = nearestProv(la, lo);
         set("provincia", prov);
+        set("zona", PROV_A_ZONA[prov] || dZona(la, lo));
         // Reverse geocoding para obtener localidad
         try {
           const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json&accept-language=es&zoom=10`);
