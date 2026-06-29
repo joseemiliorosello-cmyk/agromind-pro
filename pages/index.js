@@ -3230,7 +3230,10 @@ function CalfAIPro() {
   // ══════════════════════════════════════════════════════════════
   // RENDER PRINCIPAL
   // ══════════════════════════════════════════════════════════════
-  if (!session) return (
+  if (!session) {
+    const accesoDenegado = typeof window !== "undefined" &&
+      window.location.search.includes("error=AccessDenied");
+    return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
       <div style={{ marginBottom:48, textAlign:"center" }}>
         <div style={{ fontFamily:C.font, fontSize:13, color:C.textFaint, letterSpacing:4, marginBottom:16, textTransform:"uppercase" }}>Diagnóstico bovino</div>
@@ -3238,6 +3241,11 @@ function CalfAIPro() {
         <div style={{ width:48, height:2, background:C.green+"44", margin:"16px auto 0" }} />
       </div>
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:"32px 40px", textAlign:"center", boxShadow:C.sh.lg }}>
+        {accesoDenegado && (
+          <div style={{ fontFamily:C.sans, fontSize:13, color:C.red||"#A32D2D", marginBottom:18, lineHeight:1.5, fontWeight:600 }}>
+            Acceso no autorizado.<br/>Tu cuenta no tiene permiso para usar esta app.<br/>Contactá al administrador para solicitar acceso.
+          </div>
+        )}
         <div style={{ fontFamily:C.sans, fontSize:14, color:C.textDim, marginBottom:24, lineHeight:1.6 }}>
           Ingresá con tu cuenta institucional para<br/>acceder al sistema de diagnóstico
         </div>
@@ -3253,7 +3261,8 @@ function CalfAIPro() {
         </div>
       </div>
     </div>
-  );
+    );
+  }
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg }}>
