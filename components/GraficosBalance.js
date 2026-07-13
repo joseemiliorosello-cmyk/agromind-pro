@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useRef } from "react";
-import { balancePorCategoria, calcTrayectoriaCC, calcCadena } from "../lib/motor";
+import { balancePorCategoria, calcTrayectoriaCC, calcCadena, calcCalidadPrenez } from "../lib/motor";
 import { calcCerebro } from "../lib/cerebro";
 import { T as C } from "../lib/constantes";
 
@@ -77,6 +77,7 @@ function GraficoMcal({ datos, titulo, subTitulo, mostrarMovCC, W = 340, H = 200 
       d.oferta.verdeo > 0 ? `  Verdeo: ${d.oferta.verdeo.toFixed(1)}` : null,
       mostrarMovCC && d.oferta.movilizacionCC > 0 ? `  Mov.CC: ${d.oferta.movilizacionCC.toFixed(1)}` : null,
       `Demanda: ${d.demanda?.toFixed(1)} Mcal/d`,
+      d.estadoVaca ? `  Estado: ${d.estadoVaca}` : null,
       d.dTerneros > 0 ? `  Terneros: ${d.dTerneros?.toFixed(1)} Mcal/d` : null,
       `Balance: ${bal >= 0 ? "+" : ""}${bal?.toFixed(1)} Mcal/d`,
     ].filter(Boolean);
@@ -580,6 +581,50 @@ function GraficoDistribucionPartos({ cadena }) {
   );
 }
 
+// ─── Calidad de preñez: cabeza / cuerpo / cola ───
+function PanelCalidadPrenez({ ccServ, diasServ }) {
+  const cal = calcCalidadPrenez(ccServ, diasServ);
+  if (!cal) return null;
+
+  const COL = { bajo: DG, medio: "#F39C12", alto: DR };
+  const segs = [
+    { k: "cabeza", label: "Cabeza", ...cal.cabeza },
+    { k: "cuerpo", label: "Cuerpo", ...cal.cuerpo },
+    { k: "cola",   label: "Cola",   ...cal.cola   },
+  ];
+
+  return (
+    <div style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <div style={{ fontFamily: C.font, fontSize: 11, color: C.text, fontWeight: 700 }}>
+          Calidad de preñez — distribución cabeza / cuerpo / cola
+        </div>
+        <div style={{ fontFamily: C.font, fontSize: 8, color: C.textFaint }}>
+          Preñez estimada: {cal.prenezTotalPct}% · CC servicio {ccServ?.toFixed(1)} · {cal.nCiclos} ciclos de 21d
+        </div>
+      </div>
+      <div style={{ display: "flex", height: 22, borderRadius: 6, overflow: "hidden", marginBottom: 6 }}>
+        {segs.map(s => (
+          <div key={s.k} style={{ width: `${s.pct}%`, background: COL[s.riesgo], opacity: 0.85,
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {s.pct >= 10 && (
+              <span style={{ fontFamily: C.font, fontSize: 9, color: "#0d1a0b", fontWeight: 700 }}>{s.pct}%</span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, fontFamily: C.font, fontSize: 8.5, color: C.textDim }}>
+        {segs.map(s => (
+          <span key={s.k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ display: "inline-block", width: 10, height: 10, background: COL[s.riesgo], borderRadius: 2 }} />
+            {s.label} {s.pct}% — {s.nota}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Cronograma anual ───
 function CronogramaAnual({ motor, form, sat, potreros = [] }) {
   const cerebro = useMemo(() => {
@@ -769,6 +814,19 @@ function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
         ))}
         {/* trayectoria real */}
         <polyline points={pts} fill="none" stroke={DG} strokeWidth={2} />
+        {/* GDP (g/día) por tramo, para entender qué impulsa cada cambio de pendiente */}
+        {pvTray.slice(0, -1).map((v, i) => {
+          const dias = xDays[i+1] - xDays[i];
+          const gdp  = dias > 0 ? Math.round((pvTray[i+1] - v) * 1000 / dias) : 0;
+          const xMid = (xPos[i] + xPos[i+1]) / 2;
+          const yMid = (yPV(v) + yPV(pvTray[i+1])) / 2;
+          return (
+            <text key={i} x={xMid} y={yMid - 8} textAnchor="middle"
+              style={{ fontFamily: C.font, fontSize: "6.5px", fill: C.textDim }}>
+              {gdp >= 0 ? "+" : ""}{gdp} g/d
+            </text>
+          );
+        })}
         {/* puntos en hitos */}
         {pvTray.map((v, i) => (
           <circle key={i} cx={xPos[i]} cy={yPV(v)} r={3} fill={DG} />
@@ -793,7 +851,7 @@ function GraficoTrayectoriaVaq({ vaq1E, vaq2E }) {
         ))}
       </svg>
       <div style={{ fontFamily: C.font, fontSize: 8, color: C.textDim, marginTop: 4 }}>
-        Trayectoria real con forraje y suplemento cargados · fondo ámbar = invierno
+        Trayectoria proyectada en 5 hitos (no día a día) · fondo ámbar = invierno · g/d = ganancia diaria de peso en cada tramo
       </div>
     </div>
   );
@@ -866,6 +924,8 @@ export default function GraficosBalance({ form, sat, cadena, tray, motor, usaPot
       )}
 
       <TrayectoriaCC form={form} motor={motor} />
+
+      <PanelCalidadPrenez ccServ={motor?.tray?.ccServ} diasServ={cadena?.diasServ} />
 
       {datos.vacas_v2s && (
         <GraficoMcal

@@ -283,6 +283,20 @@ function CalfAIPro() {
     }
     return best;
   }
+  // Zona agroclimática por provincia — más confiable que el bounding-box de lat/lon
+  // porque usa la misma provincia ya determinada por nearestProv (evita que el
+  // fallback de dZona() clasifique Pampa Húmeda/NOA como NEA)
+  const PROV_A_ZONA = {
+    "Corrientes":"NEA", "Chaco":"NEA", "Formosa":"NEA", "Misiones":"NEA",
+    "Entre Ríos":"Pampa Húmeda", "Santa Fe":"Pampa Húmeda",
+    "Buenos Aires":"Pampa Húmeda", "Córdoba":"Pampa Húmeda", "La Pampa":"Pampa Húmeda",
+    "Santiago del Estero":"NOA", "Salta":"NOA", "Jujuy":"NOA",
+    "Tucumán":"NOA", "Catamarca":"NOA", "Tarija / Chaco (BO)":"NOA",
+    "Paraguay Oriental":"Paraguay Oriental", "Chaco Paraguayo":"Chaco Paraguayo",
+    "Mato Grosso do Sul (BR)":"Brasil (Cerrado)", "Mato Grosso / Goiás (BR)":"Brasil (Cerrado)",
+    "Rio Grande do Sul (BR)":"Brasil (Cerrado)", "Pantanal (BR)":"Brasil (Cerrado)",
+    "Santa Cruz / Beni (BO)":"Brasil (Cerrado)",
+  };
   async function gpsClick() {
     if (!navigator.geolocation) {
       showToast("GPS no disponible en este navegador", "error");
@@ -294,9 +308,9 @@ function CalfAIPro() {
         const la = +pos.coords.latitude.toFixed(5);
         const lo = +pos.coords.longitude.toFixed(5);
         setCoords({ lat:la, lon:lo });
-        set("zona",      dZona(la, lo));
         const prov = nearestProv(la, lo);
         set("provincia", prov);
+        set("zona", PROV_A_ZONA[prov] || dZona(la, lo));
         // Reverse geocoding para obtener localidad
         try {
           const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${la}&lon=${lo}&format=json&accept-language=es&zoom=10`);
@@ -337,7 +351,7 @@ function CalfAIPro() {
     let mi = 0;
     const iv = setInterval(() => { setLoadMsg(MSGS[mi % MSGS.length]); mi++; }, 800);
     try {
-      guardarEnHistorial(form, motor, null, potreros);
+      guardarEnHistorial(form, motor, null, potreros, sat);
       setCerebroResult(cerebroMemo);
 
       // Notificar al owner (fire & forget)
@@ -1510,9 +1524,9 @@ function CalfAIPro() {
         typeof entrada.mesesDeficit === "number" ? entrada.mesesDeficit : "",
         cbF?.resumen?.nivelRiesgo || entrada.nivelRiesgo || "",
         f.enso || "neutro",
-        "",  // lluvia 30d — no disponible en historial
-        "",  // NDVI — no disponible en historial
-        "",  // condición forrajera — no disponible en historial
+        entrada.sat?.p30 ?? "",
+        entrada.sat?.ndvi ?? "",
+        entrada.sat?.condForr || "",
         scF?.total || "",
         scF?.dim?.find(d=>d.id==="cc")?.score || "",
         scF?.dim?.find(d=>d.id==="balance")?.score || "",
@@ -3216,7 +3230,10 @@ function CalfAIPro() {
   // ══════════════════════════════════════════════════════════════
   // RENDER PRINCIPAL
   // ══════════════════════════════════════════════════════════════
-  if (!session) return (
+  if (!session) {
+    const accesoDenegado = typeof window !== "undefined" &&
+      window.location.search.includes("error=AccessDenied");
+    return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
       <div style={{ marginBottom:48, textAlign:"center" }}>
         <div style={{ fontFamily:C.font, fontSize:13, color:C.textFaint, letterSpacing:4, marginBottom:16, textTransform:"uppercase" }}>Diagnóstico bovino</div>
@@ -3224,6 +3241,11 @@ function CalfAIPro() {
         <div style={{ width:48, height:2, background:C.green+"44", margin:"16px auto 0" }} />
       </div>
       <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:"32px 40px", textAlign:"center", boxShadow:C.sh.lg }}>
+        {accesoDenegado && (
+          <div style={{ fontFamily:C.sans, fontSize:13, color:C.red||"#A32D2D", marginBottom:18, lineHeight:1.5, fontWeight:600 }}>
+            Acceso no autorizado.<br/>Tu cuenta no tiene permiso para usar esta app.<br/>Contactá al administrador para solicitar acceso.
+          </div>
+        )}
         <div style={{ fontFamily:C.sans, fontSize:14, color:C.textDim, marginBottom:24, lineHeight:1.6 }}>
           Ingresá con tu cuenta institucional para<br/>acceder al sistema de diagnóstico
         </div>
@@ -3239,7 +3261,8 @@ function CalfAIPro() {
         </div>
       </div>
     </div>
-  );
+    );
+  }
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg }}>

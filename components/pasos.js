@@ -302,6 +302,25 @@ export function getPasoRenders(scope) {
     PASOS, gpsClick, tcSave,
   } = scope;
 
+  // Alertas filtradas por paso — misma lógica que el punto de color de las pestañas (pages/index.js)
+  const FILTRO_ALERTAS_PASO = {
+    rodeo:    a => ["cc_serv_bajo","cc_desvio_campo"].includes(a.id),
+    sanidad:  a => a.id?.startsWith("agua") || a.id?.startsWith("carga"),
+  };
+
+  const BannerAlertasPaso = ({ paso }) => {
+    const filtro = FILTRO_ALERTAS_PASO[paso];
+    const lista = filtro ? (alertasMotor || []).filter(filtro) : [];
+    if (!lista.length) return null;
+    return (
+      <div style={{ marginBottom:10 }}>
+        {lista.map((a,i) => (
+          <Alerta key={i} tipo={a.tipo === "P1" ? "error" : "warn"}>{a.msg}</Alerta>
+        ))}
+      </div>
+    );
+  };
+
 const renderUbicacion = () => {
   const paises = Object.keys(UBICACIONES);
   const zonas  = form.pais ? Object.keys(UBICACIONES[form.pais] || {}) : [];
@@ -322,7 +341,7 @@ const renderUbicacion = () => {
       {sat && !sat.error && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
           <MetricCard label="TEMPERATURA" value={sat.temp+"°C"} color={C.amber} />
-          <MetricCard label="NDVI" value={sat.ndvi} color={C.green} sub={sat.condForr} />
+          <MetricCard label="NDVI (estimado)" value={sat.ndvi} color={C.green} sub={sat.condForr + " · proxy por lluvia, no imagen satelital"} />
           <MetricCard label="LLUVIA 30D" value={sat.p30+"mm"} color={"#4a9eff"} />
           <MetricCard label="BALANCE" value={(sat.deficit>0?"+":"")+sat.deficit+"mm"} color={sat.deficit>0?C.green:C.red} />
         </div>
@@ -368,6 +387,7 @@ const renderUbicacion = () => {
 }
   const renderRodeo = () => (
     <div>
+      <BannerAlertasPaso paso="rodeo" />
       <SelectF label="BIOTIPO" value={form.biotipo} onChange={v=>set("biotipo",v)}
         placeholder="Seleccioná el biotipo..."
         groups={[
@@ -1423,6 +1443,15 @@ const renderUbicacion = () => {
           const freq    = calcFreq(s1, s2);
           const tieneSupl = d1 > 0 || d2 > 0;
 
+          // ── Oferta de pasto (NDVI/GPS) para esta categoría, promediada sobre los meses de suplementación ──
+          const ofPastoKey = { vaq1:"ofPastoPerVaq1", vaq2:"ofPastoPerVaq2", v2s:"ofPastoPerV2s" }[cat.key];
+          const mesesSuplSel = (form.suplMeses || ["5","6","7"]).map(Number);
+          const ofPastoMeses = ofPastoKey
+            ? mesesSuplSel.map(i => motorEfectivo?.balanceMensual?.[i]?.[ofPastoKey]).filter(v => typeof v === "number")
+            : [];
+          const ofPastoProm = ofPastoMeses.length ? ofPastoMeses.reduce((a,b)=>a+b,0)/ofPastoMeses.length : null;
+          const ndviActual  = parseFloat(sat?.ndvi);
+
           // Alertas específicas
           const alertas = [];
           if (cat.key === "vaq1" && s1 === "Semilla algodón" && d1 > cat.pv * 0.004)
@@ -1522,6 +1551,24 @@ const renderUbicacion = () => {
                   </div>
                 ))}
               </div>
+
+              {/* ── Oferta de pasto (NDVI/GPS) + consumo posible total ── */}
+              {ofPastoKey && (
+                <div style={{ marginBottom:10, padding:"7px 9px", borderRadius:8, background:`${cat.color}08`, border:`1px solid ${cat.color}20` }}>
+                  <div style={{ fontFamily:C.font, fontSize:8, color:C.textFaint, letterSpacing:1, marginBottom:3 }}>
+                    OFERTA DE PASTO (NDVI/GPS) — meses de suplementación
+                  </div>
+                  {ofPastoProm !== null ? (
+                    <div style={{ fontFamily:C.font, fontSize:10, color:C.text }}>
+                      {ofPastoProm.toFixed(1)} Mcal/d pasto
+                      {Number.isFinite(ndviActual) && <span style={{ color:C.textFaint }}> · NDVI {ndviActual.toFixed(2)}</span>}
+                      {tieneSupl && <span style={{ color:cat.color, fontWeight:700 }}> · {(ofPastoProm + mcalTot).toFixed(1)} Mcal/d consumo posible (pasto+suplemento)</span>}
+                    </div>
+                  ) : (
+                    <div style={{ fontFamily:C.font, fontSize:9, color:C.textFaint }}>Sin datos de oferta de pasto — corré el motor para esta categoría</div>
+                  )}
+                </div>
+              )}
 
               {/* ── CUADRANTE 4: Resultados ── */}
               {tieneSupl && (
@@ -1711,6 +1758,7 @@ const renderUbicacion = () => {
   // ── PASO 7: SANIDAD ───────────────────────────────────────────
   const renderSanidad = () => (
     <div>
+      <BannerAlertasPaso paso="sanidad" />
       <div style={{ fontFamily:C.font, fontSize:10, color:C.amber, letterSpacing:1, marginBottom:4 }}>🏥 SANIDAD REPRODUCTIVA</div>
 
       {/* Vacunas obligatorias */}
