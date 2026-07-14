@@ -449,7 +449,7 @@ function PanelRecomendaciones({ motor, form }) {
     </div>
   );
 
-  const { cuellos, planes, proyeccion, ind } = dx;
+  const { cuellos, cronologia, planes, proyeccion, ind } = dx;
   const P1 = cuellos.filter(c => c.prioridad === "P1");
   const P2 = cuellos.filter(c => c.prioridad === "P2");
 
@@ -677,6 +677,45 @@ function PanelRecomendaciones({ motor, form }) {
             🔍 LIMITANTES IDENTIFICADOS — {P1.length} urgente{P1.length!==1?"s":""} · {P2.length} importante{P2.length!==1?"s":""}
           </div>
           {cuellos.map(c => <CuelloCard key={c.id} c={c} />)}
+        </div>
+      )}
+
+      {/* ── BLOQUE 1b: Línea de tiempo del ciclo ─────────────────── */}
+      {cronologia?.length > 1 && (
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontFamily:T.font, fontSize:9, color:T.textFaint, letterSpacing:1, marginBottom:8 }}>
+            🕐 CRONOLOGÍA DEL CICLO — dónde se rompe primero el sistema
+          </div>
+          <div style={{ borderLeft:`2px solid ${T.border}`, marginLeft:8, paddingLeft:14 }}>
+            {(() => {
+              let faseAnt = null;
+              return cronologia.map((c, i) => {
+                const nuevaFase = c.fase !== faseAnt;
+                faseAnt = c.fase;
+                return (
+                  <div key={c.id || i} style={{ marginBottom:8, position:"relative" }}>
+                    {nuevaFase && (
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.blue, fontWeight:700,
+                        letterSpacing:.5, margin:"10px 0 4px", position:"relative" }}>
+                        <span style={{ position:"absolute", left:-19, top:2, width:8, height:8,
+                          borderRadius:"50%", background:T.blue }} />
+                        {c.fase}
+                      </div>
+                    )}
+                    <div style={{ display:"flex", gap:6, alignItems:"baseline" }}>
+                      <span style={{ fontSize:11, flexShrink:0 }}>{c.icono}</span>
+                      <span style={{ fontFamily:T.fontSans, fontSize:11, color:T.text, lineHeight:1.35 }}>
+                        {c.titulo}
+                        <span style={{ fontFamily:T.font, fontSize:8, marginLeft:6,
+                          color: colP[c.prioridad], background:`${colP[c.prioridad]}18`,
+                          borderRadius:4, padding:"1px 5px" }}>{c.prioridad}</span>
+                      </span>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
         </div>
       )}
 
