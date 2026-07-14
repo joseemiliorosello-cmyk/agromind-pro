@@ -68,8 +68,20 @@ que impacta en toda la oferta forrajera.
 
 ## PARTE B — El registro Excel
 
-El Excel está pensado como **base de datos de seguimiento del asesor**. El archivo que
-se descarga hoy contiene **una hoja: `Historial`**.
+El Excel está pensado como **base de datos de seguimiento y detalle del asesor**. El
+archivo contiene **6 hojas**:
+
+| Hoja | Contenido |
+|------|-----------|
+| **Establecimiento** | Detalle completo de la consulta actual: identificación, rodeo, CC, destete, forraje y campo, clima satelital, suplementación por categoría, agua y sanidad, vaquillonas, V2S y terneros. |
+| **Balance mensual** | El balance energético mes a mes: oferta, demanda, balance, déficit, % cobertura, carga ajustada, terneros, y la versión en kg de MS/día. |
+| **Diagnostico** | Scores por dimensión, análisis de riesgo, puntos críticos y balance invernal. |
+| **Reproduccion** | Servicio (fechas, duración, diagnóstico), preñez, anestro, y el comparativo de CC y preñez según modalidad de destete. |
+| **Recomendaciones** | El plan priorizado P1/P2: área, acción, qué hacer y cuándo. |
+| **Historial** | Una fila por visita — para el seguimiento en el tiempo (ver abajo). |
+
+Las 5 primeras hojas son el **detalle numérico de la consulta de hoy**; la hoja
+**Historial** es el **registro acumulado** de todas las visitas.
 
 ### La hoja Historial
 
@@ -99,12 +111,8 @@ más todas las visitas previas guardadas en el dispositivo.
 - **Comparar establecimientos** de la cartera.
 - **Análisis propio:** al ser tabla plana, se filtra y grafica fácil en Excel/Sheets.
 
-> **⚠️ Nota técnica importante:** el código arma internamente **otras 5 hojas** de detalle
-> (Datos del establecimiento, Balance mensual, Diagnóstico, Servicio y Reproducción,
-> Recomendaciones), pero **la versión actual del export solo escribe la hoja `Historial`**.
-> El detalle completo de una consulta puntual está disponible en el **PDF**. Si querés
-> que esas 5 hojas también se incluyan en el Excel, es un ajuste chico de una línea —
-> pedímelo y lo activo.
+> 💡 **Tip:** para el **análisis puntual de una consulta**, usá las 5 primeras hojas.
+> Para ver la **evolución del campo** entre visitas, usá la hoja **Historial**.
 
 ---
 

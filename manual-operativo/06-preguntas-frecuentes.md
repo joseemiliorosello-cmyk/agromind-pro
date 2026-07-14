@@ -56,10 +56,10 @@ están en plena lactación. Mirá el tooltip del mes para ver el estado fisioló
 
 ## Sobre los documentos
 
-**El Excel que descargo tiene una sola hoja (Historial).**
-Es correcto. La versión actual exporta la hoja de **Historial** (una fila por visita).
-El detalle completo de la consulta puntual está en el **PDF**. (Ver nota técnica en el
-Sector 04 — hay 5 hojas de detalle construidas que pueden activarse si se necesita.)
+**¿Qué contiene el Excel?**
+El Excel trae **6 hojas**: Establecimiento, Balance mensual, Diagnóstico, Reproducción,
+Recomendaciones (el detalle de la consulta de hoy) y **Historial** (una fila por visita,
+para el seguimiento en el tiempo). Ver el detalle en el Sector 04.
 
 **¿Se pierden los datos si cierro la app?**
 No. Se **guardan en el dispositivo** automáticamente. El historial de visitas también.
