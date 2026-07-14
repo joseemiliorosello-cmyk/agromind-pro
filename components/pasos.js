@@ -1144,7 +1144,7 @@ const renderUbicacion = () => {
             <div style={{ fontFamily:C.font, fontSize:9, color:C.green, letterSpacing:1 }}>🌾 VERDEOS DE INVIERNO</div>
             <div style={{ display:"flex", gap:6 }}>
               {[["no","No tengo"],["si","Tengo"]].map(([v,l]) => (
-                <button key={v} onClick={()=>set("tieneVerdeo",v)} style={{
+                <button key={v} onClick={()=>{ set("tieneVerdeo",v); if (v === "no") set("verdeoHa",""); }} style={{
                   padding:"4px 12px", borderRadius:16, cursor:"pointer", fontFamily:C.font, fontSize:9,
                   background: form.tieneVerdeo===v ? `${C.green}20` : "transparent",
                   border:`1px solid ${form.tieneVerdeo===v ? C.green : C.border}`,
