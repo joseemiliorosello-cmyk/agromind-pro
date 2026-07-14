@@ -1539,17 +1539,7 @@ function CalfAIPro() {
     wsHistorial["!freeze"] = { xSplit: 0, ySplit: 1 };
 
     const wb = XLSX.utils.book_new();
-    // Hoja 1: detalle completo de la consulta actual (establecimiento + rodeo + campo)
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja1),      "Establecimiento");
-    // Hoja 2: balance energético mes a mes
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja2),      "Balance mensual");
-    // Hoja 3: diagnóstico (scores + puntos críticos + balance invernal)
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja3),      "Diagnostico");
-    // Hoja 4: servicio y reproducción
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hojaRepro),  "Reproduccion");
-    // Hoja 5: recomendaciones priorizadas
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(hoja5),      "Recomendaciones");
-    // Hoja 6: historial (una fila por visita) — seguimiento en el tiempo
+    // Una sola hoja: todos los datos en columnas, una fila por productor/visita.
     XLSX.utils.book_append_sheet(wb, wsHistorial, "Historial");
     XLSX.writeFile(wb, `calfai_historial_${isoDate}.xlsx`);
     showToast(`Excel generado: ${todasVisitas.length} visita${todasVisitas.length!==1?"s":""} ✓`, "ok");
