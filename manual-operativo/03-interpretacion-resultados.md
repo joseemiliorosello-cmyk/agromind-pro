@@ -48,10 +48,16 @@ Muestra la **película de la condición corporal** a lo largo del año, en 4 pun
 
 | Punto | Qué significa | Valor deseable |
 |-------|---------------|----------------|
-| **CC al parto** | Con cuánta reserva llega la vaca a parir. | ≥ 4,5 (escala 1–9) |
+| **CC al parto** | Con cuánta reserva llega la vaca a parir. | **≥ 5,5 (escala 1–9)** |
 | **CC mínima en lactación** | El punto más bajo, con el ternero al pie. | No caer por debajo de 3,5–4,0 |
-| **CC al servicio** | La que determina la preñez. | **≥ 5,0 óptimo · ≥ 4,5 aceptable** |
+| **CC al servicio** | La que determina la preñez. | **4,5 = umbral crítico (mínimo) · < 3,5 = malo** |
 | **Preñez estimada** | Traducción de la CC al servicio en % de preñez. | ≥ 75 % |
+
+> 🔑 **La regla del punto perdido:** la vaca pierde **~1 punto de CC del parto al
+> servicio** (lo moviliza en la lactación). Por eso el objetivo al parto es **5,5** —
+> para aterrizar en **4,5 al servicio**, que es el mínimo crítico para una buena
+> preñez. Si llega al parto con 4,5, al servicio cae a 3,5 (malo). Ese punto es la
+> diferencia entre un rodeo que preña y uno que no.
 
 ### La cascada causal
 
