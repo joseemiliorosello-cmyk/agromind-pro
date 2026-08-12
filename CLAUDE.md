@@ -40,9 +40,24 @@ Next.js 14 · React · Vercel · Repo: https://github.com/joseemiliorosello-cmyk
 - Parición: ago–oct · Servicio: nov–dic · Tacto: mar–abr
 - Usuario: veterinario asesor, usa la app en consulta con el productor
 
-## Trabajo pendiente
+## Trabajo pendiente (julio 2026)
 
-Sin pendientes abiertos al cierre de esta sesión (junio 2026). Última tanda completada:
+Afinado pendiente, no bloqueante:
+- Revisión a fondo de umbrales de destete/duración de servicio (cuándo recomienda hiper/antic/trad y "acortar servicio")
+- ¿Slot de suplemento dual para Vaq2? (Vaq1 ya tiene 2, Vaq2 tiene 1)
+- Código muerto en `descargarExcel`: hoja1..hoja5/hojaRepro se construyen y no se usan (volvió a 1 hoja)
+- Otra pasada de "ruido" en recomendaciones secundarias del cerebro
+
+Última tanda completada (julio 2026):
+- ✅ Reconciliación modelos de CC: cabeza/cola anclados al `ccServ` del rodeo + tasa ajustada por forraje + preñez vía `interpCC` (`lib/cerebro.js`)
+- ✅ Umbrales CC "regla del punto perdido": parto 5.5, servicio 4.5 crítico / 3.5 malo (`lib/motor.js`)
+- ✅ Verdeo fantasma: `tieneVerdeo === "si"` (era truthy con "no"); verdeo→vaq solo si destino real; limpia estado al apagar (`lib/motor.js`, `lib/cerebro.js`, `components/pasos.js`)
+- ✅ Brecha cabeza/cola: recuperación vs próximo servicio (ini+365) en vez del actual (`lib/cerebro.js`)
+- ✅ PV vaquillona agosto: `parseFloat(pvSalidaVaq1)` — string concatenaba "18521" (`lib/cerebro.js`)
+- ✅ `calcFactorForrajero`: potreros+NDVI+fenología → recuperación CC de todas las categorías (`lib/motor.js`)
+- ✅ Manual operativo (6 sectores + PDF único de venta con link e instalación) (`manual-operativo/`)
+
+Tanda anterior (junio 2026):
 
 - ✅ Fix gestación temprana: edad gestacional desde concepción, no desde parto (`lib/motor.js`)
 - ✅ Fix demanda por grupos: `reqVacaI` pondera mes a mes por `fracLact` y grupo de destete (`lib/motor.js`)
