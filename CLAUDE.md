@@ -45,12 +45,12 @@ Next.js 14 · React · Vercel · Repo: https://github.com/joseemiliorosello-cmyk
 Afinado pendiente, no bloqueante:
 - Revisión a fondo de umbrales de destete/duración de servicio (cuándo recomienda hiper/antic/trad y "acortar servicio")
 - ¿Slot de suplemento dual para Vaq2? (Vaq1 ya tiene 2, Vaq2 tiene 1)
-- Sin tests para `lib/cerebro.js` (2.199 líneas — el diagnóstico que ve el productor)
 - `descargarPDF`/`descargarExcel` viven dentro del componente `Page` (candidatos a extraer a `lib/export.js`)
 - Estética: unificar la paleta verde (app `#5cb83a` vs `productor.js`/íconos PWA `#7ec850`); `productor.js` duplica paleta/biotipos/provincias en vez de importarlos
 - Accesibilidad mínima (pocos `aria-*`/`role`)
 
 Última tanda completada (octubre 2026 — saneamiento estructural):
+- ✅ Tests de regresión para `lib/cerebro.js` (11 tests: amplitud cabeza/cola, verdeo, PV vaq, sal mineral) — 47 tests en total (`__tests__/cerebro.test.js`)
 - ✅ Eliminado código muerto en `descargarExcel`: 285 líneas de hoja1..hoja5/hojaRepro que se construían y no se escribían (`pages/index.js`)
 - ✅ Borrados scripts sueltos de la raíz: `fix_a11y.js`, `fix_dedup_confianza.js`, `scripts/test-balance.mjs`
 - ℹ️ `lib/schema.ts` (zod) SÍ se usa — sanitiza el `localStorage` en `persistencia.js` (`sanitizeForm`)
