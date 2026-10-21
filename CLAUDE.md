@@ -45,10 +45,17 @@ Next.js 14 · React · Vercel · Repo: https://github.com/joseemiliorosello-cmyk
 Afinado pendiente, no bloqueante:
 - Revisión a fondo de umbrales de destete/duración de servicio (cuándo recomienda hiper/antic/trad y "acortar servicio")
 - ¿Slot de suplemento dual para Vaq2? (Vaq1 ya tiene 2, Vaq2 tiene 1)
-- Código muerto en `descargarExcel`: hoja1..hoja5/hojaRepro se construyen y no se usan (volvió a 1 hoja)
-- Otra pasada de "ruido" en recomendaciones secundarias del cerebro
+- Sin tests para `lib/cerebro.js` (2.199 líneas — el diagnóstico que ve el productor)
+- `descargarPDF`/`descargarExcel` viven dentro del componente `Page` (candidatos a extraer a `lib/export.js`)
+- Estética: unificar la paleta verde (app `#5cb83a` vs `productor.js`/íconos PWA `#7ec850`); `productor.js` duplica paleta/biotipos/provincias en vez de importarlos
+- Accesibilidad mínima (pocos `aria-*`/`role`)
 
-Última tanda completada (julio 2026):
+Última tanda completada (octubre 2026 — saneamiento estructural):
+- ✅ Eliminado código muerto en `descargarExcel`: 285 líneas de hoja1..hoja5/hojaRepro que se construían y no se escribían (`pages/index.js`)
+- ✅ Borrados scripts sueltos de la raíz: `fix_a11y.js`, `fix_dedup_confianza.js`, `scripts/test-balance.mjs`
+- ℹ️ `lib/schema.ts` (zod) SÍ se usa — sanitiza el `localStorage` en `persistencia.js` (`sanitizeForm`)
+
+Tanda julio 2026:
 - ✅ Reconciliación modelos de CC: cabeza/cola anclados al `ccServ` del rodeo + tasa ajustada por forraje + preñez vía `interpCC` (`lib/cerebro.js`)
 - ✅ Umbrales CC "regla del punto perdido": parto 5.5, servicio 4.5 crítico / 3.5 malo (`lib/motor.js`)
 - ✅ Verdeo fantasma: `tieneVerdeo === "si"` (era truthy con "no"); verdeo→vaq solo si destino real; limpia estado al apagar (`lib/motor.js`, `lib/cerebro.js`, `components/pasos.js`)
